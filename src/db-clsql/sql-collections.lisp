@@ -468,26 +468,6 @@ the cursor."
 	  ))
       (error "Can't delete with uninitialized cursor!")))
 
-(defmethod cursor-get-both ((cursor sql-secondary-cursor) key value)
-  "cursor-get-both not implemented for secondary indices.
-Use cursor-pget-both."
-  (declare (ignore key value))
-  (error "cursor-get-both not implemented on secondary
-indices.  Use cursor-pget-both."))
-
-(defmethod cursor-get-both-range ((cursor sql-secondary-cursor) key value)
-  "cursor-get-both-range not implemented for secondary indices.
-Use cursor-pget-both-range."
-  (declare (ignore key value))
-  (error "cursor-get-both-range not implemented on secondary indices.  Use cursor-pget-both-range."))
-
-(defmethod cursor-put ((cursor sql-secondary-cursor) value &rest rest)
-  "Puts are forbidden on secondary indices.  Try adding to
-the primary."
-  (declare (ignore rest value))
-  (error "Puts are forbidden on secondary indices.  Try adding to the primary."))
-
-
 (defmethod cursor-first ((cursor sql-secondary-cursor))
   (cursor-first-x cursor)
   )

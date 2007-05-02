@@ -475,7 +475,7 @@
 
 ;; Secondary cursors
 
-(defclass bdb-secondary-cursor (bdb-cursor) ()
+(defclass bdb-secondary-cursor (secondary-cursor bdb-cursor) ()
   (:documentation "Cursor for traversing bdb secondary indices."))
 
 (defmethod make-cursor ((bt bdb-btree-index))
@@ -658,27 +658,6 @@
 		       (primary (cursor-btree cursor))))
 	  (setf (cursor-initialized-p cursor) nil)))
       (error "Can't delete with uninitialized cursor!")))
-
-(defmethod cursor-get-both ((cursor bdb-secondary-cursor) key value)
-  "cursor-get-both not implemented for secondary indices.
-Use cursor-pget-both."
-  (declare (ignore key value)
-         (ignorable cursor))
-  (error "cursor-get-both not implemented on secondary
-indices.  Use cursor-pget-both."))
-
-(defmethod cursor-get-both-range ((cursor bdb-secondary-cursor) key value)
-  "cursor-get-both-range not implemented for secondary indices.
-Use cursor-pget-both-range."
-  (declare (ignore key value)
-         (ignorable cursor))
-  (error "cursor-get-both-range not implemented on secondary indices.  Use cursor-pget-both-range."))
-
-(defmethod cursor-put ((cursor bdb-secondary-cursor) value &rest rest)
-  "Puts are forbidden on secondary indices.  Try adding to the primary."
-  (declare (ignore rest value)
-         (ignorable cursor))
-  (error "Puts are forbidden on secondary indices.  Try adding to the primary."))
 
 (defmethod cursor-next-dup ((cursor bdb-secondary-cursor))
   (when (cursor-initialized-p cursor)

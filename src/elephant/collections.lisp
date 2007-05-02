@@ -234,14 +234,20 @@ sorter.  Returns has-pair key value."))
 (defgeneric cursor-get-both (cursor key value)
   (:documentation 
    "Moves the cursor to a particular key / value pair,
-returning has-pair key value."))
+returning has-pair key value.")
+  (:method ((cursor secondary-cursor) key value)
+    (declare (ignore key value) (ignorable cursor))
+    (error "Cannot use get-both on secondary cursor; use pget-both")))
 
 (defgeneric cursor-get-both-range (cursor key value)
   (:documentation 
    "Moves the cursor to the first key / value pair with key
 equal to the key argument and value greater or equal to the
 value argument.  Not really useful for us since primaries
-don't have duplicates.  Returns has-pair key value."))
+don't have duplicates.  Returns has-pair key value.")
+  (:method ((cursor secondary-cursor) key value)
+    (declare (ignore key value) (ignorable cursor))
+    (error "Cannot use get-both-range on secondary cursor; use pget-both-range")))
 
 (defgeneric cursor-delete (cursor)
   (:documentation 
@@ -251,7 +257,10 @@ and uninitialized, after a successful delete."))
 (defgeneric cursor-put (cursor value &key key)
   (:documentation 
   "Overwrite value at current cursor location.  Cursor remains
-   at the current location"))
+   at the current location")
+  (:method ((cursor secondary-cursor) value &key key)
+    (declare (ignore key value) (ignorable cursor))
+    (error "Cannot use put on a secondary cursor; use (setf get-value) on primary")))
 
 (defclass secondary-cursor (cursor) ()
   (:documentation "Cursor for traversing secondary indices."))
