@@ -8,7 +8,6 @@
  (:berkeley-db-map-degree2 . t)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
- 
 
 #+openmcl
 ((:compiler . :gcc)

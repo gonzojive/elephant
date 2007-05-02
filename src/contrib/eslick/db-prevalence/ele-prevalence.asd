@@ -22,19 +22,11 @@
   :licence "LLGPL"
   :description "Prevalence style database for Elephant"
   :components
-  ((:module :src
-    :components
-    ((:module :contrib
-      :components
-      ((:module :eslick
-        :components
-	((:module :db-prevalence
-	  :components
-	  ((:file "package")
-	   (:file "prev-controller")
-	   (:file "prev-transactions")
-	   (:file "prev-slots")
-	   (:file "prev-collections")
-	   )
-	  :serial t))))))))
-  :depends-on (:cl-prevalence :s-serialization :elephant))
+  ((:file "package")
+   (:file "prev-controller")
+   (:file "prev-transactions")
+   (:file "prev-slots")
+   (:file "prev-collections")
+   )
+  :serial t
+  :depends-on (:cl-prevalence :elephant))

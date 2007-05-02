@@ -22,16 +22,16 @@
 ;; Data store API 
 ;;
 
-(defmethod execute-transaction ((sc prev-store-controller) fn &rest rest)
-  t)
+(defmethod execute-transaction ((sc prev-store-controller) fn &key &allow-other-keys)
+  (funcall fn))
 
 (defmethod controller-start-transaction ((sc prev-store-controller) &rest rest)
   (make-instance 'transaction))
 
-(defmethod controller-abort-transaction ((sc prev-store-controller) &rest rest)
+(defmethod controller-abort-transaction ((sc prev-store-controller) transaction &rest rest)
   t)
 
-(defmethod controller-commit-transaction ((sc prev-store-controller) &rest rest)
+(defmethod controller-commit-transaction ((sc prev-store-controller) transaction &rest rest)
   (let ((out (transaction-log-stream sc)))
     (loop for txn in (nreverse operation-log) do
 	 (serialize-xml txn out (serialization-state sc)))))
@@ -58,35 +58,45 @@
     (setf (transaction-btree-cache txn-state)
 	  (make-hash-table))))
 
-(defun commit-transaction (transaction sc)
-  (
+;;
+;; Primitive Operations on the cache
+;; - nil on read if absent
+;; - writes side effect cache and record txn object,
+;;   unless auto transaction, then shortcuts 
+
+(defgeneric cache-next-oid (sc transaction new-oid)
+  )
+
+(defgeneric read-cached-slot (sc transaction oid slotname)
+  )
+
+(defgeneric write-cached-slot (sc transaction oid slotname value)
+  )
+
+(defgeneric read-cached-btree (sc transaction oid key)
+  )
+
+(defgeneric write-cached-btree (sc transaction oid key value)
+  )
+
+(defgeneric cached-cursor-next (sc transaction oid cur-node)
+  )
+
+(defgeneric cached-cursor-prev (sc transaction oid cur-node)
+  )
 
 ;;
-;; Primitive Operations on the cache; nil on read if absent
+;; Commit or replay transactions to side effect actual data
 ;;
 
-(defmethod read-cached-slot (sc transaction oid slotname)
-  )
+;; commit-transaction
 
-(defmethod write-cached-slot (sc transaction oid slotname value)
-  )
-
-(defmethod read-cached-btree (sc transaction oid key)
-  )
-
-(defmethod write-cached-btree (sc transaction oid key value)
-  )
-
-(defmethod cache-next-oid (sc transaction new-oid)
-  )
-
-
-(defun do-transaction-op (transaction txn-op)
-  (if transaction
-      (progn
-	(push txn-op (transaction-ops transaction))
-	(
-      (make-transaction  
+;; (defun do-transaction-op (transaction txn-op)
+;;   (if transaction
+;;       (progn
+;; 	(push txn-op (transaction-ops transaction))
+;; 	(
+;;       (make-transaction  
 
 (defclass txn-op ()
   ((oid :accessor txn-oid)))
@@ -104,14 +114,15 @@
 
 (defmethod replay-transaction ((op txn-oid-op) sc)
   (incf (last-oid sc)))
+
 ;;
 ;; 
 ;;  
  
-(defclass txn-slot-write-op (txn-op)
-  (
+;;(defclass txn-slot-write-op (txn-op)
+;;  (
 
-(defclass txn-btree-insert-op (txn-op)
-(defclass txn-btree-delete-op (txn-op)
-(defclass txn-btree-overwrite-op (txn-op)
+;;(defclass txn-btree-insert-op (txn-op)
+;;(defclass txn-btree-delete-op (txn-op)
+;;(defclass txn-btree-overwrite-op (txn-op)
 

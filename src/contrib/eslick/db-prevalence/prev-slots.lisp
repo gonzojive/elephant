@@ -23,7 +23,8 @@
 ;;
 
 (defmethod persistent-slot-reader ((sc prev-store-controller) instance name)
-  (read-controller-slot sc (oid instance) name))
+  (let ((value (read-controller-slot sc (oid instance) name)))
+    value))
 
 (defmethod persistent-slot-writer ((sc prev-store-controller) value instance name)
   (write-controller-slot sc (oid instance) name value))
@@ -31,31 +32,45 @@
 (defmethod persistent-slot-boundp ((sc prev-store-controller) instance name)
   (multiple-value-bind (value found?) 
       (read-controller-slot sc (oid instance) name)
-    (when found? t)))    
+    (declare (ignore value))
+    (when found? t)))
+
+(defmethod persistent-slot-makunbound ((sc prev-store-controller) instance name)
+  (unbind-controller-slot sc (oid instance) name))
 
 ;;
-;; Slot storage
+;; Slot storage manpulation
 ;;
 
 (defun build-controller-slots (hint)
-  (make-array (floor (* 1.5 hint)) :initial-element nil :adjustable t))
+  (make-array (min (floor (* 1.5 hint)) 1000) :initial-element nil :adjustable t))
+
+(defun maybe-extend-slots (sc oid)
+  (when (>= oid (length (controller-slots sc)))
+    (adjust-array (controller-slots sc) (ceiling (* (length (controller-slots sc)) 1.5)))))
 
 (defun read-controller-slot (sc oid slotname)
-  (let ((pair (assoc slotname (aref (controller-slots sc) oid))))
+  (maybe-extend-slots sc oid)
+  (let* ((list (aref (controller-slots sc) oid))
+	 (pair (when list (assoc slotname list))))
     (if (null pair)
 	(values nil nil)
 	(values (cdr pair) t))))
 
 (defun write-controller-slot (sc oid slotname value)
-  (let ((pair (assoc slotname (aref (controller-slots sc) oid))))
+  (maybe-extend-slots sc oid)
+  (let* ((list (aref (controller-slots sc) oid))
+	 (pair (when list (assoc slotname list))))
     (if (null pair)
 	(setf (aref (controller-slots sc) oid)
 	      (acons slotname value (aref (controller-slots sc) oid)))
 	(setf (cdr pair) value))))
 
-	      
+(defun unbind-controller-slot (sc oid slotname)
+  (maybe-extend-slots sc oid)
+  (let* ((list (aref (controller-slots sc) oid)))
+    (when (assoc slotname list)
+      (setf (aref (controller-slots sc) oid)
+	    (remove slotname list :key #'car)))
+    t))
 
-reclaim oids (to save array space) on restore?
-
-store slot values with objects in snapshot; 
-overload serializer to reconstruct persistent metaclass objects

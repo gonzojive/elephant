@@ -119,7 +119,7 @@ existing primary entries (may be expensive!)"))
 ;; Secondary Indices
 ;;
 
-(defgeneric build-btree-index (sc &key primary key-form)
+(defgeneric build-btree-index (sc &key name primary key-form)
   (:documentation 
    "Construct a btree of the appropriate type corresponding to this store-controller."))
 
@@ -250,8 +250,8 @@ and uninitialized, after a successful delete."))
 
 (defgeneric cursor-put (cursor value &key key)
   (:documentation 
-  "Overwrite value at current cursor location.  Currently does
-  not properly move the cursor."))
+  "Overwrite value at current cursor location.  Cursor remains
+   at the current location"))
 
 (defclass secondary-cursor (cursor) ()
   (:documentation "Cursor for traversing secondary indices."))
@@ -399,6 +399,13 @@ not), evaluates the forms, then closes the cursor."
     (string (string<= a b))
     (persistent (<= (oid a) (oid b)))
     (symbol (string<= (symbol-name a) (symbol-name b)))))
+
+(defun lisp-compare< (a b)
+  (etypecase a
+    (number (< a b))
+    (string (string< a b))
+    (persistent (< (oid a) (oid b)))
+    (symbol (string< (symbol-name a) (symbol-name b)))))
 
 (defun lisp-compare-equal (a b)
   (equal a b))

@@ -29,6 +29,7 @@
 (defvar *elephant-data-stores*
   '((:bdb (:ele-bdb))
     (:clsql (:ele-clsql))
+    (:prevalence (:ele-prevalence))
     )
   "Tells the main elephant code the tag used in a store spec to
    refer to a given data store.  The second argument is an asdf

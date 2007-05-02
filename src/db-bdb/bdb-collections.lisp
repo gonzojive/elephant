@@ -455,9 +455,8 @@
       (error "Can't delete with uninitialized cursor!")))
 
 (defmethod cursor-put ((cursor bdb-cursor) value &key (key nil key-specified-p))
-  "Put by cursor.  Not particularly useful since primaries
-don't support duplicates.  Currently doesn't properly move
-the cursor."
+  "Put by cursor.  Not particularly useful since standard btrees
+   don't support duplicates.  Cursor is invalid after a put"
   (if key-specified-p
       (setf (get-value key (cursor-btree cursor)) value)
       (if (cursor-initialized-p cursor)

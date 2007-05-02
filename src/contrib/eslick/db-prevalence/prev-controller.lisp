@@ -16,14 +16,23 @@
 ;;; (http://opensource.franz.com/preamble.html), also known as the LLGPL.
 ;;;
 
-;; TODO:
+;; TODO1:
+;; - snapshot/restore
+;; - transactions
+;; - store slot values with objects in snapshot?
+;; - overload serializer to reconstruct persistent metaclass objects
+;; - universal comparison fn for keys & values
+
+;; TODO2:
 ;; - Rotate snapshot files (see cl-prev's approach)
 ;; - Implement backup command
+;; - snapshot based on auto dirty-p?
+;; - auto reclaim oid on restore except roots?
 
 (in-package :db-prevalence)
 
 (defclass prev-store-controller (store-controller)
-  ((prevalence-root sc)
+  ((rootdir :accessor prevalence-root-dir)
    (transaction-log :accessor transaction-log 
 		    :documentation "The pathname to the txn log")
    (transaction-log-stream :accessor transaction-log-stream
@@ -33,14 +42,16 @@
 			:initform (make-serialization-state))
    (slots :accessor controller-slots)
    (last-oid :accessor last-oid
-	     :documentation "OID state")
+	     :documentation "OID state"
+	     :initform 0)
    (transaction-lock :accessor transaction-lock
+		     :initform (ele-make-fast-lock)
 		     :documentation "Mediates starting & stopping transactions so one can abort another"))
   (:documentation "Controller for the Elephant prevalence system"))
 
 (defmethod snapshot-file ((sc prev-store-controller))
-  (assert (prevalence-root sc))
-  (merge-pathnames "snapshot.xml" (prevalence-root sc)))
+  (assert (prevalence-root-dir sc))
+  (merge-pathnames "snapshot.xml" (prevalence-root-dir sc)))
 
 ;;
 ;; Controller utilities
@@ -48,9 +59,9 @@
 
 (defun initialize-roots (sc)
   (setf (slot-value sc 'root)
-	(make-instance 'prev-btree :from-oid -1))
+	(make-instance 'prev-btree :from-oid -1 :sc sc))
   (setf (slot-value sc 'class-root)
-	(make-instance 'prev-btree :from-oid -2)))
+	(make-instance 'prev-btree :from-oid -2 :sc sc)))
   
 (defun close-open-streams (sc)
   (close (transaction-log-stream sc)))
@@ -65,10 +76,10 @@
       (error (format nil "Unrecognized database specifier: ~A" spec))))
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (register-data-store-con-init :PREVALENCE 'prev-test-and-construct))
+  (register-data-store-con-init :prevalence 'prev-test-and-construct))
 
 (defun prev-store-spec-p (spec)
-  (and (eq (first spec) :PREVALENCE)
+  (and (eq (first spec) :prevalence)
        (typecase (second spec)
 	 (pathname t)
 	 (string t)
@@ -78,15 +89,14 @@
 ;; Open and Close
 ;;
 
-(defun transaction-log (sc)
-
-(defmethod open-controller ((sc prev-store-controller) &key (recover nil))
-  (setf (prevalence-root sc) (second (controller-spec sc)))
-  (unless (probe-file (prevalence-root sc) :follow-symlinks t)
-    (error "Directory ~A does not exist" (prevalence-root sc)))
-  (setf (transaction-log sc) (make-pathname "txn.log" (prevalence-root sc)))
+(defmethod open-controller ((sc prev-store-controller) &key (recover nil) (recover-fatal nil) (thread t))
+  (declare (ignore recover recover-fatal thread))
+  (setf (prevalence-root-dir sc) (second (controller-spec sc)))
+  (unless (probe-file (prevalence-root-dir sc) :follow-symlinks t)
+    (error "Directory ~A does not exist" (prevalence-root-dir sc)))
+  (setf (transaction-log sc) (merge-pathnames "txn.log" (prevalence-root-dir sc)))
   (if (probe-file (snapshot-file sc))
-      (restore sc)
+      (controller-restore sc)
       (initialize-roots sc))
   (setf (controller-slots sc) (build-controller-slots (next-oid sc))))
 
@@ -99,15 +109,15 @@
 
 
 (defmethod close-controller ((sc prev-store-controller))
-  (when transaction-log-stream
+  (when (transaction-log-stream sc)
     (close (transaction-log-stream sc))))
 
 ;;
 ;; DB Version
 ;;
 
-(defun set-database-version (sc prev-store-controller)
-  (with-open-store (stream (version-file sc) 
+(defun set-database-version (sc)
+  (with-open-store (stream (version-file sc)
 			   :direction :output
 			   :if-does-not-exist :create
 			   :if-exists :overwrite)
@@ -119,20 +129,21 @@
       (read stream))))
 
 (defun version-file (sc)
-  (make-pathname "version.sexp" (prevalence-root sc)))
+  (merge-pathnames "version.sexp" (prevalence-root-dir sc)))
 
 ;;
 ;; UIDs
 ;;
 
 (defmethod next-oid ((sc prev-store-controller))
-  (do-transaction :oid (incf oid)))
+  (incf (last-oid sc)))
+;;  (do-transaction :oid (incf oid)))
 
 ;;
 ;; Snapshots
 ;;
 
-(defmethod snapshot ((sc prev-store-controller))
+(defmethod controller-snapshot ((sc prev-store-controller))
   "Take a snapshot of the system state; write everything to the file"
   (let ((timetag (timetag))
 	(txn-log (transaction-log sc)))
@@ -148,7 +159,7 @@
       (delete-file txn-log))))
       
     
-(defmethod restore ((sc prev-store-controller))
+(defmethod controller-restore ((sc prev-store-controller))
   (close-open-streams sc)
   (with-open-file (in (snapshot-file sc) :direct :input)
     (destructuring-bind (root class-root oid)
@@ -164,7 +175,7 @@
 				  ";; Warning: error during transaction log restore: ~s~%"
 				  condition)
 			  (truncate-file (transaction-log sc) position)
-			  (return-from restore))))
+			  (return-from controller-restore))))
 	(with-open-file (in (transaction-log system) :direction :input)
 	  (loop
 	     (let ((transaction (deserialize-xml in (serialization-state sc))))
