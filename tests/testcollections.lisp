@@ -482,39 +482,42 @@ t
 (deftest (dup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-	(loop for (more k v) = (multiple-value-list
-				(cursor-first curs))
-	   then (multiple-value-list (cursor-next-dup curs))
-	   while more
-	   collect v)))
-  (0 -1 -2 -3 -4 -5 -6 -7 -8 -9))
-	      
-
+	(null (set-difference
+	       (loop for (more k v) = (multiple-value-list
+				       (cursor-first curs))
+		  then (multiple-value-list (cursor-next-dup curs))
+		  while more
+		  collect v)
+	       '(0 -1 -2 -3 -4 -5 -6 -7 -8 -9)))))
+  t)
 
 (deftest (nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
 	(loop for (m k v) = (multiple-value-list (cursor-next-nodup curs))
 	      for i from 0 downto -9990 by 10
-              always (and m (= v i)))))
+	      while m
+	      always (= v i))))
   t)
 
 (deftest (prev-nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-        (multiple-value-bind (m k v) (cursor-last curs)
-          (assert (= -10000 v) nil "precondition for this test is wrong (~a), check dependencies between tests" v))
-        (loop for (m k v) = (multiple-value-list (cursor-prev-nodup curs))
-              for i from -9999 to -9 by 10
-              always (and m (= v i)))))
+	(cursor-last curs)
+	(loop for (m k v) = (multiple-value-list (cursor-prev-nodup curs))
+	      for i from -9999 to -9 by 10
+	      while m
+	      always (= v i))))
   t)
 
 (deftest (pnodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
+	(let ((pk nil))
 	(loop for (m k v p) = (multiple-value-list (cursor-pnext-nodup curs))
 	      for i from 0 to 9990 by 10
-              always (and m (= p i)))))
+	      while m
+	      always (= p i))))
   t)
 
 (deftest (pprev-nodup-test :depends-on put-indexed2)
@@ -524,7 +527,8 @@ t
           (assert (= -10000 v) nil "precondition for this test is wrong, check dependencies between tests"))
 	(loop for (m k v p) = (multiple-value-list (cursor-pprev-nodup curs))
 	      for i from 9999 downto 9 by 10
-              always (and m (= p i)))))
+	      while m
+	      always (= p i))))
   t)
 
 (deftest (cur-del1 :depends-on put-indexed2) 
