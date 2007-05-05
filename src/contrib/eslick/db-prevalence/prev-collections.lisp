@@ -121,9 +121,15 @@
 
 (defmethod (setf get-value) (value key (bt prev-indexed-btree))
   (ensure-transaction (:store-controller (get-con bt))
-    (let ((node (insert-kv key value bt)))
+    (let* ((old-node (gethash key (btree-hash bt)))
+	   (new-node (insert-kv key value bt))
+	   (changed? (and old-node
+			  (or (not (eq old-node new-node))
+			      (not (lisp-compare-equal (node-value old-node) (node-value new-node)))))))
       (loop for index being the hash-value of (indices bt)
-	 do (index-kv node index bt))
+	 do 
+	   (when changed? (delete-kv old-node index))
+	   (index-kv new-node index bt))
       value)))
 
 (defmethod remove-kv (key (bt prev-indexed-btree))
@@ -511,10 +517,23 @@
        (or (and exists? node) 
 	   (search-condition (cursor-root cursor)))))))
 
+(defun node-has-pkey (inode pkey)
+  (lisp-compare-equal 
+   (node-key (ibtref-node (node-value inode)))
+   pkey))
+
 (defmethod cursor-pget-both ((cursor prev-index-cursor) key pkey)
-  nil)
+  (with-search-condition (nil (node-has-pkey node pkey) node)
+    (multiple-value-bind (exists? key value)
+	(cursor-set cursor key)
+      (declare (ignore key value))
+      (when exists?
+	(cursor-psetif-ret (search-condition (cursor-node cursor)))))))
 
 (defmethod cursor-pget-both-range ((cursor prev-index-cursor) key pkey)
+  (declare (ignore key pkey))
+  (warn "pget-both-range not supported by :PREVALENCE data store due to
+         primary keys (index values) not being ordered in indices")
   nil)
 
 (defmethod cursor-delete ((cursor prev-index-cursor))
