@@ -516,7 +516,7 @@ not), evaluates the forms, then closes the cursor."
 		     ;; Step to the next key value;
 		     ;; from-end duplicate cursor is already there
 		     (if from-end 
-			 (cursor-current cur)
+			 (cursor-pcurrent cur)
 			 (cursor-pnext-nodup cur)))
 		   (map-values () 
 		     ;; Handle the next key value
