@@ -38,6 +38,9 @@
   ((slot1 :accessor slot1 :initarg :slot1)
    (slot2 :accessor slot2 :initarg :slot2)))
 
+(defmethod print-object ((blob blob) stream)
+  (format stream "#<BLOB ~A ~A>" (slot1 blob) (slot2 blob)))
+
 (defvar keys (loop for i from 1 to 1000 
 		   collect (concatenate 'base-string "key-" (prin1-to-string i))))
 

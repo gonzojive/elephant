@@ -231,6 +231,9 @@ key value."))
 greater or equal to the key argument, according to the lisp
 sorter.  Returns has-pair key value."))
 
+(defclass secondary-cursor (cursor) ()
+  (:documentation "Cursor for traversing secondary indices."))
+
 (defgeneric cursor-get-both (cursor key value)
   (:documentation 
    "Moves the cursor to a particular key / value pair,

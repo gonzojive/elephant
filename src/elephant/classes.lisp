@@ -177,9 +177,7 @@ slots."
 						 (old-persistent-slots class))))
       ;; Update new persistent slots, the others we get for free (same oid!)
       ;; Isn't this done by the default call-next-method?
-      (apply #'shared-initialize instance new-persistent-slots initargs)
-      )
-    ))
+      (apply #'shared-initialize instance new-persistent-slots initargs))))
 
 ;;
 ;; CLASS CHANGE PROTOCOL

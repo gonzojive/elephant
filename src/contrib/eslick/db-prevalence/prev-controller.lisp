@@ -21,9 +21,9 @@
 ;; - transactions
 ;; - store slot values with objects in snapshot?
 ;; - overload serializer to reconstruct persistent metaclass objects
-;; - universal comparison fn for keys & values
 
 ;; TODO2:
+;; - universal comparison fn for keys & values
 ;; - Rotate snapshot files (see cl-prev's approach)
 ;; - Implement backup command
 ;; - snapshot based on auto dirty-p?
@@ -59,9 +59,9 @@
 
 (defun initialize-roots (sc)
   (setf (slot-value sc 'root)
-	(make-instance 'prev-btree :from-oid -1 :sc sc))
+	(make-instance 'prev-btree :sc sc))
   (setf (slot-value sc 'class-root)
-	(make-instance 'prev-btree :from-oid -2 :sc sc)))
+	(make-instance 'prev-indexed-btree :sc sc)))
   
 (defun close-open-streams (sc)
   (close (transaction-log-stream sc)))
@@ -94,11 +94,28 @@
   (setf (prevalence-root-dir sc) (second (controller-spec sc)))
   (unless (probe-file (prevalence-root-dir sc) :follow-symlinks t)
     (error "Directory ~A does not exist" (prevalence-root-dir sc)))
-  (setf (transaction-log sc) (merge-pathnames "txn.log" (prevalence-root-dir sc)))
+  (setf (transaction-log sc) 
+	(merge-pathnames "txn.log" (prevalence-root-dir sc)))
+  (initialize-serializer sc)
+  (setf (controller-slots sc) 
+	(build-controller-slots (last-oid sc)))
   (if (probe-file (snapshot-file sc))
       (controller-restore sc)
-      (initialize-roots sc))
-  (setf (controller-slots sc) (build-controller-slots (next-oid sc))))
+      (progn
+	(set-database-version sc)
+	(initialize-roots sc))))
+
+(defmethod initialize-serializer ((sc prev-store-controller))
+	 (setf (controller-serializer-version sc) 2)
+	 (setf (controller-serialize sc) 
+	       (intern "SERIALIZE" (find-package :ELEPHANT-SERIALIZER2)))
+	 (setf (controller-deserialize sc) 
+	       (intern "DESERIALIZE" (find-package :ELEPHANT-SERIALIZER2))))
+;;  (setf (controller-serializer-version sc) :cl-prevalence)
+;;  (setf (controller-serialize sc)
+;;	(intern "SERIALIZE-XML" (find-package :s-serialization)))
+;;  (setf (controller-deserialize sc)
+;;	(intern "DESERIALIZE-XML" (find-package :s-serialization))))
 
 (defmethod transaction-log-stream :before ((sc prev-store-controller))
   (setf (transaction-log-stream sc)
@@ -117,11 +134,11 @@
 ;;
 
 (defun set-database-version (sc)
-  (with-open-store (stream (version-file sc)
+  (with-open-file (stream (version-file sc)
 			   :direction :output
 			   :if-does-not-exist :create
 			   :if-exists :overwrite)
-    (write stream *elephant-code-version*)))
+    (write *elephant-code-version* :stream stream)))
 
 (defmethod database-version ((sc prev-store-controller))
   (when (probe-file (version-file sc))
@@ -136,6 +153,7 @@
 ;;
 
 (defmethod next-oid ((sc prev-store-controller))
+  (maybe-extend-slots sc (+ 2 (last-oid sc)))
   (incf (last-oid sc)))
 ;;  (do-transaction :oid (incf oid)))
 
@@ -181,7 +199,7 @@
 	     (let ((transaction (deserialize-xml in (serialization-state sc))))
 	       (setf position (file-position in))
 	       (if transaction
-		   (replay-transaction transaction)
+		   (replay-transaction transaction nil)
 		   (return)))))))))
 
 ;;

@@ -23,8 +23,10 @@
 ;;
 
 (defmethod persistent-slot-reader ((sc prev-store-controller) instance name)
-  (let ((value (read-controller-slot sc (oid instance) name)))
-    value))
+  (multiple-value-bind (value exists?)
+      (read-controller-slot sc (oid instance) name)
+    (if exists? value
+	(error 'unbound-slot :instance instance :name name))))
 
 (defmethod persistent-slot-writer ((sc prev-store-controller) value instance name)
   (write-controller-slot sc (oid instance) name value))
@@ -43,22 +45,23 @@
 ;;
 
 (defun build-controller-slots (hint)
-  (make-array (min (floor (* 1.5 hint)) 1000) :initial-element nil :adjustable t))
+  (make-array (max (floor (* 1.5 hint)) 1000) :initial-element nil :adjustable t))
 
 (defun maybe-extend-slots (sc oid)
   (when (>= oid (length (controller-slots sc)))
-    (adjust-array (controller-slots sc) (ceiling (* (length (controller-slots sc)) 1.5)))))
+    (setf (controller-slots sc) 
+	  (adjust-array (controller-slots sc) (ceiling (* (length (controller-slots sc)) 1.5))))))
 
 (defun read-controller-slot (sc oid slotname)
-  (maybe-extend-slots sc oid)
+;;  (maybe-extend-slots sc oid)
   (let* ((list (aref (controller-slots sc) oid))
-	 (pair (when list (assoc slotname list))))
-    (if (null pair)
+	 (pair (when (listp list) (assoc slotname list))))
+    (if (or (null pair) (not (consp pair)))
 	(values nil nil)
 	(values (cdr pair) t))))
 
 (defun write-controller-slot (sc oid slotname value)
-  (maybe-extend-slots sc oid)
+;;  (maybe-extend-slots sc oid)
   (let* ((list (aref (controller-slots sc) oid))
 	 (pair (when list (assoc slotname list))))
     (if (null pair)
