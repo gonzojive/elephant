@@ -32,7 +32,29 @@
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
   (assert sc)
-  (funcall (symbol-function (controller-deserialize sc)) bs sc))
+  (handler-case 
+      (funcall (symbol-function (controller-deserialize sc)) bs sc)
+    (error (e)
+      (error 'elephant-deserialization-error :condition e))))
+
+;;
+;; Serializer error conditions
+;;
+
+(define-condition elephant-deserialization-error ()
+  ((condition :initarg :condition :initform nil :accessor deserialization-error-condition))
+  (:documentation "A generalized deserialization error; something went wrong in deserialization
+                   that an application can test for explicitely.  The enclosed condition is
+                   the actual error"))
+
+(define-condition elephant-type-deserialization-error (elephant-deserialization-error)
+  ((tag :initarg type-tag :initform nil :accessor type-deserialization-error-tag))
+  (:documentation "This error is signaled when a tag is not
+                   recognized in the deserializer.  This error is
+                   more specific than the generalized error
+                   condition and aids in diagnosis.  This may be
+                   due to a mistake in counts in the serializer
+                   or a corruption of the source data"))
 
 ;;
 ;; Special structure support

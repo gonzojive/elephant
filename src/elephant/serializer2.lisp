@@ -42,7 +42,8 @@
 		database-version
 		translate-and-intern-symbol
 		valid-persistent-reference-p
-		signal-cross-reference-error))
+		signal-cross-reference-error
+		elephant-type-deserialization-error))
 
 (in-package :elephant-serializer2)
 
@@ -570,7 +571,7 @@
 					 (value (%deserialize bs)))
 				     (setf (slot-value o name) value)))
 			      o)))))))
-	     (t (error (format nil "deserialize of object tagged with ~A failed" tag)))))))
+	     (t (error 'elephant-type-deserialization-error :tag tag))))))
       (etypecase buf-str 
 	(null (return-from deserialize nil))
 	(buffer-stream
