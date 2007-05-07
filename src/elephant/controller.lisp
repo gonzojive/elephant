@@ -370,7 +370,7 @@
       (map-legacy-symbols symbol-name package-name old-version)
     (if mapped?
 	(values new-name new-package)
-	(values new-name (map-legacy-package-names package-name old-version)))))
+	(values symbol-name (map-legacy-package-names package-name old-version)))))
 
 (defun translate-and-intern-symbol (symbol-name package-name db-version)
   "Service for the serializer to translate any renamed packages or symbols
