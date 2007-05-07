@@ -397,7 +397,7 @@
 	    (format t "Unrecognized tag: ~A~%" tag)
 	    (break))))))
 
-(defun print-post-deserialize-tag (value)
+(defun print-post-deserialize-value (value)
   (when *trace-deserializer*
     (format t "Returned: ~A~%" value)))
 
@@ -418,7 +418,7 @@
 	   (declare (type foreign-char tag)
 		    (dynamic-extent tag))
 ;;	   (print-pre-deserialize-tag tag)
-;;	   (let ((value 
+	   (let ((value  
 	   (cond
 	     ((= tag +fixnum32+)
 	      (buffer-read-fixnum32 bs))
@@ -571,7 +571,9 @@
 					 (value (%deserialize bs)))
 				     (setf (slot-value o name) value)))
 			      o)))))))
-	     (t (error 'elephant-type-deserialization-error :tag tag))))))
+	     (t (error 'elephant-type-deserialization-error :tag tag)))))
+;;	     (print-post-deserialize-tag value)
+	     value))))
       (etypecase buf-str 
 	(null (return-from deserialize nil))
 	(buffer-stream
