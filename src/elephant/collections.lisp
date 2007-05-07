@@ -235,7 +235,7 @@ sorter.  Returns has-pair key value."))
   (:documentation 
    "Moves the cursor to a particular key / value pair,
 returning has-pair key value.")
-  (:method ((cursor secondary-cursor) key value)
+  (:method :before ((cursor secondary-cursor) key value)
     (declare (ignore key value) (ignorable cursor))
     (error "Cannot use get-both on secondary cursor; use pget-both")))
 
@@ -245,7 +245,7 @@ returning has-pair key value.")
 equal to the key argument and value greater or equal to the
 value argument.  Not really useful for us since primaries
 don't have duplicates.  Returns has-pair key value.")
-  (:method ((cursor secondary-cursor) key value)
+  (:method :before ((cursor secondary-cursor) key value)
     (declare (ignore key value) (ignorable cursor))
     (error "Cannot use get-both-range on secondary cursor; use pget-both-range")))
 
@@ -258,12 +258,9 @@ and uninitialized, after a successful delete."))
   (:documentation 
   "Overwrite value at current cursor location.  Cursor remains
    at the current location")
-  (:method ((cursor secondary-cursor) value &key key)
+  (:method :before ((cursor secondary-cursor) value &key key)
     (declare (ignore key value) (ignorable cursor))
     (error "Cannot use put on a secondary cursor; use (setf get-value) on primary")))
-
-(defclass secondary-cursor (cursor) ()
-  (:documentation "Cursor for traversing secondary indices."))
 
 (defgeneric cursor-pcurrent (cursor)
   (:documentation 
@@ -313,7 +310,6 @@ primary key."))
 key pair, with secondary key equal to the key argument, and
 primary key greater or equal to the pkey argument.  Returns
 has-tuple / secondary key / value / primary key."))
-
 
 (defgeneric cursor-next-dup (cursor)
   (:documentation 
