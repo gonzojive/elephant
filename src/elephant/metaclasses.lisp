@@ -34,7 +34,7 @@
 
 (defmethod print-object ((obj persistent) stream)
   "This is useful for debugging and being clear about what is persistent and what is not"
-  (format stream "#<~A oid:~A>" (type-of obj) (oid obj)))
+  (format stream "#<~A oid:~A>" (type-of obj) (when (slot-boundp obj '%oid) (oid obj))))
 
 (defclass persistent-metaclass (standard-class)
   ((%persistent-slots :accessor %persistent-slots)
