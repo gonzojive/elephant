@@ -31,8 +31,9 @@
 					 (sc *store-controller*))
   "Sets the OID and home controller"
   (declare (ignore initargs))
-  (if (null sc)
-      (error "Initialize instance for type persistent requires valid store controller argument :sc"))
+  (if (or (null sc) (not (subtypep (type-of sc) 'store-controller)))
+      (error "Initialize instance for type persistent requires valid store controller argument :sc
+              or valid *store-controller*"))
   (if from-oid
       (setf (oid instance) from-oid)
       (setf (oid instance) (next-oid sc)))

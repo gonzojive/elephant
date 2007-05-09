@@ -218,6 +218,10 @@
 	;; Should get cached since make-instance calls cache-instance
 	(make-instance class-name :from-oid oid :sc sc))))
 
+(defmethod uncache-instance ((sc store-controller) oid)
+  (ele-with-fast-lock ((instance-cache-lock sc))
+    (remcache oid (instance-cache sc))))
+
 (defmethod flush-instance-cache ((sc store-controller))
   "Reset the instance cache (flush object lookups).  Useful 
    for testing.  Does not reclaim existing objects so there

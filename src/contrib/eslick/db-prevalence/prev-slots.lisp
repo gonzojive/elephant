@@ -24,56 +24,47 @@
 
 (defmethod persistent-slot-reader ((sc prev-store-controller) instance name)
   (multiple-value-bind (value exists?)
-      (read-controller-slot sc (oid instance) name)
+      (read-controller-slot (oid instance) name sc)
     (if exists? value
 	(error 'unbound-slot :instance instance :name name))))
 
 (defmethod persistent-slot-writer ((sc prev-store-controller) value instance name)
-  (write-controller-slot sc (oid instance) name value))
+  (write-controller-slot value (oid instance) name sc))
 
 (defmethod persistent-slot-boundp ((sc prev-store-controller) instance name)
   (multiple-value-bind (value found?) 
-      (read-controller-slot sc (oid instance) name)
+      (read-controller-slot (oid instance) name sc)
     (declare (ignore value))
     (when found? t)))
 
 (defmethod persistent-slot-makunbound ((sc prev-store-controller) instance name)
-  (unbind-controller-slot sc (oid instance) name))
+  (unbind-controller-slot (oid instance) name sc))
 
 ;;
-;; Slot storage manpulation
+;; Internal slot operations
 ;;
 
-(defun build-controller-slots (hint)
-  (make-array (max (floor (* 1.5 hint)) 1000) :initial-element nil :adjustable t))
-
-(defun maybe-extend-slots (sc oid)
-  (when (>= oid (length (controller-slots sc)))
-    (setf (controller-slots sc) 
-	  (adjust-array (controller-slots sc) (ceiling (* (length (controller-slots sc)) 1.5))))))
-
-(defun read-controller-slot (sc oid slotname)
-;;  (maybe-extend-slots sc oid)
-  (let* ((list (aref (controller-slots sc) oid))
-	 (pair (when (listp list) (assoc slotname list))))
+(defun read-controller-slot (oid slot sc)
+  (let* ((list (object-record-slots (get-object-record oid sc)))
+	 (pair (when (listp list) (assoc slot list))))
     (if (or (null pair) (not (consp pair)))
 	(values nil nil)
 	(values (cdr pair) t))))
 
-(defun write-controller-slot (sc oid slotname value)
-;;  (maybe-extend-slots sc oid)
-  (let* ((list (aref (controller-slots sc) oid))
-	 (pair (when list (assoc slotname list))))
-    (if (null pair)
-	(setf (aref (controller-slots sc) oid)
-	      (acons slotname value (aref (controller-slots sc) oid)))
-	(setf (cdr pair) value))))
+(defun write-controller-slot (value oid slot sc)
+  (let* ((record (get-object-record oid sc))
+         (list (object-record-slots record))
+	 (pair (when (listp list) (assoc slot list))))
+    (if (or (null pair) (not (consp pair)))
+	(push (cons slot value) (object-record-slots record))
+	(setf (cdr pair) value)))
+  value)
 
-(defun unbind-controller-slot (sc oid slotname)
-  (maybe-extend-slots sc oid)
-  (let* ((list (aref (controller-slots sc) oid)))
-    (when (assoc slotname list)
-      (setf (aref (controller-slots sc) oid)
-	    (remove slotname list :key #'car)))
-    t))
+(defun unbind-controller-slot (oid slot sc)
+  (let* ((record (get-object-record oid sc))
+	 (list (object-record-slots record)))
+    (when (assoc slot list)
+      (setf (object-record-slots record)
+	    (remove slot list :key #'car))))
+  t)
 

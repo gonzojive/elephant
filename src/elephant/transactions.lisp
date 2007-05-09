@@ -105,7 +105,8 @@
        (eq sc (transaction-store parent-txn-rec))))
 
 (define-condition transaction-retry-count-exceeded ()
-  ((retry-count :initarg :count)))
+  ((count :initarg :count :accessor retry-count :initform 0)))
+
 
 (defmacro with-transaction ((&rest keyargs &key 
 				   (store-controller '*store-controller*)

@@ -271,6 +271,7 @@
    #:bdb-db-error
    #:elephant-deserialization-error
    #:elephant-type-deserialization-error
+   #:transaction-retry-count-exceeded
 
    #:map-class-query
    #:get-query-instances

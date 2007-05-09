@@ -19,5 +19,5 @@
 (in-package :cl-user)
 
 (defpackage db-prevalence
-  (:use common-lisp elephant elephant-utils elephant-data-store s-serialization)
+  (:use common-lisp elephant elephant-memutil elephant-utils elephant-data-store)
   (:export #:checkpoint))

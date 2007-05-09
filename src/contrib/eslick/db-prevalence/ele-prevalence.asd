@@ -24,9 +24,9 @@
   :components
   ((:file "package")
    (:file "prev-controller")
-   (:file "prev-transactions")
    (:file "prev-slots")
    (:file "prev-collections")
+   (:file "prev-transactions")
    )
   :serial t
-  :depends-on (:cl-prevalence :elephant))
+  :depends-on (:elephant))
