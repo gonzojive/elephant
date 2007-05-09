@@ -58,6 +58,11 @@
    #:controller-deserialize
    #:root #:spec #:class-root
 
+   #:get-cached-instance
+   #:cache-instance
+   #:uncache-instance
+   #:flush-instance-cache
+
    ;; Collections
    #:build-btree
    #:build-indexed-btree

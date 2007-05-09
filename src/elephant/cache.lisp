@@ -39,7 +39,7 @@ collected, so are the keys."
   (apply #'make-hash-table :weak-kind :value args)
   #+openmcl
   (apply #'make-hash-table :weak :value args)
-  #-(or cmu sbcl scl allegro lispworks)
+  #-(or cmu sbcl scl allegro lispworks openmcl)
   (apply #'make-hash-table args)
   )
 
@@ -64,6 +64,8 @@ collected, so are the keys."
 	(values nil nil)))
   #+(or allegro lispworks)
   (gethash key cache)
+  #-(or allegro lispworks openmcl cmu sbcl scl)
+  (gethash key cache)
   )
 
 (defun make-finalizer (key cache)
@@ -71,7 +73,12 @@ collected, so are the keys."
   (lambda () (remhash key cache))
   #+(or allegro openmcl)
   (lambda (obj) (declare (ignore obj)) (remhash key cache))
+  #-(or cmu sbcl allegro openmcl)
+  (lambda () nil)
   )
+
+(defun remcache (key cache)
+  (remhash key cache))
 
 (defun setf-cache (key cache value)
   "Set a value in a cache-table."
@@ -91,6 +98,8 @@ collected, so are the keys."
     (excl:schedule-finalization value (make-finalizer key cache))
     (setf (gethash key cache) value))
   #+lispworks
+  (setf (gethash key cache) value)
+  #-(or lispworks allegro openmcl cmu sbcl)
   (setf (gethash key cache) value)
   )
 
