@@ -215,6 +215,23 @@ $$ LANGUAGE plpgsql;
   (setf (key-type-of bt) (data-type key))
   (make-table bt))
 
+(defmethod upgrade-btree-type ((old-bt pm-btree) data-type)
+  "We started by guessing the key from the first value. If this was wrong, 
+we need to make a new database table with a new keytype, copy the old values
+and make the old instance refer to the new database table"
+  (let ((bt (make-instance 'pm-btree)))
+    (setf (key-type-of bt) data-type)
+    (make-table bt)
+    (map-btree #'(lambda (k v)
+                   (setf (get-value k bt)
+                         v))
+               old-bt)
+    (loop for slot in '(dbtable key-type value-type queries) do
+         (setf (slot-value old-bt slot)
+               (slot-value bt slot)))
+    (setf bt nil)
+    old-bt))
+
 (defun key-parameter (key bt)
   (postgres-format key (key-type-of bt)))
 
@@ -249,12 +266,19 @@ $$ LANGUAGE plpgsql;
 (defmethod (setf internal-get-value) (value key (bt pm-btree))
   (unless (initialized-p bt)
     (create-table-from-first-values bt key value))
-  (ignore-bad-params ;;TODO: Check why value and or key is sometimes nil and what to do
-    (with-trans-and-vars (bt)
-      (btree-exec-prepared bt 'insert
-                           (list (key-parameter key bt)
-                                 (value-parameter value bt))
-                           'cl-postgres:ignore-row-reader)))
+  (unless (eq :object (key-type-of bt))
+    (unless (eq (key-type-of bt) (data-type key))
+      (upgrade-btree-type bt :object)))
+  (with-trans-and-vars (bt)
+    (btree-exec-prepared bt 'insert
+                         (list (key-parameter key bt)
+                               (value-parameter value bt))
+                         'cl-postgres:ignore-row-reader))
+  ;; Comment by Henrik 2007-may-08
+  ;; Previously I had this wrapped in ignore-bad-params, but the recent upgrade might have solved that?
+  ;; Remove this comment if everything works, and remove ignore-bad-params macro as well.
+  ;;  (ignore-bad-params ;;TODO: Check why value and or key is sometimes nil and what to do
+  ;;    )
   value)
 
 (defmethod existsp (key (bt pm-btree))
