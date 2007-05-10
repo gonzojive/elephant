@@ -30,6 +30,7 @@
   '((:bdb (:ele-bdb))
     (:clsql (:ele-clsql))
     (:prevalence (:ele-prevalence))
+    (:postmodern (:ele-postmodern))
     )
   "Tells the main elephant code the tag used in a store spec to
    refer to a given data store.  The second argument is an asdf

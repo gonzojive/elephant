@@ -97,7 +97,7 @@
   *connection*)
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (register-backend-con-init :postmodern 'pm-test-and-construct))
+  (register-data-store-con-init :postmodern 'pm-test-and-construct))
 
 (defun pm-test-and-construct (spec)
   "Entry function for making SQL backend controllers"

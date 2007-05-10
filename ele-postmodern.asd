@@ -1,9 +1,14 @@
+;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10 -*-
+;;; 
+;;; Elephant users are granted the rights to distribute and use this software
+;;; as governed by the terms of the Lisp Lesser GNU Public License
+;;; (http://opensource.franz.com/preamble.html), also known as the LLGPL.
 
 (defsystem ele-postmodern
   :name "ele-postmodern"
-  :author "Henrik Hjelte <hhjelte@common-lisp.net"
+  :author "Henrik Hjelte <hhjelte@common-lisp.net>"
   :version "0.6.0"
-  :licence "GPL"
+  :licence "LLGPL"
   :description "Elephant postmodern postgresql backend"
   
   :components
