@@ -1,4 +1,8 @@
 (require 'asdf)
+#+sbcl
+(require :sb-posix)
+
+
 (asdf:operate 'asdf:load-op 'elephant :force t)
 (in-package :elephant)
 
