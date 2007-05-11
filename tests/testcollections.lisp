@@ -477,18 +477,17 @@ t
       (with-btree-cursor (curs index3)
 	(loop for (m k v) = (multiple-value-list (cursor-next-nodup curs))
 	      for i from 0 downto -9990 by 10
-	      while m
-	      always (= v i))))
+              always (and m (= v i)))))
   t)
 
 (deftest prev-nodup-test
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-	(cursor-last curs)
-	(loop for (m k v) = (multiple-value-list (cursor-prev-nodup curs))
-	      for i from -9999 to -9 by 10
-	      while m
-	      always (= v i))))
+        (multiple-value-bind (m k v) (cursor-last curs)
+          (assert (= -10000 v) nil "precondition for this test is wrong (~a), check dependencies between tests" v))
+        (loop for (m k v) = (multiple-value-list (cursor-prev-nodup curs))
+              for i from -9999 to -9 by 10
+              always (and m (= v i)))))
   t)
 
 (deftest pnodup-test
@@ -496,18 +495,17 @@ t
       (with-btree-cursor (curs index3)
 	(loop for (m k v p) = (multiple-value-list (cursor-pnext-nodup curs))
 	      for i from 0 to 9990 by 10
-	      while m
-	      always (= p i))))
+              always (and m (= p i)))))
   t)
 
 (deftest pprev-nodup-test
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-	(cursor-last curs)
+        (multiple-value-bind (m k v) (cursor-last curs)
+          (assert (= -10000 v) nil "precondition for this test is wrong, check dependencies between tests"))
 	(loop for (m k v p) = (multiple-value-list (cursor-pprev-nodup curs))
 	      for i from 9999 downto 9 by 10
-	      while m
-	      always (= p i))))
+              always (and m (= p i)))))
   t)
 
 (deftest cur-del1 
