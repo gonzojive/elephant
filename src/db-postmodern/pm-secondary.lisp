@@ -24,6 +24,7 @@
       (loop
        (multiple-value-bind (found key-column value-column)
            (funcall movement-function cursor)
+         ;;         (format t "sec-cur-mover ~S " (list found key-column value-column))
          (cond
            ((or (not found)
                 (and dup
@@ -102,9 +103,22 @@
   (when (cursor-initialized-p cursor)
     (cursor-close cursor))
   (with-initialized-cursor
-        (cursor :where-clause "where qi=$1"
-                 :search-key key)
-      (cursor-pnext cursor)))
+      (cursor :where-clause "where qi>=$1"
+              :search-key key)
+    (help-cursor-pset-with-equality cursor key)))
+
+(defun help-cursor-pset-with-equality (cursor key)
+  ;; The where clause for key is >= (greater than).
+  ;; This because sometime you may want to cursor-next to next key,
+  ;; and that wont work if we select by =.
+  ;; However, we also need to check that the key of the returned value
+  ;; is == key and only return the values in that case.
+  ;; This is because we ask for a key == using a where >=
+  (multiple-value-bind
+        (exists? skey val pkey)
+      (cursor-pnext cursor)
+    (when (elephant::lisp-compare-equal key skey)
+      (values exists? skey val pkey))))
 
 (defmethod cursor-pset-range ((cursor pm-secondary-cursor) key)
   (when (cursor-initialized-p cursor)
@@ -114,25 +128,23 @@
                  :search-key key)
       (cursor-pnext cursor)))
 
-
 (defmethod cursor-pget-both ((cursor pm-secondary-cursor) key pkey)
   (when (cursor-initialized-p cursor)
     (cursor-close cursor))
   (with-initialized-cursor
-        (cursor :where-clause "where qi=$1 and value=$2"
+        (cursor :where-clause "where qi>=$1 and value=$2"
                  :search-key key
                  :search-value pkey)
-      (cursor-pnext cursor)))
+    (help-cursor-pset-with-equality cursor key)))
 
 (defmethod cursor-pget-both-range ((cursor pm-secondary-cursor) key pkey)
   (when (cursor-initialized-p cursor)
     (cursor-close cursor))
   (with-initialized-cursor
-      (cursor :where-clause "where qi=$1 and value>=$2"
+      (cursor :where-clause "where qi>=$1 and value>=$2"
               :search-key key
               :search-value pkey)
-    (cursor-pnext cursor)))
-
+    (help-cursor-pset-with-equality cursor key)))
 
 (defmethod cursor-delete ((cursor pm-secondary-cursor))
   "Delete by cursor: deletes ALL secondary indices."

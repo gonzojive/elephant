@@ -1,5 +1,7 @@
 (in-package :db-postmodern)
 
+(defvar *default-fetch-size* 500)
+
 (defclass pm-cursor (cursor)
   ((name :accessor db-cursor-name-of)
    (search-key :accessor search-key-of :initform nil)
@@ -24,8 +26,17 @@
 (defmethod cursor-close ((cursor pm-cursor))
   (when (cursor-initialized-p cursor)
     (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars?
-      (cl-postgres:exec-query (active-connection) (format nil "close ~a;" (db-cursor-name-of cursor)))))
-  (setf (cursor-initialized-p cursor) nil))
+      (cl-postgres:exec-query (active-connection)
+                              (format nil "close ~a;" (db-cursor-name-of cursor)))))
+  (clean-cursor-state cursor))
+
+(defun clean-cursor-state (cursor)
+  (setf (cursor-initialized-p cursor) nil
+        (current-key-field cursor) nil
+        (current-value-field cursor) nil
+        (cached-rows-of cursor) nil
+        (cached-prior-rows-of cursor) nil))
+
 
 (defmethod cursor-current ((cursor pm-cursor))
   (internal-cursor-current cursor))
@@ -64,7 +75,7 @@
                                     (build-cursor-query-helper cursor :where-clause where-clause))
                     (btree-exec-prepared bt tempname parameters 'cl-postgres:ignore-row-reader))
                   (cl-postgres:exec-query (active-connection) (build-cursor-query-helper cursor))))
-            (setf (cached-rows-of cursor) nil))
+            (clean-cursor-state cursor))
           (setf (cursor-initialized-p cursor) t))))))
 
 (defmethod build-cursor-query-helper ((cursor pm-cursor) &key (where-clause ""))
@@ -98,17 +109,18 @@
 (defmethod fetch ((cursor pm-cursor) fetch-direction)
   (when (cursor-initialized-p cursor)
     (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars?
-        (let ((rows (cl-postgres:exec-query (active-connection)
-                                            (concatenate 'string
-                                                         "FETCH "
-                                                         (if (eq fetch-direction 'next)
-                                                             "FORWARD 500" ;; Some magic number, decide a good one and then remove this comment
-                                                             (symbol-name fetch-direction))
-                                                         " FROM "
-                                                         (db-cursor-name-of cursor))
-                                            'cl-postgres:list-row-reader)))
-          (setf (cached-prior-rows-of cursor) nil)
-          (setf (cached-rows-of cursor) rows)))
+      (let* ((fetch-stmt (concatenate 'string
+                                      "FETCH "
+                                      (if (eq fetch-direction 'next)
+                                          (format nil "FORWARD ~a" *default-fetch-size*)
+                                          (symbol-name fetch-direction))
+                                      " FROM "
+                                      (db-cursor-name-of cursor)))
+             (rows (cl-postgres:exec-query (active-connection)
+                                           fetch-stmt
+                                           'cl-postgres:list-row-reader)))
+        (setf (cached-prior-rows-of cursor) nil)
+        (setf (cached-rows-of cursor) rows)))
     (fetch-next-from-cache cursor)))
 
 (defun fetch-next-from-cache (cursor)
@@ -129,7 +141,6 @@
     (setf (current-row-identifier cursor) db-oid
           (current-key-field cursor) key-field
           (current-value-field cursor) value-field)))
-
 
 (defun fetch-prior (cursor)
   (flet ((from-cache ()
@@ -161,11 +172,11 @@
     (fetch cursor 'last)))
 
 (defmethod cursor-next ((cursor pm-cursor))
-    (if (cursor-initialized-p cursor)
-        (if (cached-rows-of cursor)
-            (fetch-next-from-cache cursor)
-            (fetch cursor 'next))
-        (cursor-first cursor))) 
+  (if (cursor-initialized-p cursor)
+      (if (cached-rows-of cursor)
+          (fetch-next-from-cache cursor)
+          (fetch cursor 'next))
+      (cursor-first cursor))) 
 
 (defmethod cursor-prev ((cursor pm-cursor))
   (block prev
@@ -191,10 +202,16 @@
   (when (cursor-initialized-p cursor)
     (cursor-close cursor))
   (with-initialized-cursor
-        (cursor :where-clause "where qi=$1"
-                 :search-key key)
-      (cursor-next cursor)))
-
+      (cursor :where-clause "where qi>=$1" 
+              :search-key key)
+    ;; need greater than, otherwise next won't work like for berkeley-db.
+    ;; However, we also need to check that the key of the returned value
+    ;; is == key and only return the values in that case
+    (multiple-value-bind
+          (exists? skey val)
+        (cursor-next cursor)
+      (when (elephant::lisp-compare-equal key skey)
+        (values exists? skey val)))))
 
 (defmethod cursor-set-range ((cursor pm-cursor) key)
   (when (cursor-initialized-p cursor)
@@ -203,7 +220,6 @@
       (cursor :where-clause "where qi>=$1"
               :search-key key)
     (cursor-next cursor))  )
-
 
 (defmethod cursor-get-both ((cursor pm-cursor) key value)
   (if (equal (get-value key (cursor-btree cursor))
