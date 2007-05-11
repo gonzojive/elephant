@@ -35,8 +35,8 @@
         (current-key-field cursor) nil
         (current-value-field cursor) nil
         (cached-rows-of cursor) nil
-        (cached-prior-rows-of cursor) nil))
-
+        (cached-prior-rows-of cursor) nil)
+  nil)
 
 (defmethod cursor-current ((cursor pm-cursor))
   (internal-cursor-current cursor))
@@ -61,6 +61,7 @@
       (when (initialized-p bt)
         (handler-bind
             ((bad-db-parameter #'(lambda (c)
+                                   (declare (ignore c))
                                    (return-from cursor-init nil))))
           (with-trans-and-vars (bt) ;;Or maybe just vars?
             (setf (search-key-of cursor) search-key)
@@ -105,7 +106,6 @@
      (when (cursor-initialized-p ,cursor)
        ,@body)))
 
-
 (defmethod fetch ((cursor pm-cursor) fetch-direction)
   (when (cursor-initialized-p cursor)
     (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars?
@@ -119,7 +119,11 @@
              (rows (cl-postgres:exec-query (active-connection)
                                            fetch-stmt
                                            'cl-postgres:list-row-reader)))
-        (setf (cached-prior-rows-of cursor) nil)
+        (if (eq fetch-direction 'next)
+            (when (> (length (cached-prior-rows-of cursor))
+                     *default-fetch-size*)
+              (setf (cached-prior-rows-of cursor) (subseq (cached-prior-rows-of cursor) 0 *default-fetch-size*)))
+            (setf (cached-prior-rows-of cursor) nil))
         (setf (cached-rows-of cursor) rows)))
     (fetch-next-from-cache cursor)))
 
@@ -143,21 +147,28 @@
           (current-value-field cursor) value-field)))
 
 (defun fetch-prior (cursor)
-  (flet ((from-cache ()
-           (with-accessors ((rows cached-rows-of)
-                            (prior cached-prior-rows-of))
-             cursor
-             (update-current-from-first-row cursor prior))
-           (cursor-current cursor)))
-    (with-accessors ((rows cached-rows-of)
-                     (prior cached-prior-rows-of))
+  (with-accessors ((rows cached-rows-of)
+                   (prior cached-prior-rows-of))
       cursor
-      (when prior
-        (push (first prior) rows)
-        (pop prior))
+    (flet ((from-cache ()
+             (update-current-from-first-row cursor prior)
+             (cursor-current cursor))
+           (pop-prior ()
+             (when prior
+               (push (first prior) rows)
+               (pop prior))))
+      (pop-prior)
       (if prior
           (from-cache)
-          (fetch cursor 'prior)))))
+          (progn
+            (scan-to-current-row cursor)
+            (if prior
+                (progn
+                  (pop-prior)
+                  (if prior
+                      (from-cache)
+                      (clean-cursor-state cursor)))
+                (clean-cursor-state cursor)))))))
 
 (defmethod cursor-first ((cursor pm-cursor))
   (when (set-has-been-called-p cursor)
@@ -179,24 +190,25 @@
       (cursor-first cursor))) 
 
 (defmethod cursor-prev ((cursor pm-cursor))
-  (block prev
-    (if (not (cursor-initialized-p cursor))
-        (cursor-last cursor)
-        (progn 
-          (when (set-has-been-called-p cursor)
-            (warn "Users beware, don't mix cursor-prev and cursor-set. Inefficient!")
-            ;;Users beware, don't mix cursor-prev and cursor-set. Inefficient!
-            (let ((oid-now (current-row-identifier cursor)))
-              (cursor-close cursor)
-              (cursor-init cursor)
-              (loop for x = (cursor-next cursor)
-                    do (unless x ;; Should not really happen I guess?
-                         (return-from prev))
-                    until (= oid-now (current-row-identifier cursor)))))
-          ;; We are finally at the position previously found by cursor-set.
-          ;; Lets drop down to fetch prior, which will return the correct value. 
-          ;; Normal case is this
-          (fetch-prior cursor)))))
+  (if (not (cursor-initialized-p cursor))
+      nil ;;        (cursor-last cursor)
+      (progn 
+        (when (set-has-been-called-p cursor)
+          (warn "Postmodern users beware, don't mix cursor-prev and cursor-set. Inefficient!")
+          (scan-to-current-row cursor))
+        ;; We are finally at the position previously found by cursor-set.
+        ;; Lets drop down to fetch prior, which will return the correct value. 
+        ;; Normal case is this
+        (fetch-prior cursor))))
+
+(defun scan-to-current-row (cursor)
+  (let ((oid-now (current-row-identifier cursor)))
+    (cursor-close cursor)
+    (cursor-init cursor)
+    (loop for x = (cursor-next cursor)
+       do (unless x ;; Should not really happen I guess?
+              (return-from scan-to-current-row))
+       until (equalp oid-now (current-row-identifier cursor)))))
 	  
 (defmethod cursor-set ((cursor pm-cursor) key)
   (when (cursor-initialized-p cursor)
