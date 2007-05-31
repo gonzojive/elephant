@@ -121,6 +121,10 @@
   ((oid :initarg :oid :accessor txn-oid)
    (class :initarg :class :accessor txn-classname)))
 
+(defmethod print-object ((op txn-new-instance-op) stream)
+  (format stream "#<TXN-NEW-INST ~A ~A>" 
+	  (txn-oid op) (txn-classname op)))
+
 (defmethod cache-instance :before ((sc prev-store-controller) instance)
   (unless-inhibited
     (process-txn-op
@@ -153,8 +157,13 @@
    (old-value :accessor txn-old-value :initarg :old-value)
    (new-value :accessor txn-new-value :initarg :new-value)))
 
+(defmethod print-object ((op txn-slot-write-op) stream)
+  (format stream "#<TXN-WRITE-SLOT ~A ~A ~A>" 
+	  (txn-oid op) (txn-slotname op) (txn-new-value op)))
+
 (defmethod persistent-slot-writer :before ((sc prev-store-controller) value instance name)
   (unless-inhibited
+    (assert (not (subtypep (type-of value) 'persistent-metaclass)))
     (multiple-value-bind (old exists?) 
 	(read-controller-slot (oid instance) name sc)
       (process-txn-op 
@@ -207,6 +216,10 @@
 (defclass txn-btree-write-op (txn-btree-op)
   ((new-value :accessor txn-new-value :initarg :new-value)))
 
+(defmethod print-object ((op txn-btree-write-op) stream)
+  (format stream "#<TXN-WRITE-BTREE ~A ~A ~A>" 
+	  (txn-oid op) (txn-key op) (txn-new-value op)))
+
 (defmethod (setf get-value) :before (value key (bt prev-btree))
   (unless-inhibited
     (when (not (subtypep (type-of bt) 'prev-btree-index))
@@ -228,6 +241,10 @@
     (setf (get-value (txn-key op) bt) (txn-new-value op))))
 
 (defclass txn-btree-remove-op (txn-btree-op) ())
+
+(defmethod print-object ((op txn-btree-remove-op) stream)
+  (format stream "#<TXN-BTREE-RM ~A ~A>" 
+	  (txn-oid op) (txn-key op)))
 
 (defmethod remove-kv :before (key (bt prev-btree))
   (unless-inhibited

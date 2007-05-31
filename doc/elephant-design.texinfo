@@ -13,7 +13,7 @@ between data stores and general hygene.
 
 The architecture has been carefully modularized:
 
-@image{ArchDiagram,,4.5in,[Architecture Diagram],.png}
+@image{ArchDiagram,,4.5in,[Architecture Diagram],png}
 
 To get a feeling for what is happening inside elephant, it is probably
 best to walk through the various major protocols to see how these
@@ -176,7 +176,7 @@ for a value.
 The BTree protocol almost requires an actual BTree implementation to
 be at all efficient.  Keys and values need to be accessible via the
 cursor API, which means they need to be walked linearly in the sort
-order of the keys (described in @xref{Persistent BTrees}).
+order of the keys (described in @ref{Persistent BTrees}).
 
 An indexed BTree automatically maintains a hash table of the indices
 defined on it so that users can access them by mapping or

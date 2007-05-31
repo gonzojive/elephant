@@ -760,7 +760,8 @@ escaped in symbol names, but if a docstring contains invalid Texinfo
 markup, you lose."
   (handler-bind ((warning #'muffle-warning))
     (let ((directory (merge-pathnames (pathname directory)))
-          (*print-right-margin* 200))
+	  (*print-right-margin* 200))
+      (declare (special *print-miser-width*))
       (ensure-directories-exist directory)
       (dolist (package packages)
 	(dolist (doc (collect-documentation (find-package package)))

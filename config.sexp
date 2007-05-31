@@ -1,26 +1,18 @@
-#+(and (or sbcl allegro) (not mswindows) (not windows))
+
+;; Linux defaults
+#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows)) (not (or macosx darwin)))
 ((:compiler . :gcc)
- (:berkeley-db-include-dir . "/opt/local/include/db45/")
- (:berkeley-db-lib-dir . "/opt/local/lib/db45/")
- (:berkeley-db-lib . "/opt/local/lib/db45/libdb-4.5.dylib")
- (:berkeley-db-deadlock . "/opt/local/bin/db45_deadlock")
+ (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
+ (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib/")
+ (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.so")
+ (:berkeley-db-deadlock . "/usr/local/BerkeleyDB.4.5/bin/db_deadlock")
  (:berkeley-db-cachesize . 20971520)
  (:berkeley-db-map-degree2 . t)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
- 
 
-#+openmcl
-((:compiler . :gcc)
- (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
- (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib/")
- (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.dylib")
- (:berkeley-db-cachesize . 20971520)
- (:berkeley-db-map-degree2 . t)
- (:prebuilt-libraries . nil)
- (:clsql-lib-paths . nil))
-
-#+(and lispworks (not mswindows))
+;; OSX Defaults 
+#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows)) (or macosx darwin))
 ((:compiler . :gcc)
  (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
  (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib/")
@@ -28,9 +20,10 @@
  (:berkeley-db-deadlock . "/usr/local/BerkeleyDB.4.5/bin/db_deadlock")
  (:berkeley-db-cachesize . 20971520)
  (:berkeley-db-map-degree2 . t)
- (:prebuilt-libraries . nil)
- (:clsql-lib-paths . nil))
+ (:clsql-lib-paths . nil)
+ (:prebuilt-libraries . nil))
 
+;; Windows defaults (assumes prebuild libraries)
 #+(or mswindows windows)
 ((:compiler . :cygwin)
  (:berkeley-db-include-dir . "C:/Program Files/Oracle/Berkeley DB 4.5.20/include/")

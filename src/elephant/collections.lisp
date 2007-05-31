@@ -402,18 +402,31 @@ not), evaluates the forms, then closes the cursor."
 ;; =======================================
 
 (defun lisp-compare<= (a b)
-  (etypecase a
-    (number (<= a b))
-    (string (string<= a b))
-    (persistent (<= (oid a) (oid b)))
-    (symbol (string<= (symbol-name a) (symbol-name b)))))
+  (let ((ta (type-of a))
+	(tb (type-of b)))
+    (if (equal ta tb)
+	(typecase a
+	  (number (<= a b))
+	  (persistent (<= (oid a) (oid b)))
+	  (string (string<= a b))
+	  (symbol (string<= (symbol-name a) (symbol-name b)))
+	  (pathname (string<= (namestring a) (namestring b)))
+	  (t nil)))))
+;;	(string< (symbol-name (type-of a)) (symbol-name (type-of b))))))
 
 (defun lisp-compare< (a b)
-  (etypecase a
-    (number (< a b))
-    (string (string< a b))
-    (persistent (< (oid a) (oid b)))
-    (symbol (string< (symbol-name a) (symbol-name b)))))
+  (let ((ta (type-of a))
+	(tb (type-of b)))
+    (if (equal ta tb)
+	(typecase a
+	  (number (< a b))
+	  (persistent (< (oid a) (oid b)))
+	  (string (string< a b))
+	  (symbol (string< (symbol-name a) (symbol-name b)))
+	  (pathname (string< (namestring a) (namestring b)))
+	  (t nil)))))
+;;	(string< (symbol-name (type-of a)) (symbol-name (type-of b))))))
+;;     (string< (format nil "~A" a) (format nil "~A" b))) ?
 
 (defun lisp-compare-equal (a b)
   (equal a b))

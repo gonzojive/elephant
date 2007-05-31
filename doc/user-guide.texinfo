@@ -968,7 +968,7 @@ the value).
 
 A simple, contrived example is shown in the figure below:
 
-@center @image{IndexedBtrees1,,4.0in,[BTree Index Diagram],.png}
+@center @image{IndexedBtrees1,,4.0in,[BTree Index Diagram],png}
 
 Here we have a primary, indexed btree with a set of keys and values
 represented by symbols.  We'll declare the function @code{val} to take

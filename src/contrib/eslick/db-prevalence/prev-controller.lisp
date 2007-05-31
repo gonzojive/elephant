@@ -17,25 +17,26 @@
 ;;;
 
 ;; TODO1:
-;; - universal comparison fn for keys & values
+;; - Debug rest of tests
+;; - Duplicate ordering on primary key 
+;; - Universal comparison fn for keys & values
+;; - Compress OID and do reachability on snapshot
 
 ;; TODO2:
-;; - Duplicate ordering on primary key 
-;; - Implement retry in execute-transaction
 ;; - Performance
-;;   - log(n) 'set' commands for dups (need full k-ary tree implementation?)
+;;   - log(n) 'set' commands (need full k-ary tree implementation?)
 ;;   - also reduces hash storage and access overhead
 ;; - Snapshots
 ;;   - revert to prior snapshot and preserve txn.log when snapshot fails
 ;;   - snapshot based on auto dirty-p?
 ;;   - auto mark and sweep on snapshot?
-;;   - auto reclaim oid on restore except roots?
 ;;   - auto snapshot in separate thread?
 ;;   - versioning: move db backward in time (to last snapshot, back N txns, etc?)
 ;;     or save snapshot versions
 ;;   - Implement backup command
 ;;   - Rotate snapshot files (see cl-prev's approach)
 ;; - Concurrent transactions (store side effects, cancel conflicting transactions on commit)
+;;   - Implement retry in execute-transaction
 ;; - Txn costs
 ;;   - transaction op pools to avoid allocating caches?
 ;;   - or txn structs for cheaper allocation costs?

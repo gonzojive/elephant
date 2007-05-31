@@ -75,6 +75,8 @@
    #:serialize-database-version-key
    #:serialize-database-version-value
    #:deserialize-database-version-value
+   #:lisp-compare<= #:lisp-compare<
+   #:lisp-compare-equal
 
    ;; Cursor accessors
    #:cursor-btree

@@ -341,7 +341,7 @@
 
       (disable-class-indexing 'idx-five :errorp nil)
       (setf (find-class 'idx-five) nil)
-      
+
       (defclass idx-five ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
 	 (slot2 :initarg :slot2 :initform 2 :accessor slot2)
