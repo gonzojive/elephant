@@ -33,10 +33,16 @@ if [ -e /usr/local/BerkeleyDB.4.5/lib/ ] ; then
      echo "my-config.sexp already exists, will not overwrite it"
    else
     echo '' > my-config.sexp
-    echo '((:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")' >> my-config.sexp
+    echo '(' >> my-config.sexp
+    echo ' (:compiler . :gcc)' >> my-config.sexp
+    echo ' (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")' >> my-config.sexp
     echo ' (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib/")' >> my-config.sexp
     echo ' (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.so")' >> my-config.sexp
-    echo ' (:pthread-lib . nil)' >> my-config.sexp
-    echo ' (:clsql-lib . nil))' >> my-config.sexp
+    echo ' (:berkeley-db-cachesize . 20971520)' >> my-config.sexp
+    echo ' (:berkeley-db-map-degree2 . t)' >> my-config.sexp
+    echo ' (:prebuilt-libraries . nil)' >> my-config.sexp
+    echo ' :pthread-lib . nil)' >> my-config.sexp
+    echo ' (:clsql-lib-paths . nil)' >> my-config.sexp
+    echo ')' >> my-config.sexp
    fi
 fi
