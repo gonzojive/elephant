@@ -66,13 +66,13 @@
 ;; Default implementation based on btrees
 ;;
 
-(defclass default-pset (pset)
+(defpclass default-pset (pset)
   ((btree :accessor pset-btree :initarg :btree)))
 
 (defmethod build-pset ((sc store-controller))
   "Default pset method; override if backend has better policy"
   (let ((btree (make-btree sc)))
-    (make-instance 'default-pset :btree btree :sc sc :from-oid (oid btree))))
+    (make-instance 'default-pset :btree btree :sc sc))) ;; :from-oid (oid btree))))
 
 (defun make-pset (&key items pset (sc *store-controller*))
   (let ((new-pset (build-pset sc)))
