@@ -478,6 +478,15 @@
        (in-out-deep-equalp b)))
   t t t t t t t)
 
+(defclass spud ()
+  ((msgid :type (or list string) :initform "" :accessor spud-msgid :initarg :msgid)
+   (value :type (or list string) :initform "" :accessor spud-value :initarg :value)))
+
+(deftest test-serialization-unicode-slot
+    (let ((s (make-instance 'spud :msgid '(a b c) :value (format nil "Mesa~Ao Teksto" (code-char 267)))))
+      (in-out-deep-equal-p s)))
+   
+
 (defclass pfoo ()
   ((slot1 :initarg :slot1 :accessor slot1))
   (:metaclass persistent-metaclass))
