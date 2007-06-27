@@ -191,7 +191,8 @@
   #+(and sbcl sb-unicode) :utf32le
   #+(and sbcl (not sb-unicode)) :utf8
   #+lispworks :utf16le
-  #+openmcl :utf8
+  #+(and openmcl (not openmcl-unicode-strings)) :utf8
+  #+openmcl-unicode-strings :utf32le
   )
 
 (defun compatible-unicode-support-p (encoding-type)
