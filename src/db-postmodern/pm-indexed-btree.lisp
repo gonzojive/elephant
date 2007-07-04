@@ -9,7 +9,10 @@
 (defmethod shared-initialize :after ((instance pm-indexed-btree) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
+;; It seems like this is unbound, but how can it be?
+  (setf (indices instance) (make-hash-table))
   (setf (indices-cache instance) (indices instance)))
+
   
 (defmethod build-indexed-btree ((sc postmodern-store-controller))
   (make-instance 'pm-indexed-btree :sc sc))

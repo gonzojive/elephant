@@ -89,6 +89,9 @@
 (defvar *testpg-spec2*
   '(:clsql (:postgresql "localhost.localdomain" "test2" "postgres" "")))
 
+(defvar *testpm-spec* 
+  '(:postmodern (:postgresql "127.0.0.1" "elepm" "postgres" "")))
+
 (defvar *testsqlite3-spec*
   `(:clsql (:sqlite3 
 	    ,(namestring
@@ -116,6 +119,9 @@
 (defvar *testsqlite3-memory-spec*
   '(:clsql (:sqlite3 :memory))
   "Using :memory: as a file name will get you an completely in-memory system")
+
+
+
 
 
 ;;

@@ -166,7 +166,7 @@
         
         (setf (persistent-slot-collection-of sc) (make-instance 'pm-btree :table-name "slots" :from-oid 2 :sc sc))
         (setf (key-type-of (persistent-slot-collection-of sc)) (data-type (form-slot-key 777 'a-typical-slot)))
-        
+
         (unless (base-table-existsp con)
           (create-base-tables con)
           (init-stored-procedures con)
@@ -176,6 +176,7 @@
 
         (setf (slot-value sc 'root) (make-instance 'pm-indexed-btree :sc sc :from-oid 0 :table-name "root"))
         (setf (key-type-of (slot-value sc 'root)) (data-type t))            
+
         
         (setf (slot-value sc 'class-root) (make-instance 'pm-indexed-btree :sc sc :from-oid 1 :table-name "classroot"))
         (setf (key-type-of (slot-value sc 'class-root)) (data-type t))
@@ -234,7 +235,9 @@
             new-value)))
   new-value)
 
+;; I have to figure out how to make this work...
 (defmethod persistent-slot-reader ((sc postmodern-store-controller) instance name)
+  (declare (optimize (debug 3)))
   (with-controller-for-btree (sc)
     (multiple-value-bind (v existsp)
         (get-value (form-slot-key (oid instance) name)

@@ -65,11 +65,11 @@
     "Get the string error associated with an error number."
     (convert-from-cstring (%db-strerror errno)))
 
-  (define-condition db-error (error) 
+  (define-condition bdb-db-error (error) 
     ((errno :type fixnum :initarg :errno :reader db-error-errno))
     (:report
      (lambda (condition stream)
-       (declare (type db-error condition) (type stream stream))
+       (declare (type bdb-db-error condition) (type stream stream))
        (format stream "Berkeley DB error: ~A"
 	       (db-strerror (db-error-errno condition)))))
     (:documentation "Berkeley DB errors."))
@@ -292,7 +292,7 @@
 				      (= ,errno DB_LOCK_NOTGRANTED))
 				  (throw 'transaction ,transaction)))
 			  (values))
-		    (t (error 'db-error :errno ,errno))))))))
+		    (t (error 'bdb-db-error :errno ,errno))))))))
 	`(defun ,wname ,wrapper-args
 	  ,@(if documentation (list documentation) (values))
 	  ,@(if declarations (list declarations) (values))
@@ -306,7 +306,7 @@
 			       (= ,errno DB_LOCK_NOTGRANTED))
 			      (throw 'transaction ,transaction)))
 		      (values))
-		(t (error 'db-error :errno ,errno)))))))))
+		(t (error 'bdb-db-error :errno ,errno)))))))))
 
 (defmacro flags (&key auto-commit joinenv init-cdb init-lock init-log
 		 init-mpool init-rep init-txn recover recover-fatal lockdown
@@ -395,7 +395,7 @@
     (declare (type fixnum errno))
     (if (= errno 0)
 	env
-	(error 'db-error :errno errno))))
+	(error 'bdb-db-error :errno errno))))
 	     
 (def-function ("db_env_close" %db-env-close)
     ((dbenvp :pointer-void)
@@ -520,7 +520,7 @@
     (declare (type fixnum errno))
     (if (= errno 0) 
 	db
-	(error 'db-error :errno errno))))
+	(error 'bdb-db-error :errno errno))))
 
 (def-function ("db_close" %db-close)
     ((db :pointer-void)
@@ -619,7 +619,7 @@ and DUP-SORT.")
   (multiple-value-bind (errno flags)
       (%db-get-flags db)
     (if (= errno 0) flags
-	(error 'db-error :errno errno))))
+	(error 'bdb-db-error :errno errno))))
 
 ;; Accessors
 
@@ -669,7 +669,7 @@ decoding, or NIL if nothing was found."
 	(throw 'transaction transaction))
        ((> result-size value-length)
 	(resize-buffer-stream-no-copy value-buffer-stream result-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 (def-function ("db_get_raw" %db-get-buffered)
     ((db :pointer-void)
@@ -720,7 +720,7 @@ decoding, or NIL if nothing was found."
 	  (throw 'transaction transaction))
 	 ((> result-size value-length)
 	  (resize-buffer-stream-no-copy value-buffer-stream result-size))
-	 (t (error 'db-error :errno errno)))))))
+	 (t (error 'bdb-db-error :errno errno)))))))
 
 (defun db-get (db key &key (key-size (length key))
 	       (transaction (txn-default *current-transaction*))
@@ -760,7 +760,7 @@ is found, NIL is returned."
 	    (throw 'transaction transaction))
 	   ((> result-size value-length)
 	    (resize-buffer-stream-no-copy value-buffer-stream result-size))
-	   (t (error 'db-error :errno errno))))))))
+	   (t (error 'bdb-db-error :errno errno))))))))
 
 (def-function ("db_put_raw" %db-put-buffered)
     ((db :pointer-void)
@@ -794,7 +794,7 @@ exists and EXISTS-ERROR-P is NIL."
 	   nil)
 	  ((or (= errno DB_LOCK_DEADLOCK) (= errno DB_LOCK_NOTGRANTED))
 	   (throw 'transaction transaction))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_put_raw" %db-put)
     ((db :pointer-void)
@@ -846,7 +846,7 @@ found."
 	  ((or (= errno DB_LOCK_DEADLOCK)
 	       (= errno DB_LOCK_NOTGRANTED))
 	   (throw 'transaction transaction))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_del" %db-delete)
     ((db :pointer-void)
@@ -874,7 +874,7 @@ string.  T on success, NIL if the key wasn't found."
 	    ((or (= errno DB_LOCK_DEADLOCK)
 		 (= errno DB_LOCK_NOTGRANTED))
 	     (throw 'transaction transaction))
-	    (t (error 'db-error :errno errno))))))
+	    (t (error 'bdb-db-error :errno errno))))))
 
 (def-function ("db_del_kv" %db-delete-kv)
     ((db :pointer-void)
@@ -906,7 +906,7 @@ wasn't found."
 	  ((or (= errno DB_LOCK_DEADLOCK)
 	       (= errno DB_LOCK_NOTGRANTED))
 	   (throw 'transaction transaction))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 ;; Compaction for BDB 4.4
 
@@ -950,7 +950,7 @@ wasn't found."
 		  (throw 'transaction transaction))
 		 ((> end-size end-length)
 		  (resize-buffer-stream-no-copy end end-size))
-		 (t (error 'db-error :errno errno))))))
+		 (t (error 'bdb-db-error :errno errno))))))
 
 ;; Cursors
 
@@ -976,7 +976,7 @@ wasn't found."
       (declare (type pointer-void curs)
 	       (type fixnum errno))
       (if (= errno 0) curs
-	  (error 'db-error :errno errno)))))
+	  (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_cursor_close" %db-cursor-close)
     ((cursor :pointer-void))
@@ -1001,7 +1001,7 @@ wasn't found."
 	  ((or (= errno DB_LOCK_DEADLOCK)
 	       (= errno DB_LOCK_NOTGRANTED))
 	   (throw 'transaction *current-transaction*))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_cursor_dup" %db-cursor-dup)
     ((cursor :pointer-void)
@@ -1020,7 +1020,7 @@ wasn't found."
       (declare (type pointer-void newc)
 	       (type fixnum errno))
       (if (= errno 0) newc
-	  (error 'db-error :errno errno)))))
+	  (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_cursor_get_raw" %db-cursor-get-key-buffered)
     ((cursor :pointer-void)
@@ -1081,7 +1081,7 @@ prev, prev-nodup."
        ((or (> result-size value-length) (> ret-key-size key-length))
 	(resize-buffer-stream-no-copy value-buffer-stream result-size)
 	(resize-buffer-stream-no-copy key-buffer-stream ret-key-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 ;; set, set-range: sets key
 (defun db-cursor-set-buffered (cursor key-buffer-stream value-buffer-stream
@@ -1120,7 +1120,7 @@ found.  Supports set and set-range."
        ((or (> result-size value-length) (> ret-key-size key-length))
 	(resize-buffer-stream-no-copy value-buffer-stream result-size)
 	(resize-buffer-stream key-buffer-stream ret-key-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 ;; get-both, get-both-range : sets both
 (defun db-cursor-get-both-buffered (cursor key-buffer-stream 
@@ -1161,7 +1161,7 @@ value pair found.  Supports get-both and get-both-range."
        ((or (> result-size value-length) (> ret-key-size key-length))
 	(resize-buffer-stream key-buffer-stream ret-key-size)
 	(resize-buffer-stream value-buffer-stream result-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 (def-function ("db_cursor_pget_raw" %db-cursor-pget-key-buffered)
     ((cursor :pointer-void)
@@ -1236,7 +1236,7 @@ next-dup, next-nodup, prev, prev-nodup."
 	(resize-buffer-stream-no-copy value-buffer-stream result-size)
 	(resize-buffer-stream-no-copy pkey-buffer-stream ret-pkey-size)
 	(resize-buffer-stream-no-copy key-buffer-stream ret-key-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 ;; set, set-range: sets key
 (defun db-cursor-pset-buffered (cursor key-buffer-stream pkey-buffer-stream 
@@ -1285,7 +1285,7 @@ primary triple found.  Supports set, set-range."
 	(resize-buffer-stream-no-copy value-buffer-stream result-size)
 	(resize-buffer-stream-no-copy pkey-buffer-stream ret-pkey-size)
 	(resize-buffer-stream key-buffer-stream ret-key-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 ;; get-both, get-both-range : sets key and primary
 (defun db-cursor-pget-both-buffered (cursor key-buffer-stream 
@@ -1337,7 +1337,7 @@ get, get-range."
 	(resize-buffer-stream key-buffer-stream ret-key-size)
 	(resize-buffer-stream pkey-buffer-stream ret-pkey-size)
 	(resize-buffer-stream-no-copy value-buffer-stream result-size))
-       (t (error 'db-error :errno errno))))))
+       (t (error 'bdb-db-error :errno errno))))))
 
 (def-function ("db_cursor_put_raw" %db-cursor-put-buffered)
     ((cursor :pointer-void)
@@ -1375,7 +1375,7 @@ get, get-range."
        nil)
       ((or (= errno DB_LOCK_DEADLOCK) (= errno DB_LOCK_NOTGRANTED))
        (throw 'transaction *current-transaction*))
-      (t (error 'db-error :errno errno)))))
+      (t (error 'bdb-db-error :errno errno)))))
 
 ;; Transactions
 
@@ -1408,7 +1408,7 @@ get, get-range."
 	       (type fixnum errno))
       (if (= errno 0) 
 	  txn
-	  (error 'db-error :errno errno)))))
+	  (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_txn_abort" %db-txn-abort)
     ((txn :pointer-void))
@@ -1660,7 +1660,7 @@ function for Elephant to compare lisp values.")
 	       (type fixnum errno))
       (if (= errno 0) 
 	  seq
-	  (error 'db-error :errno errno)))))
+	  (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_sequence_open" %db-sequence-open)
     ((seq :pointer-void)
@@ -1712,7 +1712,7 @@ function for Elephant to compare lisp values.")
 	  ((or (= errno db_lock_deadlock)
 	       (= errno db_lock_notgranted))
 	   (throw 'transaction transaction))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_sequence_get_lower" %db-sequence-get-lower)
     ((seq :pointer-void)
@@ -1737,7 +1737,7 @@ function for Elephant to compare lisp values.")
 	  ((or (= errno db_lock_deadlock)
 	       (= errno db_lock_notgranted))
 	   (throw 'transaction transaction))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_sequence_initial_value" %db-sequence-initial-value)
     ((seq :pointer-void)
@@ -1751,7 +1751,7 @@ function for Elephant to compare lisp values.")
 	 (%db-sequence-initial-value sequence (low32 value) (high32 value))))
     (declare (type fixnum errno))
     (cond ((= errno 0) nil)
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_sequence_remove" %db-sequence-remove)
     ((seq :pointer-void)
@@ -1806,7 +1806,7 @@ function for Elephant to compare lisp values.")
 				 (low32 max) (high32 max))))
     (declare (type fixnum errno))
     (cond ((= errno 0) nil)
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("db_sequence_get_range" %db-sequence-get-range)
     ((seq :pointer-void)
@@ -1824,7 +1824,7 @@ function for Elephant to compare lisp values.")
 	     (type integer minlow minhigh maxlow maxhigh))
     (cond ((= errno 0) (values (make-64-bit-integer minhigh minlow)
 			       (make-64-bit-integer maxhigh maxlow)))
-	  (t (error 'db-error :errno errno)))))
+	  (t (error 'bdb-db-error :errno errno)))))
 
 (def-function ("next_counter" %next-counter)
     ((env :pointer-void)
@@ -1840,5 +1840,5 @@ function for Elephant to compare lisp values.")
   "Get the next element in the counter.  To be deprecated when 4.3 is released."
   (let ((ret (%next-counter env db parent key key-size lockid lockid-size)))
     (if (< ret 0)
-	(error 'db-error :errno ret)
+	(error 'bdb-db-error :errno ret)
 	ret)))

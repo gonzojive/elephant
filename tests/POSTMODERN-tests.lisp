@@ -15,7 +15,14 @@
 
 (in-package "ELEPHANT-TESTS")
 
-(defparameter *testpm-spec* '(:postmodern (:postgresql "127.0.0.1" "elepm" "user" "password")))
+(asdf:operate 'asdf:load-op :ele-postmodern)
+
+;; Note:  One almost certainly has to execute "createdb elepm" as the user "postgres"
+;; in order for this to work.
+;; The Postemodern interface also apparently requries that "plpgsql language be loaded as 
+;; a query language into the postgres instance.  This can be created by executing:
+;; "create language plpgsql;" inside postgres itself.
+(defparameter *testpm-spec* '(:postmodern (:postgresql "127.0.0.1" "elepm" "postgres" "")))
 
 (setf *default-spec* *testpm-spec*)
 

@@ -268,7 +268,7 @@
    #:cross-reference-error
    #:controller-lost-error
    #:persistent-class-not-indexed
-   #:db-error
+   #:bdb-db-error
    #:elephant-deserialization-error
    #:elephant-type-deserialization-error
 

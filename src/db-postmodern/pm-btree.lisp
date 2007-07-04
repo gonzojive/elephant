@@ -48,7 +48,8 @@
         (let ((rows (sp-meta-select (active-connection) (table-of bt))))
           (destructuring-bind (keytype valuetype) (first rows)
             (setf (key-type-of bt) (read-from-string keytype))
-            (setf (value-type-of bt) (read-from-string valuetype))))))))
+            (setf (value-type-of bt) (read-from-string valuetype)))))))
+)
 
 (defmethod duplicates-allowed-p ((bt pm-btree))
   nil)
@@ -149,22 +150,22 @@ $$ LANGUAGE plpgsql;
 (defmethod btree-exec-prepared ((bt pm-btree) query-identifier params row-reader)
   (destructuring-bind (name-string name-symbol sql)
       (loop for query-info = (cdr (assoc query-identifier (queries-of bt)))
-         for try-to-prepare = t then nil
-         if query-info do (return query-info)
-         else do
-         (if try-to-prepare
-             (prepare-local-queries bt)
-             (error "btree-exec-prepared could not find the prepared query ~S in ~S" query-identifier (table-of bt))))
+	    for try-to-prepare = t then nil
+	    if query-info do (return query-info)
+	    else do
+	    (if try-to-prepare
+		(prepare-local-queries bt)
+		(error "btree-exec-prepared could not find the prepared query ~S in ~S" query-identifier (table-of bt))))
     (let ((meta (cl-postgres:connection-meta (active-connection))))
       (unless (gethash name-symbol meta)
         (setf (gethash name-symbol meta) t)
         (handler-case
             (cl-postgres:prepare-query (active-connection) name-string sql)
-          ((cl-postgres:database-error (e)
-            (if (string= (slot-value e 'error-code)
+	  (cl-postgres:database-error (e)
+            (if (string= (slot-value e 'cl-postgres::error-code)
                          "42P05")
                 'ignore-because-already-prepared
-                (signal e)))))))
+                (signal e))))))
     
     (cl-postgres:exec-prepared (active-connection)
                                name-string
@@ -242,11 +243,13 @@ and make the old instance refer to the new database table"
 ;;------------------------------------------
 
 (defmethod get-value (key (bt pm-btree))
+  (declare (optimize (debug 3)))
   (multiple-value-bind (value exists)
       (internal-get-value key bt)
     (values value exists)))
 
 (defmethod internal-get-value (key (bt pm-btree))
+  (declare (optimize (debug 3)))
   (let (value exists-p)
     (when (initialized-p bt)
       (with-trans-and-vars (bt)

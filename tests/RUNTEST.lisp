@@ -17,6 +17,7 @@
 (asdf:operate 'asdf:load-op :ele-clsql)
 (asdf:operate 'asdf:load-op :ele-bdb)
 (asdf:operate 'asdf:load-op :ele-sqlite3)
+;; (asdf:operate 'asdf:load-op :postmodern)
 
 (asdf:operate 'asdf:load-op :elephant-tests)
 
@@ -32,6 +33,16 @@
 
 ;; Test SQLite 3
 (setq *default-spec* *testsqlite3-spec*)
+(do-backend-tests)
+
+;; Test Postmodern interface to Postgres
+;; Note:  One almost certainly has to execute "createdb elepm" as the user "postgres"
+;; in order for this to work.
+;; The Postemodern interface also apparently requries that "plpgsql language be loaded as 
+;; a query language into the postgres instance.  This can be created by executing:
+;; "create language plpgsql;" inside postgres itself.
+(asdf:operate 'asdf:load-op :ele-postmodern)
+(setq *default-spec* *testpm-spec*)
 (do-backend-tests)
 
 ;; Test a Migration of data from BDB to postgres
