@@ -1,5 +1,12 @@
 (in-package :db-postmodern)
 
+;; One limitation is that indexes can not be created on columns longer than about 2,000 characters.
+;; In order to avoid problems with that, strings are encoded as blobs.
+;; If you want to encode strings as strings despite the index limitation,
+;; do this:   (push :char-columns cl::*features*)
+;;
+;; At one time, we might add a testcase for this and similar limitations.
+
 (defclass pm-btree (btree)
   ((dbtable :accessor table-of :initform nil :initarg :table-name)
    (key-type :accessor key-type-of :initform nil)
@@ -179,6 +186,7 @@ $$ LANGUAGE plpgsql;
                                   ;; Round up, because it is probably a query in for greater than.
                                   (ceiling parameter))
                                  (t (signal 'bad-db-parameter)))))
+    #+char-columns 
     (:string (cond
                ((stringp parameter) parameter)
                ((null parameter)
@@ -186,24 +194,31 @@ $$ LANGUAGE plpgsql;
                 "")
                (t (warn "Suspect string input to postgres-format.")
                   (format nil "~a" parameter))))
+    #-char-columns
+    (:string (princ-to-string (ensure-bid (serialize-to-base64-string parameter (active-controller)))))    
     (:object (princ-to-string (ensure-bid (serialize-to-base64-string parameter (active-controller)))))))
 
 (defun postgres-value-to-lisp (value data-type)
   (ecase data-type
     (:integer value)
+    #+char-columns 
     (:string value)
+    #-char-columns
+    (:string (deserialize-binary-result value))    
     (:object (deserialize-binary-result value))))
 
 (defun data-type (item)
   (typecase item
     (integer :integer)
+    #+char-columns 
     (string  :string)
     (t :object)))
 
 (defun postgres-type (data-type)
   (ecase data-type
     (:integer 'bigint)
-    (:string 'text)
+    #+char-columns (:string 'text)
+    #-char-columns (:string 'bigint)    
     (:object 'bigint))) ;; Object are integers that refer to blob table
 
 (defmethod create-table-from-first-values ((bt pm-btree) key value)
