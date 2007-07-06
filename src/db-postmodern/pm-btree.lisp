@@ -148,29 +148,25 @@ $$ LANGUAGE plpgsql;
       (deserialize-from-database (ensure-bob item) (active-controller))))
 
 (defmethod btree-exec-prepared ((bt pm-btree) query-identifier params row-reader)
-  (destructuring-bind (name-string name-symbol sql)
-      (loop for query-info = (cdr (assoc query-identifier (queries-of bt)))
-	    for try-to-prepare = t then nil
-	    if query-info do (return query-info)
-	    else do
-	    (if try-to-prepare
-		(prepare-local-queries bt)
-		(error "btree-exec-prepared could not find the prepared query ~S in ~S" query-identifier (table-of bt))))
-    (let ((meta (cl-postgres:connection-meta (active-connection))))
-      (unless (gethash name-symbol meta)
-        (setf (gethash name-symbol meta) t)
-        (handler-case
-            (cl-postgres:prepare-query (active-connection) name-string sql)
-	  (cl-postgres:database-error (e)
-            (if (string= (slot-value e 'cl-postgres::error-code)
-                         "42P05")
-                'ignore-because-already-prepared
-                (signal e))))))
-    
-    (cl-postgres:exec-prepared (active-connection)
-                               name-string
-                               params
-                               row-reader)))
+  (labels ((lookup-query (query-identifier)
+             (cdr (assoc query-identifier (queries-of bt))))
+           (ensure-registered-on-class (query-identifier)
+             (or (lookup-query query-identifier)
+                 (progn (prepare-local-queries bt)
+                        (or (lookup-query query-identifier)
+                            (error "btree-exec-prepared could not find the prepared query ~S in ~S" query-identifier (table-of bt))))))
+           (ensure-prepared-on-connection (name-symbol name-string sql)
+             (let ((meta (cl-postgres:connection-meta (active-connection))))
+               (unless (gethash name-symbol meta)
+                 (cl-postgres:prepare-query (active-connection) name-string sql)
+                 (setf (gethash name-symbol meta) t)))))
+    (destructuring-bind (name-string name-symbol sql)
+        (ensure-registered-on-class query-identifier)
+      (ensure-prepared-on-connection name-symbol name-string sql)
+      (cl-postgres:exec-prepared (active-connection)
+                                 name-string
+                                 params
+                                 row-reader))))
 
 (defun postgres-format (parameter data-type)
   (ecase data-type
