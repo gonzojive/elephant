@@ -20,8 +20,9 @@
 ;; Note:  One almost certainly has to execute "createdb elepm" as the user "postgres"
 ;; in order for this to work.
 ;; The Postemodern interface also apparently requries that "plpgsql language be loaded as 
-;; a query language into the postgres instance.  This can be created by executing:
-;; "create language plpgsql;" inside postgres itself.
+;; a query language into the postgres instance.  This can be created by executing
+;; this in a shell:
+;;     psql -c 'create language plpgsql' elepm;
 (defparameter *testpm-spec* '(:postmodern (:postgresql "127.0.0.1" "elepm" "postgres" "")))
 
 (setf *default-spec* *testpm-spec*)

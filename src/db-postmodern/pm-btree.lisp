@@ -48,8 +48,7 @@
         (let ((rows (sp-meta-select (active-connection) (table-of bt))))
           (destructuring-bind (keytype valuetype) (first rows)
             (setf (key-type-of bt) (read-from-string keytype))
-            (setf (value-type-of bt) (read-from-string valuetype)))))))
-)
+            (setf (value-type-of bt) (read-from-string valuetype))))))))
 
 (defmethod duplicates-allowed-p ((bt pm-btree))
   nil)

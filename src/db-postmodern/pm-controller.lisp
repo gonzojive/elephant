@@ -242,11 +242,9 @@
     (multiple-value-bind (v existsp)
         (get-value (form-slot-key (oid instance) name)
                    (persistent-slot-collection-of sc))
-      (when (and v (not existsp))
-        (error "Debugging:Ooops existsp value was not returned."))
       (if existsp
           v
-          (error  'unbound-slot :instance instance :name name)))))
+          (error 'unbound-slot :instance instance :name name)))))
 
 (defmethod persistent-slot-boundp ((sc postmodern-store-controller) instance name)
   (with-controller-for-btree (sc)
