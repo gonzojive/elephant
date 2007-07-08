@@ -6,7 +6,7 @@
   `(push ,sql-code *stored-procedures*))
 
 (define-stored-procedure
-"CREATE OR REPLACE FUNCTION sp_ins_blob(value bytea) RETURNS integer AS $$
+"CREATE OR REPLACE FUNCTION sp_ins_blob(value bytea) RETURNS bigint AS $$
 BEGIN
     insert into blob (bob) values(value);
     return currval('blob_bid_seq');
@@ -168,7 +168,7 @@ prepared queries must be initialized for each database connection.")
   (dolist (stmt '("create sequence tree_seq;" ;; Unnecessary soon
                   "create sequence blob_bid_seq;"
                   "create table blob (
-bid integer primary key not null default nextval('blob_bid_seq'),
+bid bigint primary key not null default nextval('blob_bid_seq'),
 bob bytea unique not null);"
                   
                   "create table metatree (
