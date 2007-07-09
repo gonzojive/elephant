@@ -100,13 +100,13 @@ prepared queries must be initialized for each database connection.")
   "select nextval('tree_seq');")
 
 (define-prepared-query sp-select-blob-bid-by-bob (bob)
-  "select bid from blob where bob=decode($1,'base64')") ;; TODO choose: Limit 1 or set bob as unique based on performance
+  "select bid from blob where bob=$1")
 
 (define-prepared-query sp-select-blob-bob-by-bid (bid)
-  "select bob from blob where bid=$1") ;; TODO choose: Limit 1 or set bob as unique based on performance
+  "select bob from blob where bid=$1")
 
 (define-prepared-query sp-ins-blob (buffer)
-  "select sp_ins_blob(decode($1,'base64'))")
+  "select sp_ins_blob($1)")
 
 (define-prepared-query sp-meta-select (tablename)
    "select keytype,valuetype from metatree where tablename=$1")
@@ -122,50 +122,21 @@ prepared queries must be initialized for each database connection.")
 (defun ensure-bob (bid)
   (sp-select-blob-bob-by-bid (active-connection) (integer-to-string bid) :row-reader 'first-value-row-reader))
 
-(defclass cache ()
-  ((table :accessor table-of :initform (make-hash-table :test #'equal))
-   (max-size :accessor max-size :initform 200 :initarg :max-size)))
-
-(defmethod cache-make-room ((c cache))
-  (let ((min-value (loop for v being the hash-values of (table-of c)
-                         minimizing (cdr v))))
-    (maphash #'(lambda (key value)
-                 (when (= min-value (cdr value))
-                   (remhash key (table-of c))))
-             (table-of c))))
-
-(defmethod cache-object ((c cache) key value)
-  (with-accessors ((table table-of) (max max-size))
-    c
-    (when (>= (hash-table-size table) max)
-      (cache-make-room c))
-    (setf (gethash key table) (cons value 0))))
-
-(defmethod check-cache ((c cache) key)
-  (with-accessors ((table table-of))
-    c
-    (let ((v (gethash key table)))
-      (when v
-        (incf (cdr v))
-        (car (values v t))))))
-
-(defparameter *bob-cache* (make-instance 'cache))
-(defparameter *use-cache* nil) ;; cache is disabled by default, haven't checked for thread safety, and I'm not sure it improves performance anyway.
+(defun serialize-to-postmodern (x sc)
+  "Encode object using the store controller's serializer format,"
+  (with-buffer-streams (out-buf)
+    (elephant-memutil::buffer-read-byte-vector 
+     (serialize x out-buf sc))))
 
 (defun ensure-bid (bob)
-  (or (and *use-cache* (check-cache *bob-cache* bob))
-      (let ((rows (sp-select-blob-bid-by-bob (active-connection) bob)))
-        (if rows
-            (progn
-              #+elephant-without-optimize 
-              (unless (eq (length rows) 1) (error "Blob table is corrupt, only unique objects should be allowed however a duplicate found."))
-              (caar rows))
-            (let ((bid (caar (sp-ins-blob (active-connection) bob))))
-              (when *use-cache* (cache-object *bob-cache* bob bid))
-              bid)))))
+  (declare (type (simple-array (unsigned-byte 8)) bob))
+  (let ((bid (sp-select-blob-bid-by-bob (active-connection) bob :row-reader 'first-value-row-reader)))
+    (if bid
+        bid
+        (sp-ins-blob (active-connection) bob :row-reader 'first-value-row-reader))))
 
 (defun create-base-tables (connection)
-  (dolist (stmt '("create sequence tree_seq;" ;; Unnecessary soon
+  (dolist (stmt '("create sequence tree_seq;"
                   "create sequence blob_bid_seq;"
                   "create table blob (
 bid bigint primary key not null default nextval('blob_bid_seq'),

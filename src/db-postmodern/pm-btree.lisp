@@ -195,8 +195,9 @@ $$ LANGUAGE plpgsql;
                (t (warn "Suspect string input to postgres-format.")
                   (format nil "~a" parameter))))
     #-char-columns
-    (:string (princ-to-string (ensure-bid (serialize-to-base64-string parameter (active-controller)))))    
-    (:object (princ-to-string (ensure-bid (serialize-to-base64-string parameter (active-controller)))))))
+    (:string (princ-to-string (ensure-bid (serialize-to-postmodern parameter (active-controller)))))    
+    (:object (princ-to-string (ensure-bid (serialize-to-postmodern parameter (active-controller)))))    
+    ))
 
 (defun postgres-value-to-lisp (value data-type)
   (ecase data-type
