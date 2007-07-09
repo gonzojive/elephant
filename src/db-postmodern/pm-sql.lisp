@@ -29,6 +29,7 @@ BEGIN
     END IF;
 END;
 $$ LANGUAGE plpgsql;
+
 ")
 
 (defun ignore-warning (condition)
@@ -46,20 +47,6 @@ $$ LANGUAGE plpgsql;
 ;;    (cl-postgres:exec-query con "CREATE LANGUAGE plpgsql;"))
   (loop for sp-def in *stored-procedures* do
         (cl-postgres:exec-query con sp-def)))
-
-(defparameter *prepare-query-lambdas* nil
-  "List of functions taking connection as parameter, since 
-prepared queries must be initialized for each database connection.")
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defun safe-sql-name (name)
-    (substitute #\_ #\- (string name) :test #'char=))
-  
-  (defun tweak-param (parameter)
-    (cond
-      ((eq 'key parameter) `(setf key (integer-to-string (ensure-bid key))))
-      ((eq 'value parameter) `(setf value (integer-to-string (ensure-bid value))))
-      (t nil))))
 
 (defparameter *stats* (make-hash-table))
 
@@ -96,22 +83,23 @@ prepared queries must be initialized for each database connection.")
     (values value value-set)))
 
 (defmacro define-prepared-query (name parameters sql-definition) ;;TODO rebind to make macro safer
-  ;;TODO:Cleanup this and code in db-btree. For exampe=le, the *prepare-query-lambdas* are they necessary?
-  (let ((sp-name (safe-sql-name name)))
-    `(progn
-;;      (push (lambda (connection)
-;;              (postmodern::ensure-prepared connection ',name ,sql-definition))
-;;       ;;              (cl-postgres:prepare-query connection ,sp-name ,sql-definition)
-;;       *prepare-query-lambdas*)
-      (defun ,name (connection ,@parameters &key (row-reader 'cl-postgres:list-row-reader))
-        ,@(mapcar #'tweak-param parameters)
-        (let ((meta (cl-postgres:connection-meta connection)))
-          (unless (gethash ',name meta)
-            (setf (gethash ',name meta) t)
-            (cl-postgres:prepare-query connection ,(symbol-name name) ,sql-definition))) ;;same as ensure-prepared-on-conn in db-btree
-        (with-stat-collector (,sp-name)
-          (cl-postgres:exec-prepared connection ,(symbol-name name) (list ,@parameters) row-reader)
-          )))))
+  ;;TODO:Cleanup this and code in db-btree.
+  (flet ((safe-sql-name (name)
+           (substitute #\_ #\- (string name) :test #'char=))
+         (tweak-param (parameter)
+           (cond
+             ((eq 'key parameter) `(setf key (integer-to-string (ensure-bid key))))
+             ((eq 'value parameter) `(setf value (integer-to-string (ensure-bid value))))
+             (t nil))))
+    (let ((sp-name (safe-sql-name name)))
+      `(defun ,name (connection ,@parameters &key (row-reader 'cl-postgres:list-row-reader))
+         ,@(mapcar #'tweak-param parameters)
+         (let ((meta (cl-postgres:connection-meta connection)))
+           (unless (gethash ',name meta)
+             (setf (gethash ',name meta) t)
+             (cl-postgres:prepare-query connection ,(symbol-name name) ,sql-definition))) ;;same as ensure-prepared-on-conn in db-btree
+         (with-stat-collector (,sp-name)
+           (cl-postgres:exec-prepared connection ,(symbol-name name) (list ,@parameters) row-reader))))))
 
 (define-prepared-query next-tree-number ()
   "select nextval('tree_seq');")
@@ -127,11 +115,6 @@ prepared queries must be initialized for each database connection.")
 
 (define-prepared-query sp-metatree-insert (tablename keytype valuetype)
    "insert into metatree(tablename,keytype,valuetype) values ($1,$2,$3)")
-
-(defun prepare-queries ()
-  (assert (active-connection))
-  (loop for prep-lambda in *prepare-query-lambdas* do
-        (funcall prep-lambda (active-connection))))
 
 (defun ensure-bob (bid)
   (sp-select-blob-bob-by-bid (active-connection) (integer-to-string bid) :row-reader 'first-value-row-reader))
