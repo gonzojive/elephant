@@ -5,11 +5,28 @@
 (defmacro define-stored-procedure (sql-code)
   `(push ,sql-code *stored-procedures*))
 
-(define-stored-procedure
-"CREATE OR REPLACE FUNCTION sp_ins_blob(value bytea) RETURNS bigint AS $$
+(define-stored-procedure "
+CREATE OR REPLACE FUNCTION sp_ensure_bid (value bytea) RETURNS bigint as $$
+DECLARE
+    value_md5 bytea;
+    retrieved_bid bigint;
+    existing_p boolean := FALSE;
+    
 BEGIN
-    insert into blob (bob) values(value);
-    return currval('blob_bid_seq');
+    /* md5 encodes to a hex string 32 chars which is converted to an bytea of 16 bytes */
+    select decode(md5(value),'hex') into value_md5;
+
+    select bid into retrieved_bid from blob where bob_md5=value_md5 and bob=value limit 1;
+    IF FOUND THEN 
+          existing_p := TRUE;
+    END IF;
+
+    IF existing_p THEN
+        return retrieved_bid;
+    ELSE
+        insert into blob (bob,bob_md5) values(value,value_md5);
+        return currval('blob_bid_seq');
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
 ")
@@ -99,14 +116,11 @@ prepared queries must be initialized for each database connection.")
 (define-prepared-query next-tree-number ()
   "select nextval('tree_seq');")
 
-(define-prepared-query sp-select-blob-bid-by-bob (bob)
-  "select bid from blob where bob=$1")
-
 (define-prepared-query sp-select-blob-bob-by-bid (bid)
   "select bob from blob where bid=$1")
 
-(define-prepared-query sp-ins-blob (buffer)
-  "select sp_ins_blob($1)")
+(define-prepared-query sp-ensure-bid (buffer)
+  "select sp_ensure_bid($1)")
 
 (define-prepared-query sp-meta-select (tablename)
    "select keytype,valuetype from metatree where tablename=$1")
@@ -130,23 +144,21 @@ prepared queries must be initialized for each database connection.")
 
 (defun ensure-bid (bob)
   (declare (type (simple-array (unsigned-byte 8)) bob))
-  (let ((bid (sp-select-blob-bid-by-bob (active-connection) bob :row-reader 'first-value-row-reader)))
-    (if bid
-        bid
-        (sp-ins-blob (active-connection) bob :row-reader 'first-value-row-reader))))
+  (sp-ensure-bid (active-connection) bob :row-reader 'first-value-row-reader))
 
 (defun create-base-tables (connection)
   (dolist (stmt '("create sequence tree_seq;"
                   "create sequence blob_bid_seq;"
                   "create table blob (
 bid bigint primary key not null default nextval('blob_bid_seq'),
-bob bytea unique not null);"
+bob_md5 bytea not null,
+bob bytea not null);"
                   
                   "create table metatree (
 tablename text primary key not null,
 keytype text not null,
 valuetype text not null);"
-                  ;;  "create index idx_blob_bob on blob (bob);" ;; already made implicitly when definig bob as unique
+                  "create index idx_blob_bob_md5 on blob (bob);"
                   ;;  "create index idx_blob_bid on blob (bid);" ;;already made implicitly when defining primary key for table
                   "create sequence persistent_seq start with 10;")) ;; make room for some system tables
     (cl-postgres:exec-query connection stmt)))
