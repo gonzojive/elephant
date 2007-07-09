@@ -44,15 +44,15 @@
     (make-persons *nr-persons*)))
 
 (defun subsets (size list)
-  (let ((subsets nil))
-    (loop for elt in list 
-	  for i from 0 do
-       (when (= 0 (mod i size))
-	 (setf (car subsets) (nreverse (car subsets)))
-	 (push nil subsets))
-       (push elt (car subsets)))
+  (let ((subsets (cons nil nil)))
+    (loop for elt in list
+          for i from 0 do
+          (when (= 0 (mod i size))
+            (setf (car subsets) (nreverse (car subsets)))
+            (push nil subsets))
+          (push elt (car subsets)))
     (setf (car subsets) (nreverse (car subsets)))
-    (nreverse subsets)))
+    (cdr (nreverse subsets))))
 
 (defmacro do-subsets ((subset subset-size list) &body body)
   `(loop for ,subset in (subsets ,subset-size ,list) do
