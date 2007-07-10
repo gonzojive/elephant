@@ -27,6 +27,24 @@
       rv)
   t)
 
+(deftest keysizetest
+    (let ((rv nil))
+      (let ((key "0123456789"))
+	;; This should create a key of size 10* (2 ** x)
+	;; On SBCL and postmodern, this fails at 16...
+	(dotimes (x 14)
+	  (setf key (concatenate 'string key key))
+	  )
+	(format t "Testing length = ~A~%" (length key))
+      (add-to-root key key)
+      (setq rv (equal (format nil "~A" key)
+		      (format nil "~A" (get-from-root key))))
+      (remove-from-root key)
+      rv)
+      )
+  t)
+
+
 (deftest testoid
     (progn
       (ele::next-oid *store-controller*)
