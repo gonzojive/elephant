@@ -437,6 +437,7 @@ not), evaluates the forms, then closes the cursor."
   (let ((end (if value-set-p value end))
 	(results nil))
     (ensure-transaction (:store-controller (get-con btree) :degree-2 *map-using-degree2*)
+      (handler-case 
       (with-btree-cursor (curs btree)
 	(flet ((continue-p (key)
 		 ;; Do we go to the next value?
@@ -464,14 +465,32 @@ not), evaluates the forms, then closes the cursor."
 		  (funcall fn key value)
 		  (return-from map-btree nil))
 	      (loop
-		 (multiple-value-bind (exists? k v)
-		     (if from-end
-			 (cursor-prev curs)
-			 (cursor-next curs))
-		   (declare (dynamic-extent exists? k v))
-		   (if (and exists? (continue-p k))
-		       (funcall fn k v)
-		       (return nil)))))))))
+	       (handler-case 
+		   (progn
+		     (multiple-value-bind (exists? k v)
+			 (if from-end
+			     (cursor-prev curs)
+			     (cursor-next curs))
+		       (declare (dynamic-extent exists? k v))
+		       (if (and exists? (continue-p k))
+			   (funcall fn k v)
+			   (return nil))))
+		     (elephant-deserialization-error 
+		      (e)
+		      (format t "desirializaiton-error: returning nil~%")
+		      (return nil)
+		      nil
+		      )
+		 )
+	       )))
+	  ))
+      (elephant-deserialization-error 
+       (e)
+       (format t "desiralizaiton-error: returning nil~%")
+       nil
+       )
+      )
+      )
     results))
 
 (defgeneric map-index (fn index &rest args &key start end value from-end collect &allow-other-keys)
