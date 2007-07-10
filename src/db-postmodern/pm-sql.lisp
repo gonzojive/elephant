@@ -132,16 +132,18 @@ $$ LANGUAGE plpgsql;
 (defun create-base-tables (connection)
   (dolist (stmt '("create sequence tree_seq;"
                   "create sequence blob_bid_seq;"
+
                   "create table blob (
 bid bigint primary key not null default nextval('blob_bid_seq'),
 bob_md5 bytea not null,
 bob bytea not null);"
+
                   
                   "create table metatree (
 tablename text primary key not null,
 keytype text not null,
 valuetype text not null);"
-                  "create index idx_blob_bob_md5 on blob (bob);"
+                  "create index idx_blob_bob_md5 on blob (bob_md5);"
                   ;;  "create index idx_blob_bid on blob (bid);" ;;already made implicitly when defining primary key for table
                   "create sequence persistent_seq start with 10;")) ;; make room for some system tables
     (cl-postgres:exec-query connection stmt)))
