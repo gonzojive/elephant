@@ -2,29 +2,29 @@
 
 (defclass pm-indexed-btree (indexed-btree pm-btree)
   ((indices :accessor indices :initform (make-hash-table))
-   (indices-cache :accessor indices-cache :initform (make-hash-table) :transient t))
+   #- (and) (indices-cache :accessor indices-cache :initform (make-hash-table) :transient t))
   (:metaclass persistent-metaclass)
   (:documentation "Postmodern implementation of a SQL-based BTree that supports secondary indices."))
 
 (defmethod shared-initialize :after ((instance pm-indexed-btree) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
-;; It seems like this is unbound, but how can it be?
-  (setf (indices instance) (make-hash-table))
-  (setf (indices-cache instance) (indices instance)))
+  ;; It seems like this is unbound, but how can it be?
+  (unless (slot-boundp instance 'indices)
+    (setf (indices instance) (make-hash-table)))
+  #- (and) (setf (indices-cache instance) (indices instance)))
 
   
 (defmethod build-indexed-btree ((sc postmodern-store-controller))
   (make-instance 'pm-indexed-btree :sc sc))
 
 (defmethod map-indices (fn (bt pm-indexed-btree))
-  (maphash fn (indices-cache bt)))
+  (maphash fn (indices bt)))
 
 (defmethod get-index ((bt pm-indexed-btree) index-name)
-  (gethash index-name (indices-cache bt)))
+  (gethash index-name (indices bt)))
 
 (defmethod remove-index ((bt pm-indexed-btree) index-name)
-  (remhash index-name (indices-cache bt))
   (let ((indices (indices bt)))
     (remhash index-name indices)
     (setf (indices bt) indices)))
@@ -40,7 +40,7 @@
                          (index (build-btree-index sc 
                                                    :primary bt 
                                                    :key-form key-form)))
-                     (setf (gethash index-name (indices-cache bt)) index)
+                     
                      (setf (gethash index-name ht) index)
                      (setf (indices bt) ht)
                      index))))
@@ -60,7 +60,7 @@
   "Set a key / value pair, and update secondary indices."
   (call-next-method)
   (with-trans-and-vars (bt)
-    (loop for index being the hash-value of (indices-cache bt) do
+    (loop for index being the hash-value of (indices bt) do
           (maybe-insert/update-secondary-index index (key-fn index) key value)))
   value)
 
@@ -77,7 +77,7 @@
   (with-trans-and-vars (bt)
     (let ((value (get-value key bt)))
       (when value
-        (let ((indices (indices-cache bt)))
+        (let ((indices (indices bt)))
           (loop for index being the hash-value of indices do
                 (multiple-value-bind (index? secondary-key)
                     (funcall (key-fn index) index key value)
