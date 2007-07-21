@@ -233,37 +233,6 @@
   (is-false (get-primary-key 300 index2)))
 
 
-;;(test (remove-kv-indexed :depends-on (and simple-slot-get)) 
-;;  (5am:finishes (remove-kv first-key indexed)))
-
-;;(deftest (no-key-nor-indices :depends-on (and remove-kv-indexed))
-;;    (values
-;;     (get-value first-key indexed)
-;;     (get-primary-key 1 index1)
-;;     (get-primary-key 100 index2))
-;;  nil nil nil)
-
-
-;;(deftest (remove-kv-from-slot1 :depends-on (and no-key-nor-indices)) 
-;;    (5am:finishes (remove-kv 2 index1)))
-
-;;(deftest (no-key-nor-indices-slot1 :depends-on (and remove-kv-from-slot1))
-;;    (values
-;;     (get-value (second keys) indexed)
-;;     (get-primary-key 2 index1)
-;;     (get-primary-key 200 index2))
-;;  nil nil nil)
-
-;;(deftest (remove-kv-from-slot2 :depends-on (and remove-kv-from-slot1))
-;;    (5am:finishes (remove-kv 300 index2)))
-;;
-;;(deftest (no-key-nor-indices-slot2 :depends-on (and remove-kv-from-slot2))
-;;    (values
-;;     (get-value (third keys) indexed)
-;;     (get-primary-key 3 index1)
-;;     (get-primary-key 300 index2))
-;;  nil nil nil)
-
 (deftest (map-indexed :depends-on remove-kv-tests)
     (let ((ks nil)
 	  (vs nil))
@@ -274,9 +243,8 @@
 	    (subsetp (cdddr keys) ks :test #'equalp))))
   t)
 
-;; This is "4" below because they have removed the
-;; first three keys, and are testing that the index reflect this,
-;; and my code doesn't.
+;; This is "4" below because the first three keys are removed by remove-kv-tests
+
 (deftest (get-first :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index1)
