@@ -53,7 +53,9 @@
   :components
   ((:module :tests
 	    :components
-	    ((:file "elephant-tests")
+	    ((:file "elet-package")
+             (:file "elephant-tests")
+             (:file "testperformance")
 	     (:file "testserializer")
 	     (:file "testconditions")
 	     (:file "mop-tests")
