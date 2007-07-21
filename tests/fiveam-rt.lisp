@@ -8,6 +8,8 @@
 ;; Future tests may be written using the FiveAM features such as the is macro,
 ;; dependencies between tests and more.
 
+(in-suite* elephant-tests)
+
 (defmacro deftest (name &rest body)
   (let* ((p body)
 	 (properties
@@ -19,6 +21,7 @@
 	 (form (pop p))
 	 (vals p)
          (result (gensym "RESULT")))
+    (declare (ignorable properties))
     `(fiveam:test ,name
       (let ((,result (multiple-value-list ,form)))
         ,@(loop for v in vals
@@ -28,4 +31,4 @@
   (fiveam:run! name))
 
 (defun do-tests ()
-  (fiveam:run!))
+  (fiveam:run! 'elephant-tests))
