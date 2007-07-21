@@ -40,6 +40,8 @@
 ;;; Suite 330, Boston, MA 02111-1307 USA
 ;;;
 
+(pushnew :use-fiveam *features*)
+
 (defsystem elephant-tests
   :name "elephant"
   :author "Ben Lee <blee@common-lisp.net>"
@@ -49,11 +51,14 @@
   :description "Object database for Common Lisp"
   :long-description "An object-oriented database based on Berkeley DB, for CMUCL/SBCL, OpenMCL, Lispworks, and Allegro."
   
-  :depends-on (:elephant :rt)
+  :depends-on #-use-fiveam (:elephant :rt)
+              #+use-fiveam (:elephant :fiveam)
   :components
   ((:module :tests
 	    :components
 	    ((:file "elet-package")
+             #+use-fiveam
+             (:file "fiveam-rt")
              (:file "elephant-tests")
              (:file "testperformance")
 	     (:file "testserializer")

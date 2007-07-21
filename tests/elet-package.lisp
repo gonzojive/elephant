@@ -18,6 +18,9 @@
 
 (defpackage elephant-tests
   (:nicknames :ele-tests)
+  #+use-fiveam
+  (:use :common-lisp :elephant :5am)
+  #-use-fiveam
   (:use :common-lisp :elephant :regression-test)
   (:import-from :elephant
 		with-buffer-streams

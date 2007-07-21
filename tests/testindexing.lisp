@@ -2,8 +2,10 @@
 (in-package :ele-tests)
 
 (defun setup-testing ()
-  (setf regression-test::*debug* t)
-  (setf regression-test::*catch-errors* nil)
+  #-use-fiveam
+  (progn
+    (setf regression-test::*debug* t)
+    (setf regression-test::*catch-errors* nil))
 ;;  (trace elephant::indexed-slot-writer)
   (trace ((method initialize-instance :before (persistent))))
   (trace ((method initialize-instance (persistent-object))))
