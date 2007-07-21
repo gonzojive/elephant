@@ -118,6 +118,7 @@
     (is-true (and (subsetp ks (cdr keys) :test #'equalp) 
                   (subsetp (cdr keys) ks :test #'equalp)))))
 
+;;------------------------------------------------------------------------------
 
 (in-suite* collections-indexed :in testcollections )
 
@@ -342,6 +343,20 @@
        4455 ;; sum 690-700 inclusive
        10945 ;; sum 990 to 1000 inclusive
        ))
+
+(test (map-index-value-param :depends-on remove-kv-tests)
+  (let ((sum 0))
+    (flet ((collector (key value pkey)
+             (incf sum (slot1 value))))
+      (map-index #'collector index1 :value 990))
+    (is (= sum 990))))
+
+(test (map-index-collect-param :depends-on remove-kv-tests)
+  (flet ((returner (key value pkey)
+           (slot1 value)))
+    (is (equal (map-index #'returner index1 :value 990 :collect t)
+               (list 990)))))
+
 
 (deftest (rem-kv :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
