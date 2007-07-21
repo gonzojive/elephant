@@ -14,43 +14,49 @@
 
 (in-package :ele-tests)
 
-(deftest basicpersistence 
-    (let ((rv nil))
-      (let ((x (gensym)))
-	(add-to-root "x" x)
-	;; Clear instances
-	(flush-instance-cache *store-controller*)
-	;; Are gensyms equal across db instantiations?
-	;; This forces a refetch of the object from db
-	(setq rv (equal (format nil "~A" x)
-			(format nil "~A" (get-from-root "x")))))
-      rv)
-  t)
-
-(deftest keysizetest
-    (let ((rv nil))
-      (let ((key "0123456789"))
-	;; This should create a key of size 10* (2 ** x)
-	;; On SBCL and postmodern, this fails at 16...
-	(dotimes (x 14)
-	  (setf key (concatenate 'string key key))
-	  )
-	(format t "Testing length = ~A~%" (length key))
-      (add-to-root key key)
-      (setq rv (equal (format nil "~A" key)
-		      (format nil "~A" (get-from-root key))))
-      (remove-from-root key)
-      rv)
-      )
-  t)
+;;  Tests are best run as complete suites,
+;;  ie. (do-test-spec 'collections-indexed)
+;;  When running single tests, sometimes
+;;  later tests may have affected some global state.
+;;  This is not captured by the :depends-on parameter,
+;;  so when running single tests be aware of this.
+;;  
+;;  Todo: Update FiveAM run-resolving-dependencies to fix this problem,
+;;  for example by having a :before option.
 
 
-(deftest testoid
-    (progn
-      (ele::next-oid *store-controller*)
-      (let ((oid (ele::next-oid *store-controller*)))
-	  (< oid (ele::next-oid *store-controller*))))
-  t)
+(in-suite* testcollections :in elephant-tests)
+
+(in-suite* collections-basic :in testcollections)
+
+(test basicpersistence
+  (let ((x (gensym)))
+    (add-to-root "x" x)
+    ;; Clear instances
+    (flush-instance-cache *store-controller*)
+    ;; Are gensyms equal across db instantiations?
+    ;; This forces a refetch of the object from db
+    (is (equal (format nil "~A" x)
+               (format nil "~A" (get-from-root "x"))))))
+
+(test keysizetest
+  (let ((key "0123456789"))
+    ;; This should create a key of size 10* (2 ** x)
+    ;; On SBCL and postmodern, this fails at 16...
+    (dotimes (x 14)
+      (setf key (concatenate 'string key key)))
+    
+    (format t "Testing length = ~A~%" (length key))
+    (add-to-root key key)
+    (setq rv (equal (format nil "~A" key)
+                    (format nil "~A" (get-from-root key))))
+    (remove-from-root key)
+    (is-true rv)))
+
+(test testoid
+  (ele::next-oid *store-controller*)
+  (let ((oid (ele::next-oid *store-controller*)))
+    (is (< oid (ele::next-oid *store-controller*)))))
 
 (defclass blob ()
   ((slot1 :accessor slot1 :initarg :slot1)
@@ -69,26 +75,26 @@
 
 (defvar bt)
 
-(deftest btree-make
-    (finishes (setq bt (make-btree *store-controller*)))
-  t)
+(in-suite* collections-btree :in testcollections )
 
-(deftest btree-put
-    (finishes
-       (with-transaction (:store-controller *store-controller*)
-         (loop for obj in objs
-               for key in keys
-               do (setf (get-value key bt) obj))))
-  t)
+(test btree-make
+  (5am:finishes (setq bt (make-btree *store-controller*))))
 
-(deftest btree-get
-    (loop for key in keys
-	  for i from 1 to 1000
-	  for obj = (get-value key bt)
-	  always
-	  (and (= (slot1 obj) i)
-	       (= (slot2 obj) (* i 100))))
-  t)
+(test (btree-put :depends-on btree-make)
+  (5am:finishes
+    (with-transaction (:store-controller *store-controller*)
+      (loop for obj in objs
+         for key in keys
+         do (setf (get-value key bt) obj)))))
+
+(test (btree-get :depends-on (and btree-make btree-put))
+  (is-true
+   (loop for key in keys
+      for i from 1 to 1000
+      for obj = (get-value key bt)
+      always
+      (and (= (slot1 obj) i)
+           (= (slot2 obj) (* i 100))))))
 
 (defvar first-key (first keys))
 
@@ -96,54 +102,52 @@
 ;; For some unkown reason, this fails on my server unless
 ;; I put the variable "first-key" here rather than use the string
 ;; "key-1".  I need to understand this, but don't at present....
-(deftest remove-kv
-     (finishes 
-       (with-transaction (:store-controller *store-controller*) (remove-kv first-key bt)))
-  t)
+(test (remove-kv :depends-on btree-put)
+  (5am:finishes 
+    (with-transaction (:store-controller *store-controller*)
+      (remove-kv first-key bt)))
+  (is-true (not (get-value first-key bt))))
 
-(deftest removed
-    (not (get-value first-key bt))
-  t)
+;; (deftest removed) moved into remove-kv
 
-(deftest map-btree
-    (let ((ks nil)
-	  (vs nil))
-      (flet ((mapper (k v) (push k ks) (push v vs)))
-	(map-btree #'mapper bt))
-      (values
-       (and (subsetp ks (cdr keys) :test #'equalp) 
-	    (subsetp (cdr keys) ks :test #'equalp))))
-  t)
+(test (map-btree :depends-on remove-kv)
+  (let ((ks nil)
+        (vs nil))
+    (flet ((mapper (k v) (push k ks) (push v vs)))
+      (map-btree #'mapper bt))
+    (is-true (and (subsetp ks (cdr keys) :test #'equalp) 
+                  (subsetp (cdr keys) ks :test #'equalp)))))
+
+
+(in-suite* collections-indexed :in testcollections )
 
 ;; I hate global variables!  Yuck!
 (defvar indexed)
 (defvar index1)
 (defvar index2)
 
-(deftest indexed-btree-make
-    (finishes (with-transaction (:store-controller *store-controller*)
-		(setq indexed (make-indexed-btree *store-controller*))))
-  t)
+(test indexed-btree-make
+  (5am:finishes (with-transaction (:store-controller *store-controller*)
+                  (setq indexed (make-indexed-btree *store-controller*)))))
 
 (defun key-maker (s key value)
   (declare (ignore s key))
   (values t (slot1 value)))
 
-(deftest add-indices
-    (finishes
-     (with-transaction (:store-controller *store-controller*)
-       (setf index1
-	     (add-index indexed :index-name 'slot1 :key-form 'key-maker))
-       (setf index2
-	     (add-index indexed :index-name 'slot2
-			:key-form '(lambda (s key value) 
-				    (declare (ignore s key))
-				    (values t (slot2 value)))))))
-  t)
+(test (add-indices :depends-on indexed-btree-make)
+  (5am:finishes
+    (with-transaction (:store-controller *store-controller*)
+      (setf index1
+            (add-index indexed :index-name 'slot1 :key-form 'key-maker))
+      (setf index2
+            (add-index indexed :index-name 'slot2
+                       :key-form '(lambda (s key value) 
+                                   (declare (ignore s key))
+                                   (values t (slot2 value))))))))
 
 ;; ISE NOTE: indices accessor is not portable across backends in current
 ;; system so I'm using alternate access (map-indices) instead
-(deftest test-indices
+(deftest (test-indices :depends-on add-indices)
     (values
      ;; (= (hash-table-count (indices indexed)) 2)
      (let ((count 0))
@@ -171,84 +175,96 @@
 		      (= (slot2 obj2) (* j 100))))))
   t) |#
    
-(deftest indexed-put
-    (finishes
-      (with-transaction (:store-controller *store-controller*)
-	(loop for obj in objs
-	   for key in keys
-	   do (setf (get-value key indexed) obj))))
-  t)
+(test (indexed-put :depends-on add-indices)
+  (5am:finishes
+    (with-transaction (:store-controller *store-controller*)
+      (loop for obj in objs
+         for key in keys
+         do (setf (get-value key indexed) obj)))))
 
-(deftest indexed-get
-    (loop for key in keys
-	  for i from 1 to 1000
-	  for obj = (get-value key indexed)
-	  always 
-	  (and (= (slot1 obj) i)
-	       (= (slot2 obj) (* i 100))))
-  t)
+(test (indexed-get :depends-on add-indices)
+  (is-true
+   (loop for key in keys
+      for i from 1 to 1000
+      for obj = (get-value key indexed)
+      always 
+      (and (= (slot1 obj) i)
+           (= (slot2 obj) (* i 100))))))
 
+(test (simple-slot-get :depends-on add-indices)
+  (setf (get-value (nth 0 keys) indexed)
+        (nth 0 objs)) ;; Henrik comment 20070720: Why? 
+  (let ((obj (get-value 1 index1)))
+    (is (= (slot1 obj) 1))
+    (is (= (slot2 obj) (* 1 100)))))
 
-(deftest simple-slot-get
-    (progn
-    (setf (get-value (nth 0 keys) indexed) (nth 0 objs))
-    (let ((obj
-	   (get-value 1 index1)))
-      	  (and (= (slot1 obj) 1)
- 	       (= (slot2 obj) (* 1 100)))))
-t)
-
-(deftest indexed-get-from-slot1
-    (loop with index = (get-index indexed 'slot1)
-	  for i from 1 to 1000
-	  for obj = (get-value i index)
-	  always
-	  (= (slot1 obj) i))
-  t)
+(test (indexed-get-from-slot1 :depends-on simple-slot-get)
+  (is-true
+   (loop with index = (get-index indexed 'slot1)
+      for i from 1 to 1000
+      for obj = (get-value i index)
+      always
+      (= (slot1 obj) i))))
 	  
-(deftest indexed-get-from-slot2
-    (loop with index = (get-index indexed 'slot2)
-	  for i from 1 to 1000
-	  for obj = (get-value (* i 100) index)
-	  always
-	  (= (slot2 obj) (* i 100)))
-  t)
-	  
-(deftest remove-kv-indexed
-    (finishes (remove-kv first-key indexed))
-  t)
+(test (indexed-get-from-slot2 :depends-on simple-slot-get)
+  (is-true
+   (loop with index = (get-index indexed 'slot2)
+      for i from 1 to 1000
+      for obj = (get-value (* i 100) index)
+      always
+      (= (slot2 obj) (* i 100)))))
 
-(deftest no-key-nor-indices
-    (values
-     (get-value first-key indexed)
-     (get-primary-key 1 index1)
-     (get-primary-key 100 index2))
-  nil nil nil)
+(test (remove-kv-tests :depends-on simple-slot-get)
+  (5am:finishes (remove-kv first-key indexed))
+  (is-false (get-value first-key indexed))
+  (is-false (get-primary-key 1 index1))
+  (is-false (get-primary-key 100 index2))
+  ;; Remove from slot-1
+  (5am:finishes (remove-kv 2 index1))
+  ;; No key-nor-indices-slot1
+  (is-false (get-value (second keys) indexed))
+  (is-false (get-primary-key 2 index1))
+  (is-false (get-primary-key 200 index2))
+  ;; Remove from slot2
+  (5am:finishes (remove-kv 300 index2))
+  ;; No key-nor-indices-slot2
+  (is-false (get-value (third keys) indexed))
+  (is-false (get-primary-key 3 index1))
+  (is-false (get-primary-key 300 index2)))
 
 
-(deftest remove-kv-from-slot1
-    (finishes (remove-kv 2 index1))
-  t)
+;;(test (remove-kv-indexed :depends-on (and simple-slot-get)) 
+;;  (5am:finishes (remove-kv first-key indexed)))
 
-(deftest no-key-nor-indices-slot1
-    (values
-     (get-value (second keys) indexed)
-     (get-primary-key 2 index1)
-     (get-primary-key 200 index2))
-  nil nil nil)
+;;(deftest (no-key-nor-indices :depends-on (and remove-kv-indexed))
+;;    (values
+;;     (get-value first-key indexed)
+;;     (get-primary-key 1 index1)
+;;     (get-primary-key 100 index2))
+;;  nil nil nil)
 
-(deftest remove-kv-from-slot2
-    (finishes (remove-kv 300 index2))
-  t)
 
-(deftest no-key-nor-indices-slot2
-    (values
-     (get-value (third keys) indexed)
-     (get-primary-key 3 index1)
-     (get-primary-key 300 index2))
-  nil nil nil)
+;;(deftest (remove-kv-from-slot1 :depends-on (and no-key-nor-indices)) 
+;;    (5am:finishes (remove-kv 2 index1)))
 
-(deftest map-indexed
+;;(deftest (no-key-nor-indices-slot1 :depends-on (and remove-kv-from-slot1))
+;;    (values
+;;     (get-value (second keys) indexed)
+;;     (get-primary-key 2 index1)
+;;     (get-primary-key 200 index2))
+;;  nil nil nil)
+
+;;(deftest (remove-kv-from-slot2 :depends-on (and remove-kv-from-slot1))
+;;    (5am:finishes (remove-kv 300 index2)))
+;;
+;;(deftest (no-key-nor-indices-slot2 :depends-on (and remove-kv-from-slot2))
+;;    (values
+;;     (get-value (third keys) indexed)
+;;     (get-primary-key 3 index1)
+;;     (get-primary-key 300 index2))
+;;  nil nil nil)
+
+(deftest (map-indexed :depends-on remove-kv-tests)
     (let ((ks nil)
 	  (vs nil))
       (flet ((mapper (k v) (push k ks) (push v vs)))
@@ -261,7 +277,7 @@ t)
 ;; This is "4" below because they have removed the
 ;; first three keys, and are testing that the index reflect this,
 ;; and my code doesn't.
-(deftest get-first
+(deftest (get-first :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index1)
 	(multiple-value-bind (has k v)
@@ -270,7 +286,7 @@ t)
 	  (= k 4))))
   t)
 
-(deftest get-first2
+(deftest (get-first2 :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index2)
 	(multiple-value-bind (has k v)
@@ -279,7 +295,7 @@ t)
 	  (= k 400))))
   t)
 
-(deftest get-last
+(deftest (get-last :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index1)
 	(multiple-value-bind (has k v)
@@ -288,7 +304,7 @@ t)
 	  (= k 1000))))
   t)
 
-(deftest get-last2
+(deftest (get-last2 :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index2)
 	(multiple-value-bind (has k v)
@@ -297,7 +313,7 @@ t)
 	  (= k 100000))))
   t)
 
-(deftest set
+(deftest (set :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index1)
 	(multiple-value-bind (has k v)
@@ -306,7 +322,7 @@ t)
 	  (= (slot1 v) 200))))
   t)
 
-(deftest set2
+(deftest (set2 :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index2)
 	(multiple-value-bind (has k v)
@@ -315,7 +331,7 @@ t)
 	  (= (slot2 v) 500))))
   t)
 
-(deftest set-range
+(deftest (set-range :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index1)
 	(multiple-value-bind (has k v)
@@ -324,7 +340,7 @@ t)
 	  (= (slot1 v) 200))))
   t)
 
-(deftest set-range2
+(deftest (set-range2 :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (c index2)
 	(multiple-value-bind (has k v)
@@ -333,7 +349,7 @@ t)
 	  (= (slot2 v) 600))))
   t)
 
-(deftest map-indexed-index
+(deftest (map-indexed-index :depends-on remove-kv-tests)
     (let ((sum 0))
       (flet ((collector (key value pkey)
 	       (incf sum (slot1 value))))
@@ -346,7 +362,7 @@ t)
        10945 ;; sum 990 to 1000 inclusive
        ))
 
-(deftest map-index-from-end
+(deftest (map-index-from-end :depends-on remove-kv-tests)
     (let ((sum 0))
       (flet ((collector (key value pkey)
 	       (incf sum (slot1 value))))
@@ -359,7 +375,7 @@ t)
        10945 ;; sum 990 to 1000 inclusive
        ))
 
-(deftest rem-kv
+(deftest (rem-kv :depends-on remove-kv-tests)
     (with-transaction (:store-controller *store-controller*)
       (let ((ibt (make-indexed-btree *store-controller*)))
 	(loop for i from 0 to 10
@@ -392,7 +408,7 @@ t
   (declare (ignore s v))
   (values t (floor (/ k 2))))
 
-(deftest rem-idexkv
+(deftest (rem-idexkv :depends-on rem-kv)
     (with-transaction (:store-controller *store-controller*)
     (let* ((ibt (make-indexed-btree *store-controller*))
 	   (id1 (add-index ibt :index-name 'idx1 :key-form 'odd)))
@@ -430,6 +446,8 @@ t
     t
   )
 
+(in-suite* indexed2-tests :in testcollections)
+
 (defvar indexed2)
 (defvar index3)
 
@@ -442,14 +460,14 @@ t
   (declare (ignore s k))
   (values t (floor (/ (- v) 10))))
 
-(deftest add-indices2
+(deftest (add-indices2 :depends-on make-indexed2)
     (finishes
       (with-transaction (:store-controller *store-controller*) 
 	(setq index3
 	      (add-index indexed2 :index-name 'crunch :key-form 'crunch))))
   t)
 
-(deftest put-indexed2
+(deftest (put-indexed2 :depends-on add-indices2)
     (finishes
       (with-transaction (:store-controller *store-controller*) 
 	(loop for i from 0 to 10000
@@ -457,12 +475,12 @@ t
 	      (setf (get-value i indexed2) (- i)))))
   t)
 
-(deftest get-indexed2
+(deftest (get-indexed2 :depends-on put-indexed2)
     (loop for i from 0 to 10000
 	  always (= (- i) (get-value i indexed2)))
   t)
 
-(deftest get-from-index3
+(deftest (get-from-index3 :depends-on put-indexed2)
     (let ((v))
 ;;    (trace get-value)
 ;;    (trace crunch)
@@ -478,7 +496,7 @@ t
     v)
   t)
 
-(deftest dup-test
+(deftest (dup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
 	(loop for (more k v) = (multiple-value-list
@@ -490,7 +508,7 @@ t
 	      
 
 
-(deftest nodup-test
+(deftest (nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
 	(loop for (m k v) = (multiple-value-list (cursor-next-nodup curs))
@@ -498,7 +516,7 @@ t
               always (and m (= v i)))))
   t)
 
-(deftest prev-nodup-test
+(deftest (prev-nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
         (multiple-value-bind (m k v) (cursor-last curs)
@@ -508,7 +526,7 @@ t
               always (and m (= v i)))))
   t)
 
-(deftest pnodup-test
+(deftest (pnodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
 	(loop for (m k v p) = (multiple-value-list (cursor-pnext-nodup curs))
@@ -516,7 +534,7 @@ t
               always (and m (= p i)))))
   t)
 
-(deftest pprev-nodup-test
+(deftest (pprev-nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
         (multiple-value-bind (m k v) (cursor-last curs)
@@ -526,7 +544,7 @@ t
               always (and m (= p i)))))
   t)
 
-(deftest cur-del1 
+(deftest (cur-del1 :depends-on put-indexed2) 
     (with-transaction (:store-controller *store-controller*)
       (let* ((ibt (make-indexed-btree *store-controller*))
 	     (id1 (add-index ibt :index-name 'idx1 :key-form 'odd)))
@@ -545,7 +563,7 @@ t
 	      (deleted 1 '(5 3))))))
   t)
 
-(deftest indexed-delete 
+(deftest (indexed-delete :depends-on cur-del1) 
     (finishes
       (with-transaction (:store-controller *store-controller*)
 	(with-btree-cursor (curs index3)
@@ -553,13 +571,13 @@ t
 	  (cursor-delete curs))))
   t)
 
-(deftest test-deleted
+(deftest (test-deleted :depends-on indexed-delete)
     (values
      (get-value 10000 indexed2)
      (get-value 1000 index3))
   nil nil)
 		      
-(deftest indexed-delete2
+(deftest (indexed-delete2 :depends-on indexed-delete)
     (finishes
       (with-transaction (:store-controller *store-controller*)
 	(with-btree-cursor (curs index3)
@@ -568,7 +586,7 @@ t
 	  (cursor-delete curs))))
   t)
 
-(deftest test-deleted2
+(deftest (test-deleted2 :depends-on indexed-delete2)
     (values
      (get-value 0 indexed2)
      (get-value 0 index3)
@@ -580,7 +598,7 @@ t
   0 0 nil -2)
 
 
-(deftest cur-del2 
+(deftest (cur-del2 :depends-on test-deleted2) 
     (with-transaction (:store-controller *store-controller*)
       (let* ((ibt (make-indexed-btree *store-controller*))
 	     (id1 (add-index ibt :index-name 'idx1 :key-form 'half-floor)))
@@ -600,19 +618,19 @@ t
 
 
 
-(deftest get-both 
+(deftest (get-both :depends-on cur-del2) 
     (with-btree-cursor (c indexed2)
       (cursor-get-both c 200 -200))
   t 200 -200)
 
-(deftest pget-both 
+(deftest (pget-both :depends-on cur-del2) 
     (with-btree-cursor (c index3)
       (multiple-value-bind (m k v p)
 	  (cursor-pget-both c 10 107)
 	(values k v p)))
   10 -107 107)
 
-(deftest pget-both-range
+(deftest (pget-both-range :depends-on cur-del2)
     (with-btree-cursor (c index3)
       (multiple-value-bind (m k v p)
 	  (cursor-pget-both-range c 10 106.5)
@@ -625,7 +643,7 @@ t
     (declare (ignore m k v))
     p))
 
-(deftest pcursor
+(deftest (pcursor :depends-on cur-del2)
     (with-btree-cursor (c index3)
       (values
        (pcursor-pkey (cursor-pfirst c))
@@ -647,7 +665,7 @@ t
 
 (defvar index4)
 
-(deftest newindex
+(deftest (newindex :depends-on cur-del2)
     (finishes
      (with-transaction (:store-controller *store-controller*) 
        (setq index4
@@ -655,7 +673,7 @@ t
 			:populate t))))
   t)
 
-(deftest pcursor2
+(deftest (pcursor2 :depends-on newindex)
     (with-btree-cursor (c index4)
       (values
        (pcursor-pkey (cursor-pfirst c))
@@ -672,6 +690,7 @@ t
       
   0 2 10 11 10 9 9999 3000 2000 101 112)
 
+(in-suite* from-and-to-root :in testcollections)
 
 (deftest add-get-remove
     (let ((r1 '())
