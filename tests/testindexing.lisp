@@ -1,6 +1,8 @@
 
 (in-package :ele-tests)
 
+(in-suite* testindexing :in elephant-tests)
+
 (defun setup-testing ()
   #-use-fiveam
   (progn
@@ -110,6 +112,50 @@
  		(length (get-instances-by-range 'idx-one 'slot1 n (+ 1 n))))
 	))
   3 2 1 t 3)
+
+(test indexing-basic-with-string
+  (defclass idx-one-str ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
+  (disable-class-indexing 'idx-one-str :errorp nil)
+  (setf (find-class 'idx-one-str nil) nil)
+      
+  (defclass idx-one-str ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (with-transaction (:store-controller *store-controller*)
+    (setq inst1 (make-instance 'idx-one-str :slot1 "one" :sc *store-controller*))
+    (setq inst2 (make-instance 'idx-one-str :slot1 "two" :sc *store-controller*))
+    (setq inst3 (make-instance 'idx-one-str :slot1 "one" :sc *store-controller*)))
+  (is (= 3 (length (get-instances-by-class 'idx-one-str))))
+  (is (= 2 (length (get-instances-by-value 'idx-one-str 'slot1 "one"))))
+  (is (= 1 (length (get-instances-by-value 'idx-one-str 'slot1 "two"))))
+  (is (equal (get-instances-by-value 'idx-one-str 'slot1 "two")
+             (list inst2))))
+
+(test indexing-basic-with-symbol
+  (defclass idx-one-symbol ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
+  (disable-class-indexing 'idx-one-symbol :errorp nil)
+  (setf (find-class 'idx-one-symbol nil) nil)
+      
+  (defclass idx-one-symbol ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (with-transaction (:store-controller *store-controller*)
+    (setq inst1 (make-instance 'idx-one-symbol :slot1 'one :sc *store-controller*))
+    (setq inst2 (make-instance 'idx-one-symbol :slot1 'two :sc *store-controller*))
+    (setq inst3 (make-instance 'idx-one-symbol :slot1 'one :sc *store-controller*)))
+  (is (= 3 (length (get-instances-by-class 'idx-one-symbol))))
+  (is (= 2 (length (get-instances-by-value 'idx-one-symbol 'slot1 'one))))
+  (is (= 1 (length (get-instances-by-value 'idx-one-symbol 'slot1 'two))))
+  (is (equal (get-instances-by-value 'idx-one-symbol 'slot1 'two)
+             (list inst2))))
 
 (deftest indexing-class-opt
     (progn
