@@ -656,22 +656,49 @@ t
 			:populate t))))
   t)
 
-(deftest (pcursor2 :depends-on newindex)
+(test (pcursor2 :depends-on newindex)
     (with-btree-cursor (c index4)
-      (values
-       (pcursor-pkey (cursor-pfirst c))
-       (pcursor-pkey (cursor-pnext c))
-       (pcursor-pkey (cursor-pnext-nodup c))
-       (pcursor-pkey (cursor-pnext-dup c))
-       (pcursor-pkey (cursor-pprev c))
-       (pcursor-pkey (cursor-pprev-nodup c))
-       (pcursor-pkey (cursor-plast c))
-       (pcursor-pkey (cursor-pset c 300))
-       (pcursor-pkey (cursor-pset-range c 199.5))
-       (pcursor-pkey (cursor-pget-both c 10 101))
-       (pcursor-pkey (cursor-pget-both-range c 11 111.4))))
-      
-  0 2 10 11 10 9 9999 3000 2000 101 112)
+      (is (= 0 (pcursor-pkey (cursor-pfirst c))))
+      (is (= 2 (pcursor-pkey (cursor-pnext c))))
+      (is (= 10 (pcursor-pkey (cursor-pnext-nodup c))))
+      (is (= 11 (pcursor-pkey (cursor-pnext-dup c))))
+      (is (= 10 (pcursor-pkey (cursor-pprev c))))
+      (is (= 9 (pcursor-pkey (cursor-pprev-nodup c))))
+      (is (= 9999 (pcursor-pkey (cursor-plast c))))
+      (is (= 3000 (pcursor-pkey (cursor-pset c 300))))
+      (is (= 3010 (pcursor-pkey (cursor-pnext-nodup c))))      
+      (is (= 2000 (pcursor-pkey (cursor-pset-range c 199.5))))
+      (is (= 101 (pcursor-pkey (cursor-pget-both c 10 101))))
+      (is (= 112 (pcursor-pkey (cursor-pget-both-range c 11 111.4))))))
+
+(defvar index-string)
+
+(defun crunch-string (s k v)
+  (multiple-value-bind (index? value)
+      (crunch s k v)
+    (values index? (princ-to-string value))))
+
+(test (crunch-as-string :depends-on cur-del2)
+    (5am:finishes
+     (with-transaction (:store-controller *store-controller*) 
+       (setq index-string
+	     (add-index indexed2 :index-name 'crunch-string
+                        :key-form 'crunch-string
+			:populate t)))))
+
+(test (pcursor2-on-string :depends-on crunch-as-string)
+    (with-btree-cursor (c index-string)
+      (is (= 0 (pcursor-pkey (cursor-pfirst c))))
+      (is (= 2 (pcursor-pkey (cursor-pnext c))))
+      (is (= 10 (pcursor-pkey (cursor-pnext-nodup c))))
+      (is (= 11 (pcursor-pkey (cursor-pnext-dup c))))
+      (is (= 10 (pcursor-pkey (cursor-pprev c))))
+      (is (= 9 (pcursor-pkey (cursor-pprev-nodup c))))
+      (is (= 9999 (pcursor-pkey (cursor-plast c))))
+      (is (= 3000 (pcursor-pkey (cursor-pset c "300"))))
+      (is (= 3010 (pcursor-pkey (cursor-pnext-nodup c))))
+      (is (= 3000 (pcursor-pkey (cursor-pset-range c "300"))))))
+
 
 (in-suite* from-and-to-root :in testcollections)
 
