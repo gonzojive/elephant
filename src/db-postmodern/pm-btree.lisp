@@ -7,19 +7,27 @@
 ;;
 ;; At one time, we might add a testcase for this and similar limitations.
 
-(defclass pm-btree (btree)
+(defclass pm-btree (btree pm-executor)
   ((dbtable :accessor table-of :initform nil :initarg :table-name)
    (key-type :accessor key-type-of :initform nil)
-   (value-type :accessor value-type-of :initform :object)
-   (queries :accessor queries-of :initform nil))
+   (value-type :accessor value-type-of :initform :object))
   (:documentation "A SQL implementation of a BTree"))
-
 
 (define-condition db-error (serious-condition) ())
 (define-condition bad-db-parameter (db-error) ())
 (define-condition suspicios-db-parameter (warning) ())
 
 (defparameter +join-with-blob-optimization+ t)
+
+(defun ignore-warning (condition)
+   (declare (ignore condition))
+   (muffle-warning))
+
+(defmacro while-ignoring-warnings (&body body)
+  `(handler-bind
+    ((warning #'ignore-warning))
+        (let ((cl-user::*break-on-signals* nil)) ;; convenient when debugging
+          ,@body)))
 
 (defvar *sc* nil)
 
@@ -118,17 +126,8 @@ $$ LANGUAGE plpgsql;
 ")))
     sql))
 
-(defmethod make-local-name ((bt pm-btree) name)
-  (read-from-string (format nil "~a~a" (table-of bt) name)))
-
-(defmethod register-query ((bt pm-btree) query-identifier sql)
-  (let ((local-name (make-local-name bt query-identifier)))
-    (pushnew (cons query-identifier
-                   (list (symbol-name local-name)
-                         local-name
-                         sql))
-             (queries-of bt)
-             :key #'car)))
+(defmethod executor-prefix ((bt pm-btree))
+  (table-of bt))
 
 (defmethod prepare-local-queries ((bt pm-btree))
   (if (and +join-with-blob-optimization+
@@ -138,6 +137,9 @@ $$ LANGUAGE plpgsql;
   (register-query bt 'insert (format nil "select ins_upd_~a($1,$2)" (table-of bt)))
   (register-query bt 'delete (format nil "delete from ~a where qi=$1" (table-of bt))))
 
+(defmethod btree-exec-prepared ((bt pm-btree) query-identifier params row-reader)
+  (executor-exec-prepared bt query-identifier params row-reader))
+
 (defmethod initialized-p ((bt pm-btree))
   (not (null (key-type-of bt))))
 
@@ -145,27 +147,6 @@ $$ LANGUAGE plpgsql;
   (if (and +join-with-blob-optimization+ (arrayp item))
       (deserialize-from-database item (active-controller))
       (deserialize-from-database (ensure-bob item) (active-controller))))
-
-(defmethod btree-exec-prepared ((bt pm-btree) query-identifier params row-reader)
-  (labels ((lookup-query (query-identifier)
-             (cdr (assoc query-identifier (queries-of bt))))
-           (ensure-registered-on-class (query-identifier)
-             (or (lookup-query query-identifier)
-                 (progn (prepare-local-queries bt)
-                        (or (lookup-query query-identifier)
-                            (error "btree-exec-prepared could not find the prepared query ~S in ~S" query-identifier (table-of bt))))))
-           (ensure-prepared-on-connection (name-symbol name-string sql)
-             (let ((meta (cl-postgres:connection-meta (active-connection))))
-               (unless (gethash name-symbol meta)
-                 (cl-postgres:prepare-query (active-connection) name-string sql)
-                 (setf (gethash name-symbol meta) t)))))
-    (destructuring-bind (name-string name-symbol sql)
-        (ensure-registered-on-class query-identifier)
-      (ensure-prepared-on-connection name-symbol name-string sql)
-      (cl-postgres:exec-prepared (active-connection)
-                                 name-string
-                                 params
-                                 row-reader))))
 
 (defun postgres-format (parameter data-type)
   (ecase data-type

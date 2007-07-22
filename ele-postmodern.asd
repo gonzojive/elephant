@@ -17,8 +17,8 @@
             ((:module :db-postmodern
 		      :components
 		      ((:file "package")
-		       (:file "pm-controller")
                        (:file "pm-sql")
+                       (:file "pm-controller")
 		       (:file "pm-transaction")
                        (:file "pm-btree")
                        (:file "pm-cursor")

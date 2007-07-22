@@ -19,7 +19,7 @@
 (defun integer-to-string (int)
   (princ-to-string int))
 
-(defclass postmodern-store-controller (store-controller)
+(defclass postmodern-store-controller (store-controller pm-executor)
   ((dbcons :accessor controller-db-table :initarg :db :initform (make-hash-table :test 'equal))
    (persistent-slot-collection :accessor persistent-slot-collection-of :initform nil)
    (dbversion :accessor postmodern-dbversion :initform nil))
@@ -143,6 +143,10 @@
   (cl-postgres:exec-query (active-connection) "create table version (dbversion varchar(20) not null)")
   (cl-postgres:exec-query (active-connection) (format nil "insert into version (dbversion) values('~a')" *elephant-code-version*)))
 
+(defun base-table-existsp (con)
+  (with-conn (con)
+    (postmodern:table-exists-p 'blob)))
+
 (defmethod database-version ((sc postmodern-store-controller))
   "Returns a list of the form '(0 6 0)"
   (or (postmodern-dbversion sc)
@@ -199,6 +203,9 @@
             (make-table (slot-value sc 'root))
             (make-table (slot-value sc 'class-root))))
         sc))))
+
+(defmethod prepare-local-queries ((sc postmodern-store-controller))
+  (initialize-global-queries sc))
 
 (defmethod connection-ok-p ((sc postmodern-store-controller))
   (with-connection-for-thread (sc)

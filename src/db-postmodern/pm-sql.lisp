@@ -1,9 +1,15 @@
 (in-package :db-postmodern)
 
+;;--------- Stored procedures ---------
+
 (defparameter *stored-procedures* nil)
 
 (defmacro define-stored-procedure (sql-code)
   `(push ,sql-code *stored-procedures*))
+
+(defun init-stored-procedures (con)
+  (loop for sp-def in *stored-procedures* do
+       (cl-postgres:exec-query con sp-def)))
 
 (define-stored-procedure "
 CREATE OR REPLACE FUNCTION sp_ensure_bid (value bytea) RETURNS bigint as $$
@@ -32,74 +38,113 @@ $$ LANGUAGE plpgsql;
 
 ")
 
-(defun ignore-warning (condition)
-   (declare (ignore condition))
-   (muffle-warning))
+;; ---------- collecting data ---------
 
-(defmacro while-ignoring-warnings (&body body)
-  `(handler-bind
-    ((warning #'ignore-warning))
-        (let ((cl-user::*break-on-signals* nil)) ;; convenient when debugging
-          ,@body)))
+(defparameter *performance-stats* (make-hash-table))
+(defvar *collect-performance-stats* nil)
 
-(defun init-stored-procedures (con)
-;;  (ignore-errors
-;;    (cl-postgres:exec-query con "CREATE LANGUAGE plpgsql;"))
-  (loop for sp-def in *stored-procedures* do
-        (cl-postgres:exec-query con sp-def)))
-
-(defparameter *stats* (make-hash-table))
-
-(defun add-statistics (identifier run-time)
-  (let ((x (gethash identifier *stats*)))
+(defun add-performance-statistics (identifier run-time)
+  (let ((x (gethash identifier *performance-stats*)))
     (if x
         (progn
           (incf (car x))
           (incf (cdr x) run-time))
-        (setf (gethash identifier *stats*) (cons 0 run-time)))))
+        (setf (gethash identifier *performance-stats*) (cons 0 run-time)))))
 
-(defmacro with-stat-collector ((identifier) &body body)
-  `(let ((before (get-internal-real-time)))
-    (prog1
-        (progn ,@body)
-      (add-statistics ,identifier (- (get-internal-real-time) before)))))
+(defmacro with-performance-stat-collector ((identifier) &body body)
+  `(while-connecting-performance-stats ,identifier
+                           (lambda () ,@body)))
 
+(defun while-connecting-performance-stats (identifier function)
+  (if *collect-performance-stats*
+      (let ((before (get-internal-real-time)))
+        (prog1
+            (funcall function)
+          (add-performance-statistics identifier (- (get-internal-real-time) before))))
+      (funcall function)))
 
-(defun show-statistics ()
+(defun reset-performance-stats ()
+  (setf *performance-stats* (make-hash-table)))
+
+(defun start-collecting-performance-stats ()
+  (setf *collect-performance-stats* t))
+
+(defun show-performance-statistics ()
   (maphash #'(lambda (id data)
              (destructuring-bind (calls . time) data
                (setf time  (/ time internal-time-units-per-second))
                (format t "~%~a calls:~a time:~f avg:~f" id calls time (when (> calls 0) (/ time  calls)))))
-           *stats*))
+           *performance-stats*))
 
-(cl-postgres:def-row-reader first-value-row-reader (fields)
-  (let (value-set value)
-    (loop :while (cl-postgres:next-row)
-          :collect (loop :for field :across fields
-                         :do (if value-set
-                                 (cl-postgres:next-field field)
-                                 (setf value-set t
-                                       value (cl-postgres:next-field field)))))
-    (values value value-set)))
+;;--------- executing prepared queries ---------
+
+(defclass pm-executor ()
+   ((queries :accessor queries-of :initform nil)))
+
+(defgeneric prepare-local-queries (pm-executor))
+
+(defmethod prepare-local-queries ((ex pm-executor))
+  nil)
+
+(defgeneric executor-prefix (pm-executor))
+
+(defmethod executor-prefix ((ex pm-executor))
+  (declare (ignorable ex))
+  "")
+
+(defmethod make-local-name ((ex pm-executor) name)
+  (read-from-string (format nil "~a~a" (executor-prefix ex) name)))
+
+(defmethod register-query ((ex pm-executor) query-identifier sql)
+  (let ((local-name (make-local-name ex query-identifier)))
+    (pushnew (cons query-identifier
+                   (list (symbol-name local-name)
+                         local-name
+                         query-identifier
+                         sql))
+             (queries-of ex)
+             :key #'car)))
+
+(defmethod executor-exec-prepared ((ex pm-executor) query-identifier params row-reader)
+  (labels ((lookup-query (query-identifier)
+             (cdr (assoc query-identifier (queries-of ex))))
+           (ensure-registered-on-class (query-identifier)
+             (or (lookup-query query-identifier)
+                 (progn (prepare-local-queries ex)
+                        (or (lookup-query query-identifier)
+                            (error "executor-exec-prepared didn't find the query ~S"
+                                   query-identifier)))))
+           (ensure-prepared-on-connection (name-symbol name-string sql)
+             (let ((meta (cl-postgres:connection-meta (active-connection))))
+               (unless (gethash name-symbol meta)
+                 (cl-postgres:prepare-query (active-connection) name-string sql)
+                 (setf (gethash name-symbol meta) t)))))
+    (destructuring-bind (name-string name-symbol stat-identifier sql)
+        (ensure-registered-on-class query-identifier)
+      (ensure-prepared-on-connection name-symbol name-string sql)
+      (with-performance-stat-collector (stat-identifier)
+        (cl-postgres:exec-prepared (active-connection)
+                                 name-string
+                                 params
+                                 row-reader)))))
+
+;;---------------- Global queries -----------
+
+(defparameter *global-queries* nil)
+
+(defun initialize-global-queries (executor)
+  (mapcar #'(lambda (fn)
+              (funcall fn executor))
+          *global-queries*))
 
 (defmacro define-prepared-query (name parameters sql-definition) ;;TODO rebind to make macro safer
-  ;;TODO:Cleanup this and code in db-btree.
-  (flet ((safe-sql-name (name)
-           (substitute #\_ #\- (string name) :test #'char=))
-         (tweak-param (parameter)
-           (cond
-             ((eq 'key parameter) `(setf key (integer-to-string (ensure-bid key))))
-             ((eq 'value parameter) `(setf value (integer-to-string (ensure-bid value))))
-             (t nil))))
-    (let ((sp-name (safe-sql-name name)))
-      `(defun ,name (connection ,@parameters &key (row-reader 'cl-postgres:list-row-reader))
-         ,@(mapcar #'tweak-param parameters)
-         (let ((meta (cl-postgres:connection-meta connection)))
-           (unless (gethash ',name meta)
-             (setf (gethash ',name meta) t)
-             (cl-postgres:prepare-query connection ,(symbol-name name) ,sql-definition))) ;;same as ensure-prepared-on-conn in db-btree
-         (with-stat-collector (,sp-name)
-           (cl-postgres:exec-prepared connection ,(symbol-name name) (list ,@parameters) row-reader))))))
+  `(let ((name ',name))
+     (push #'(lambda (ex)
+               (register-query ex name ,sql-definition))
+           *global-queries*)
+     (defun ,name (connection ,@parameters &key (row-reader 'cl-postgres:list-row-reader))
+       (declare (ignore connection)) ;; TODO remove connetion
+       (executor-exec-prepared (active-controller) name (list ,@parameters) row-reader))))
 
 (define-prepared-query next-tree-number ()
   "select nextval('tree_seq');")
@@ -115,6 +160,18 @@ $$ LANGUAGE plpgsql;
 
 (define-prepared-query sp-metatree-insert (tablename keytype valuetype)
    "insert into metatree(tablename,keytype,valuetype) values ($1,$2,$3)")
+
+;; ------------- Misc functions ---------------
+
+(cl-postgres:def-row-reader first-value-row-reader (fields)
+  (let (value-set value)
+    (loop :while (cl-postgres:next-row)
+          :collect (loop :for field :across fields
+                         :do (if value-set
+                                 (cl-postgres:next-field field)
+                                 (setf value-set t
+                                       value (cl-postgres:next-field field)))))
+    (values value value-set)))
 
 (defun ensure-bob (bid)
   (sp-select-blob-bob-by-bid (active-connection) (integer-to-string bid) :row-reader 'first-value-row-reader))
@@ -147,6 +204,3 @@ valuetype text not null);"
                   ;;  "create index idx_blob_bid on blob (bid);" ;;already made implicitly when defining primary key for table
                   "create sequence persistent_seq start with 10;")) ;; make room for some system tables
     (cl-postgres:exec-query connection stmt)))
-
-(defun base-table-existsp (con)
-  (with-conn (con) (postmodern:table-exists-p 'blob)))
