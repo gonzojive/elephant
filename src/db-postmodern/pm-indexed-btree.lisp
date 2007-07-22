@@ -1,19 +1,16 @@
 (in-package :db-postmodern)
 
 (defclass pm-indexed-btree (indexed-btree pm-btree)
-  ((indices :accessor indices :initform (make-hash-table))
-   #- (and) (indices-cache :accessor indices-cache :initform (make-hash-table) :transient t))
+  ((indices :accessor indices :initform (make-hash-table)))
   (:metaclass persistent-metaclass)
   (:documentation "Postmodern implementation of a SQL-based BTree that supports secondary indices."))
 
 (defmethod shared-initialize :after ((instance pm-indexed-btree) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
-  ;; It seems like this is unbound, but how can it be?
+  ;; It seems like this is sometimes unbound, but how can it be?
   (unless (slot-boundp instance 'indices)
-    (setf (indices instance) (make-hash-table)))
-  #- (and) (setf (indices-cache instance) (indices instance)))
-
+    (setf (indices instance) (make-hash-table))))
   
 (defmethod build-indexed-btree ((sc postmodern-store-controller))
   (make-instance 'pm-indexed-btree :sc sc))

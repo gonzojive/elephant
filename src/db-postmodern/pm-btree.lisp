@@ -19,13 +19,6 @@
 (define-condition bad-db-parameter (db-error) ())
 (define-condition suspicios-db-parameter (warning) ())
 
-(defmacro ignore-bad-params (&body body)
-  `(handler-case
-    (progn ,@body)
-    (bad-db-parameter (c)
-     (declare (ignore c))
-     nil)))
-
 (defparameter +join-with-blob-optimization+ t)
 
 (defvar *sc* nil)
@@ -288,11 +281,6 @@ and make the old instance refer to the new database table"
                          (list (key-parameter key bt)
                                (value-parameter value bt))
                          'cl-postgres:ignore-row-reader))
-  ;; Comment by Henrik 2007-may-08
-  ;; Previously I had this wrapped in ignore-bad-params, but the recent upgrade might have solved that?
-  ;; Remove this comment if everything works, and remove ignore-bad-params macro as well.
-  ;;  (ignore-bad-params ;;TODO: Check why value and or key is sometimes nil and what to do
-  ;;    )
   value)
 
 (defmethod existsp (key (bt pm-btree))

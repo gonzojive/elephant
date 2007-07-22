@@ -248,7 +248,6 @@
             new-value)))
   new-value)
 
-;; I have to figure out how to make this work...
 (defmethod persistent-slot-reader ((sc postmodern-store-controller) instance name)
   (declare (optimize (debug 3)))
   (with-controller-for-btree (sc)
