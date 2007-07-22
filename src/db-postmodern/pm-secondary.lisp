@@ -100,12 +100,15 @@
   (secondary-cursor-mover cursor #'cursor-prev :nodup t :return-pk t))
 
 (defmethod cursor-pset ((cursor pm-secondary-cursor) key)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-      (cursor :where-clause "where qi>=$1"
-              :search-key key)
-    (help-cursor-pset-with-equality cursor key)))
+  (cursor-set-helper cursor key 'cursor-pset))
+  
+;;  (when (cursor-initialized-p cursor)
+;;    (cursor-close cursor))
+;;  (with-initialized-cursor
+;;      (cursor :where-clause "where qi>=$1"
+;;              :search-key key)
+;;    (help-cursor-pset-with-equality cursor key))
+
 
 (defun help-cursor-pset-with-equality (cursor key)
   ;; The where clause for key is >= (greater than).
@@ -121,30 +124,36 @@
       (values exists? skey val pkey))))
 
 (defmethod cursor-pset-range ((cursor pm-secondary-cursor) key)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-        (cursor :where-clause "where qi>=$1"
-                 :search-key key)
-      (cursor-pnext cursor)))
+  (cursor-set-helper cursor key 'cursor-pset-range))
+
+;;  (when (cursor-initialized-p cursor)
+;;    (cursor-close cursor))
+;;  (with-initialized-cursor
+;;        (cursor :where-clause "where qi>=$1"
+;;                 :search-key key)
+;;      (cursor-pnext cursor))
 
 (defmethod cursor-pget-both ((cursor pm-secondary-cursor) key pkey)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-        (cursor :where-clause "where qi>=$1 and value=$2"
-                 :search-key key
-                 :search-value pkey)
-    (help-cursor-pset-with-equality cursor key)))
+  (cursor-pget-both-helper cursor key pkey 'cursor-pget-both))
+
+;;  (when (cursor-initialized-p cursor)
+;;    (cursor-close cursor))
+;;  (with-initialized-cursor
+;;        (cursor :where-clause "where qi>=$1 and value=$2"
+;;                 :search-key key
+;;                 :search-value pkey)
+;;    (help-cursor-pset-with-equality cursor key))
 
 (defmethod cursor-pget-both-range ((cursor pm-secondary-cursor) key pkey)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-      (cursor :where-clause "where qi>=$1 and value>=$2"
-              :search-key key
-              :search-value pkey)
-    (help-cursor-pset-with-equality cursor key)))
+  (cursor-pget-both-helper cursor key pkey 'cursor-pget-both-range))
+
+;;  (when (cursor-initialized-p cursor)
+;;    (cursor-close cursor))
+;;  (with-initialized-cursor
+;;      (cursor :where-clause "where qi>=$1 and value>=$2"
+;;              :search-key key
+;;              :search-value pkey)
+;;    (help-cursor-pset-with-equality cursor key))
 
 (defmethod cursor-delete ((cursor pm-secondary-cursor))
   "Delete by cursor: deletes ALL secondary indices."

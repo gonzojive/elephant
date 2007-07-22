@@ -209,29 +209,110 @@
        do (unless x ;; Should not really happen I guess?
               (return-from scan-to-current-row))
        until (equalp oid-now (current-row-identifier cursor)))))
+
+(defmethod move-absolute ((cursor pm-cursor) absolute-nr)
+  (setf (current-key-field cursor) nil
+        (current-value-field cursor) nil
+        (cached-rows-of cursor) nil
+        (cached-prior-rows-of cursor) nil)  
+  (let ((fetch-stmt (concatenate 'string
+                                 "MOVE ABSOLUTE "
+                                 (princ-to-string absolute-nr)
+                                 " FROM "
+                                 (db-cursor-name-of cursor))))
+    (cl-postgres:exec-query (active-connection)
+                            fetch-stmt
+                            'cl-postgres:ignore-row-reader)))
+
 	  
 (defmethod cursor-set ((cursor pm-cursor) key)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-      (cursor :where-clause "where qi>=$1" 
-              :search-key key)
-    ;; need greater than, otherwise next won't work like for berkeley-db.
-    ;; However, we also need to check that the key of the returned value
-    ;; is == key and only return the values in that case
+  (cursor-set-helper cursor key 'cursor-set)
+
+;;  (progn
+;;    (when (cursor-initialized-p cursor)
+;;      (cursor-close cursor))
+;;    (with-initialized-cursor
+;;        (cursor :where-clause "where qi>=$1" 
+;;                :search-key key)
+;;      ;; need greater than, otherwise next won't work like for berkeley-db.
+;;      ;; However, we also need to check that the key of the returned value
+;;      ;; is == key and only return the values in that case
+;;      (multiple-value-bind
+;;            (exists? skey val)
+;;          (cursor-next cursor)
+;;        (when (elephant::lisp-compare-equal key skey)
+;;          (values exists? skey val)))))
+  )
+
+(defun cursor-pget-both-helper (cursor key primary-key query-function-name)
+  (unless (cursor-initialized-p cursor)
+    (cursor-init cursor))
+  (let* ((bt (cursor-btree cursor))
+         (qid (intern (format nil "CURSOR-SET-BOTH-HELP-~a" (table-of bt)))))
+    (register-query bt qid
+                    (format nil "select count(*) from (select qi,value from ~a order by qi,value) as c where c.qi<=$1 and c.value<$2"
+                            (table-of bt)))
+    (with-trans-and-vars (bt)
+      (let ((rows-before (btree-exec-prepared bt qid
+                                              (list (key-parameter key bt)
+                                                    (value-parameter primary-key bt))
+                                              'first-value-row-reader)))
+        (when rows-before
+;;          (format t "rows-before ~a" rows-before)
+          (move-absolute cursor rows-before))))
     (multiple-value-bind
-          (exists? skey val)
-        (cursor-next cursor)
-      (when (elephant::lisp-compare-equal key skey)
-        (values exists? skey val)))))
+          (exists? skey val pkey)
+        (cursor-pnext cursor)
+      ;;            (print "HELLO")
+      ;;            (format t "~a key ~a exits ~a skey ~a val ~a optional-pkey~a" query-function-name key exists? skey val pkey)
+      (ecase query-function-name
+        (cursor-pget-both (when (elephant::lisp-compare-equal pkey primary-key)
+                            ;;                            (print "equal")
+                            (values exists? skey val pkey)))
+        (cursor-pget-both-range (values exists? skey val pkey))))))
+
+(defun cursor-set-helper (cursor key query-function-name)
+  (unless (cursor-initialized-p cursor)
+    (cursor-init cursor))
+  (let* ((bt (cursor-btree cursor))
+         (qid (intern (format nil "CURSOR-SET-HELP-~a" (table-of bt)))))
+    (register-query bt qid
+                    (format nil "select count(*) from (select qi from ~a order by qi,value) as c where c.qi<$1"
+                            (table-of bt)))
+    (with-trans-and-vars (bt)
+      (let ((rows-before (btree-exec-prepared bt qid
+                                              (list (key-parameter key bt))
+                                              'first-value-row-reader)))
+        (when rows-before
+;;          (format t "rows-before ~a" rows-before)
+          (move-absolute cursor rows-before))))
+    (multiple-value-bind
+          (exists? skey val pkey)
+        (if (member query-function-name '(cursor-set cursor-set-range))
+            (cursor-next cursor)
+            (cursor-pnext cursor))
+;;      (print "HELLO")
+;;      (format t "~a key ~a exits ~a skey ~a val ~a optional-pkey~a" query-function-name key exists? skey val pkey)
+      (ecase query-function-name
+        (cursor-set (when (elephant::lisp-compare-equal key skey)
+;;                      (print "EQUAL")
+                      (values exists? skey val)))
+        (cursor-set-range (values exists? skey val))
+        (cursor-pset (when (elephant::lisp-compare-equal key skey)
+;;                       (print "EQUAL")
+                       (values exists? skey val pkey)))
+        (cursor-pset-range (values exists? skey val pkey))))))
+
 
 (defmethod cursor-set-range ((cursor pm-cursor) key)
-  (when (cursor-initialized-p cursor)
-    (cursor-close cursor))
-  (with-initialized-cursor
-      (cursor :where-clause "where qi>=$1"
-              :search-key key)
-    (cursor-next cursor))  )
+  (cursor-set-helper cursor key 'cursor-set-range))
+
+;;  (when (cursor-initialized-p cursor)
+;;    (cursor-close cursor))
+;;  (with-initialized-cursor
+;;      (cursor :where-clause "where qi>=$1"
+;;              :search-key key)
+;;    (cursor-next cursor))
 
 (defmethod cursor-get-both ((cursor pm-cursor) key value)
   (if (equal (get-value key (cursor-btree cursor))
