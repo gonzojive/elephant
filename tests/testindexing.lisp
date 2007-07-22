@@ -76,7 +76,7 @@
   t)
 
 ;; put list of objects, retrieve on value, range and by class
-(deftest indexing-basic
+(test indexing-basic
     (let ((n 105))
       ;;(format t "Global vars:~%")
       ;;(format t "~%basic store: ~A  ~A~%" *store-controller* (elephant::controller-spec *store-controller*))
@@ -96,22 +96,19 @@
 	(if (slot-boundp obj 'slot1)
 	    (format stream "slot1 = ~A~%" (slot1 obj))
 	    (format stream "slot1 unbound~&")
-	))
+            ))
 
-      (progn
-	(with-transaction (:store-controller *store-controller*)
-	  (setq inst1 (make-instance 'idx-one :slot1 n :sc *store-controller*))
-	  (setq inst2 (make-instance 'idx-one :slot1 n :sc *store-controller*))
-	  (setq inst3 (make-instance 'idx-one :slot1 (+ 1 n) :sc *store-controller*)))
+      (with-transaction (:store-controller *store-controller*)
+        (setq inst1 (make-instance 'idx-one :slot1 n :sc *store-controller*))
+        (setq inst2 (make-instance 'idx-one :slot1 n :sc *store-controller*))
+        (setq inst3 (make-instance 'idx-one :slot1 (+ 1 n) :sc *store-controller*)))
 
-;;	(format t "Starting gathering of instances~%")
- 	(values (length (get-instances-by-class 'idx-one))
- 		(length (get-instances-by-value 'idx-one 'slot1 n))
- 		(length (get-instances-by-value 'idx-one 'slot1 (+ 1 n)))
- 		(equal (first (get-instances-by-value 'idx-one 'slot1 (+ 1 n))) inst3)
- 		(length (get-instances-by-range 'idx-one 'slot1 n (+ 1 n))))
-	))
-  3 2 1 t 3)
+      ;;	(format t "Starting gathering of instances~%")
+      (is (= 3 (length (get-instances-by-class 'idx-one))))
+      (is (= 2 (length (get-instances-by-value 'idx-one 'slot1 n))))
+      (is (= 1 (length (get-instances-by-value 'idx-one 'slot1 (+ 1 n)))))
+      (is (equal (first (get-instances-by-value 'idx-one 'slot1 (+ 1 n))) inst3))
+      (is (= 3 (length (get-instances-by-range 'idx-one 'slot1 n (+ 1 n)))))))
 
 (test indexing-basic-with-string
   (defclass idx-one-str ()
@@ -128,12 +125,53 @@
   (with-transaction (:store-controller *store-controller*)
     (setq inst1 (make-instance 'idx-one-str :slot1 "one" :sc *store-controller*))
     (setq inst2 (make-instance 'idx-one-str :slot1 "two" :sc *store-controller*))
-    (setq inst3 (make-instance 'idx-one-str :slot1 "one" :sc *store-controller*)))
-  (is (= 3 (length (get-instances-by-class 'idx-one-str))))
+    (setq inst3 (make-instance 'idx-one-str :slot1 "one" :sc *store-controller*))
+    (setq inst4 (make-instance 'idx-one-str :slot1 "onethousand" :sc *store-controller*))
+    (setq inst5 (make-instance 'idx-one-str :slot1 "only" :sc *store-controller*))
+    (setq inst6 (make-instance 'idx-one-str :slot1 "twothousand" :sc *store-controller*)))
+  (is (= 6 (length (get-instances-by-class 'idx-one-str))))
   (is (= 2 (length (get-instances-by-value 'idx-one-str 'slot1 "one"))))
-  (is (= 1 (length (get-instances-by-value 'idx-one-str 'slot1 "two"))))
   (is (equal (get-instances-by-value 'idx-one-str 'slot1 "two")
              (list inst2))))
+
+(test larger-indexing
+  (defclass idx-one ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
+  (disable-class-indexing 'idx-one :errorp nil)
+  (setf (find-class 'idx-one nil) nil)
+      
+  (defclass idx-one ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
+  (defmethod print-object ((obj idx-one) stream)
+    (print-unreadable-object (obj stream)
+      (format stream "idx-one slot1 = ~A"
+              (if (slot-boundp obj 'slot1)
+                  (slot1 obj)
+                  "unbound slot"))))
+
+  (let ((nr 100)
+        instances)
+    (flet ((last-in-string (str)
+             (subseq str (1- (length str)))))
+      (with-transaction (:store-controller *store-controller*)
+        (dotimes (i nr)
+          (push (make-instance 'idx-one
+                               :slot1 (read-from-string (last-in-string (princ-to-string i)))
+                               :sc *store-controller*)
+                instances)))
+      (setf instances (nreverse instances))
+      (is (= nr (length (get-instances-by-class 'idx-one))))
+      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 2))))
+      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 8))))
+      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 0))))
+      (is (equal (first (get-instances-by-value 'idx-one 'slot1 0))
+                 (first instances)))
+      (is (equal (second (get-instances-by-value 'idx-one 'slot1 0))
+                 (elt instances 10))))))
 
 (test larger-indexing-with-string
   (defclass idx-one-str ()
