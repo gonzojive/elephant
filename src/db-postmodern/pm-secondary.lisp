@@ -13,7 +13,7 @@
 (defvar *in-secondary-cursor-mover* nil)
 
 (defun key-field= (a b)
-  (equalp a b)) ;; TODO is this correct enough
+  (equalp a b))
 
 (defun secondary-cursor-mover (cursor movement-function &key dup nodup return-pk)
   (let ((value-column-before (current-key-field cursor))
@@ -101,59 +101,15 @@
 
 (defmethod cursor-pset ((cursor pm-secondary-cursor) key)
   (cursor-set-helper cursor key 'cursor-pset))
-  
-;;  (when (cursor-initialized-p cursor)
-;;    (cursor-close cursor))
-;;  (with-initialized-cursor
-;;      (cursor :where-clause "where qi>=$1"
-;;              :search-key key)
-;;    (help-cursor-pset-with-equality cursor key))
-
-
-(defun help-cursor-pset-with-equality (cursor key)
-  ;; The where clause for key is >= (greater than).
-  ;; This because sometime you may want to cursor-next to next key,
-  ;; and that wont work if we select by =.
-  ;; However, we also need to check that the key of the returned value
-  ;; is == key and only return the values in that case.
-  ;; This is because we ask for a key == using a where >=
-  (multiple-value-bind
-        (exists? skey val pkey)
-      (cursor-pnext cursor)
-    (when (elephant::lisp-compare-equal key skey)
-      (values exists? skey val pkey))))
 
 (defmethod cursor-pset-range ((cursor pm-secondary-cursor) key)
   (cursor-set-helper cursor key 'cursor-pset-range))
 
-;;  (when (cursor-initialized-p cursor)
-;;    (cursor-close cursor))
-;;  (with-initialized-cursor
-;;        (cursor :where-clause "where qi>=$1"
-;;                 :search-key key)
-;;      (cursor-pnext cursor))
-
 (defmethod cursor-pget-both ((cursor pm-secondary-cursor) key pkey)
   (cursor-pget-both-helper cursor key pkey 'cursor-pget-both))
 
-;;  (when (cursor-initialized-p cursor)
-;;    (cursor-close cursor))
-;;  (with-initialized-cursor
-;;        (cursor :where-clause "where qi>=$1 and value=$2"
-;;                 :search-key key
-;;                 :search-value pkey)
-;;    (help-cursor-pset-with-equality cursor key))
-
 (defmethod cursor-pget-both-range ((cursor pm-secondary-cursor) key pkey)
   (cursor-pget-both-helper cursor key pkey 'cursor-pget-both-range))
-
-;;  (when (cursor-initialized-p cursor)
-;;    (cursor-close cursor))
-;;  (with-initialized-cursor
-;;      (cursor :where-clause "where qi>=$1 and value>=$2"
-;;              :search-key key
-;;              :search-value pkey)
-;;    (help-cursor-pset-with-equality cursor key))
 
 (defmethod cursor-delete ((cursor pm-secondary-cursor))
   "Delete by cursor: deletes ALL secondary indices."

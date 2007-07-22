@@ -4,7 +4,6 @@
 
 (defclass pm-cursor (cursor)
   ((name :accessor db-cursor-name-of)
-   (search-key :accessor search-key-of :initform nil)
    (db-oid :accessor current-row-identifier :initform nil
            :documentation "This oid is the postgresql oid, not the elephant oid. Unfortunately they share name")
    (key :accessor current-key-field :initform nil)
@@ -51,58 +50,36 @@
               found t)))
     (values found key val)))
 
-(defmethod cursor-init ((cursor pm-cursor)
-                        &key (where-clause "")
-                        (search-key nil key-provided-p)
-                        (search-value nil value-provided-p))
+(defmethod cursor-init ((cursor pm-cursor))
   (unless (cursor-initialized-p cursor)
     (with-accessors ((bt cursor-btree))
-      cursor
+        cursor
       (when (initialized-p bt)
         (handler-bind
             ((bad-db-parameter #'(lambda (c)
                                    (declare (ignore c))
                                    (return-from cursor-init nil))))
           (with-trans-and-vars (bt) ;;Or maybe just vars?
-            (setf (search-key-of cursor) search-key)
             (let ((tempname (gensym "TMPCUR")))
               (setf (db-cursor-name-of cursor) (format nil "cur_~a_~a" (table-of bt) tempname))
-              (if key-provided-p
-                  (let ((parameters (list (key-parameter search-key (cursor-btree cursor)))))
-                    (when value-provided-p
-                      (setf parameters (append parameters (list (value-parameter search-value (cursor-btree cursor))))))
-                    (register-query bt
-                                    tempname
-                                    (build-cursor-query-helper cursor :where-clause where-clause))
-                    (btree-exec-prepared bt tempname parameters 'cl-postgres:ignore-row-reader))
-                  (cl-postgres:exec-query (active-connection) (build-cursor-query-helper cursor))))
+              (cl-postgres:exec-query (active-connection) (build-cursor-query-helper cursor)))
             (clean-cursor-state cursor))
           (setf (cursor-initialized-p cursor) t))))))
 
-(defmethod build-cursor-query-helper ((cursor pm-cursor) &key (where-clause ""))
+(defmethod build-cursor-query-helper ((cursor pm-cursor))
   (if (and +join-with-blob-optimization+ (eq :object (value-type-of (cursor-btree cursor))))
-      (format nil "declare ~a scroll cursor with hold for select qi,bob,~a.oid from ~a ,blob ~a ~a bid=value order by qi,value" 
+      (format nil "declare ~a scroll cursor with hold for select qi,bob,~a.oid from ~a ,blob where bid=value order by qi,value" 
               (db-cursor-name-of cursor)
               (table-of (cursor-btree cursor))
-              (table-of (cursor-btree cursor))
-              (if (string= "" where-clause)
-                  "where"
-                  where-clause)
-              (if (string= "" where-clause)
-                  ""
-                  " and "))
-      (format nil "declare ~a scroll cursor with hold for select qi,value,oid from ~a ~a order by qi,value" 
+              (table-of (cursor-btree cursor)))
+      (format nil "declare ~a scroll cursor with hold for select qi,value,oid from ~a order by qi,value" 
               (db-cursor-name-of cursor)
-              (table-of (cursor-btree cursor))
-              where-clause)))
+              (table-of (cursor-btree cursor)))))
 
-(defmethod set-has-been-called-p ((cursor pm-cursor))
-  "cursor-set moves the cursor so the first position is wrong"
-  (when (search-key-of cursor) t))
-
-(defmacro with-initialized-cursor ((cursor &rest args) &body body)
+(defmacro with-initialized-cursor ((cursor) &body body)
   `(progn
-     (cursor-init cursor ,@args)
+     (unless (cursor-initialized-p ,cursor)
+       (cursor-init cursor))
      (when (cursor-initialized-p ,cursor)
        ,@body)))
 
@@ -171,14 +148,10 @@
                 (clean-cursor-state cursor)))))))
 
 (defmethod cursor-first ((cursor pm-cursor))
-  (when (set-has-been-called-p cursor)
-    (cursor-close cursor))
   (with-initialized-cursor (cursor)
     (fetch cursor 'first)))
 		 
 (defmethod cursor-last ((cursor pm-cursor))
-  (when (set-has-been-called-p cursor)
-    (cursor-close cursor))
   (with-initialized-cursor (cursor) 
     (fetch cursor 'last)))
 
@@ -191,15 +164,8 @@
 
 (defmethod cursor-prev ((cursor pm-cursor))
   (if (not (cursor-initialized-p cursor))
-      nil ;;        (cursor-last cursor)
-      (progn 
-        (when (set-has-been-called-p cursor)
-          (warn "Postmodern users beware, don't mix cursor-prev and cursor-set. Inefficient!")
-          (scan-to-current-row cursor))
-        ;; We are finally at the position previously found by cursor-set.
-        ;; Lets drop down to fetch prior, which will return the correct value. 
-        ;; Normal case is this
-        (fetch-prior cursor))))
+      nil
+      (fetch-prior cursor)))
 
 (defun scan-to-current-row (cursor)
   (let ((oid-now (current-row-identifier cursor)))
@@ -223,26 +189,9 @@
     (cl-postgres:exec-query (active-connection)
                             fetch-stmt
                             'cl-postgres:ignore-row-reader)))
-
 	  
 (defmethod cursor-set ((cursor pm-cursor) key)
-  (cursor-set-helper cursor key 'cursor-set)
-
-;;  (progn
-;;    (when (cursor-initialized-p cursor)
-;;      (cursor-close cursor))
-;;    (with-initialized-cursor
-;;        (cursor :where-clause "where qi>=$1" 
-;;                :search-key key)
-;;      ;; need greater than, otherwise next won't work like for berkeley-db.
-;;      ;; However, we also need to check that the key of the returned value
-;;      ;; is == key and only return the values in that case
-;;      (multiple-value-bind
-;;            (exists? skey val)
-;;          (cursor-next cursor)
-;;        (when (elephant::lisp-compare-equal key skey)
-;;          (values exists? skey val)))))
-  )
+  (cursor-set-helper cursor key 'cursor-set))
 
 (defun cursor-pget-both-helper (cursor key primary-key query-function-name)
   (unless (cursor-initialized-p cursor)
@@ -258,16 +207,12 @@
                                                     (value-parameter primary-key bt))
                                               'first-value-row-reader)))
         (when rows-before
-;;          (format t "rows-before ~a" rows-before)
           (move-absolute cursor rows-before))))
     (multiple-value-bind
           (exists? skey val pkey)
         (cursor-pnext cursor)
-      ;;            (print "HELLO")
-      ;;            (format t "~a key ~a exits ~a skey ~a val ~a optional-pkey~a" query-function-name key exists? skey val pkey)
       (ecase query-function-name
         (cursor-pget-both (when (elephant::lisp-compare-equal pkey primary-key)
-                            ;;                            (print "equal")
                             (values exists? skey val pkey)))
         (cursor-pget-both-range (values exists? skey val pkey))))))
 
@@ -284,35 +229,23 @@
                                               (list (key-parameter key bt))
                                               'first-value-row-reader)))
         (when rows-before
-;;          (format t "rows-before ~a" rows-before)
           (move-absolute cursor rows-before))))
     (multiple-value-bind
           (exists? skey val pkey)
         (if (member query-function-name '(cursor-set cursor-set-range))
             (cursor-next cursor)
             (cursor-pnext cursor))
-;;      (print "HELLO")
-;;      (format t "~a key ~a exits ~a skey ~a val ~a optional-pkey~a" query-function-name key exists? skey val pkey)
       (ecase query-function-name
         (cursor-set (when (elephant::lisp-compare-equal key skey)
-;;                      (print "EQUAL")
                       (values exists? skey val)))
         (cursor-set-range (values exists? skey val))
         (cursor-pset (when (elephant::lisp-compare-equal key skey)
-;;                       (print "EQUAL")
                        (values exists? skey val pkey)))
         (cursor-pset-range (values exists? skey val pkey))))))
 
 
 (defmethod cursor-set-range ((cursor pm-cursor) key)
   (cursor-set-helper cursor key 'cursor-set-range))
-
-;;  (when (cursor-initialized-p cursor)
-;;    (cursor-close cursor))
-;;  (with-initialized-cursor
-;;      (cursor :where-clause "where qi>=$1"
-;;              :search-key key)
-;;    (cursor-next cursor))
 
 (defmethod cursor-get-both ((cursor pm-cursor) key value)
   (if (equal (get-value key (cursor-btree cursor))
