@@ -37,3 +37,25 @@
                            (list (postgres-format secondary-key (key-type-of bt))
                                  (postgres-format value (value-type-of bt)))
                            'cl-postgres:ignore-row-reader))))
+
+;;------------------------------------------------------------------------------
+
+(defmethod map-index (fn (index pm-btree-index) &rest args 
+		      &key start end (value nil value-set-p) from-end collect 
+		      &allow-other-keys)
+  ;; This is because the default map-index method relies on the sort order of strings,
+  ;; which is not implemented in the db-postmodern backend as it is now
+  (flet ((my-lisp-compare<= (a b)
+           (etypecase a
+               (number (<= a b))
+               (string (string= a b)) ;; This is the important change
+               (persistent (<= (oid a) (oid b)))
+               (symbol (string= (symbol-name a) (symbol-name b))))))
+    (let ((fn-before (symbol-function 'elephant::lisp-compare<=)))
+      (unwind-protect
+           (progn
+             (setf (symbol-function 'elephant::lisp-compare<=)
+                   #'my-lisp-compare<=)
+             (common-lisp:call-next-method))
+        (setf (symbol-function 'elephant::lisp-compare<=)
+              fn-before)))))
