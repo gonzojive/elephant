@@ -199,7 +199,7 @@
   (let* ((bt (cursor-btree cursor))
          (qid (intern (format nil "CURSOR-SET-BOTH-HELP-~a" (table-of bt)))))
     (unless (initialized-p bt)
-      (return-from cursor-set-helper nil))    
+      (return-from cursor-pget-both-helper nil))    
     (register-query bt qid
                     (format nil "select count(*) from (select qi,value from ~a order by qi,value) as c where c.qi<=$1 and c.value<$2"
                             (table-of bt)))
