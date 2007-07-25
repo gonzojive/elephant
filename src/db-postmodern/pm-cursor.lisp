@@ -64,6 +64,7 @@
               (setf (db-cursor-name-of cursor) (format nil "cur_~a_~a" (table-of bt) tempname))
               (cl-postgres:exec-query (active-connection) (build-cursor-query-helper cursor)))
             (clean-cursor-state cursor))
+          (register-cursor-local-queries bt)
           (setf (cursor-initialized-p cursor) t))))))
 
 (defmethod build-cursor-query-helper ((cursor pm-cursor))
@@ -189,49 +190,49 @@
     (cl-postgres:exec-query (active-connection)
                             fetch-stmt
                             'cl-postgres:ignore-row-reader)))
-	  
-(defmethod cursor-set ((cursor pm-cursor) key)
-  (cursor-set-helper cursor key 'cursor-set))
+
+
+(defun register-cursor-local-queries (bt)
+  (register-query bt 'cursor-set-both-helper
+                  (concatenate 'string 
+                               "select count(*) from (select qi,value from "
+                               (table-of bt)
+                               " order by qi,value) as c where c.qi<=$1 and c.value<$2"))
+  (register-query bt 'cursor-set-helper
+                  (concatenate 'string 
+                               "select count(*) from (select qi from "
+                               (table-of bt)
+                               " order by qi,value) as c where c.qi<$1")))
 
 (defun cursor-pget-both-helper (cursor key primary-key query-function-name)
-  (unless (cursor-initialized-p cursor)
-    (cursor-init cursor))
-  (let* ((bt (cursor-btree cursor))
-         (qid (intern (format nil "CURSOR-SET-BOTH-HELP-~a" (table-of bt)))))
-    (unless (initialized-p bt)
-      (return-from cursor-pget-both-helper nil))    
-    (register-query bt qid
-                    (format nil "select count(*) from (select qi,value from ~a order by qi,value) as c where c.qi<=$1 and c.value<$2"
-                            (table-of bt)))
-    (with-trans-and-vars (bt)
-      (let ((rows-before (btree-exec-prepared bt qid
-                                              (list (key-parameter key bt)
-                                                    (value-parameter primary-key bt))
-                                              'first-value-row-reader)))
-        (when rows-before
-          (move-absolute cursor rows-before))))
-    (multiple-value-bind
-          (exists? skey val pkey)
-        (cursor-pnext cursor)
-      (ecase query-function-name
-        (cursor-pget-both (when (elephant::lisp-compare-equal pkey primary-key)
-                            (values exists? skey val pkey)))
-        (cursor-pget-both-range (values exists? skey val pkey))))))
+  (cursor-set-helper-common cursor :query-function-name query-function-name
+                                :key key
+                                :primary-key primary-key
+                                :prepared-query-id 'cursor-set-both-helper))
+
 
 (defun cursor-set-helper (cursor key query-function-name)
+  (cursor-set-helper-common cursor :query-function-name query-function-name
+                                :key key 
+                                :prepared-query-id 'cursor-set-helper))
+
+(defun cursor-set-helper-common (cursor &key query-function-name
+                                 key
+                                 (primary-key nil primary-key-provided-p)
+                                 prepared-query-id)
   (unless (cursor-initialized-p cursor)
     (cursor-init cursor))
-  (let* ((bt (cursor-btree cursor))
-         (qid (intern (format nil "CURSOR-SET-HELP-~a" (table-of bt)))))
+  (with-accessors ((bt cursor-btree))
+      cursor
     (unless (initialized-p bt)
-      (return-from cursor-set-helper nil))
-    (register-query bt qid
-                    (format nil "select count(*) from (select qi from ~a order by qi,value) as c where c.qi<$1"
-                            (table-of bt)))
-    (with-trans-and-vars (bt)
-      (let ((rows-before (btree-exec-prepared bt qid
-                                              (list (key-parameter key bt))
-                                              'first-value-row-reader)))
+      (return-from cursor-set-helper-common nil))    
+    (with-vars (bt)
+      (let* ((parameters (cons (key-parameter key bt)
+                                (when primary-key-provided-p
+                                  (list (value-parameter primary-key bt)))))
+             (rows-before (btree-exec-prepared bt prepared-query-id
+                                               parameters
+                                               'first-value-row-reader)))
         (when rows-before
           (move-absolute cursor rows-before))))
     (multiple-value-bind
@@ -245,8 +246,13 @@
         (cursor-set-range (values exists? skey val))
         (cursor-pset (when (elephant::lisp-compare-equal key skey)
                        (values exists? skey val pkey)))
-        (cursor-pset-range (values exists? skey val pkey))))))
-
+        (cursor-pset-range (values exists? skey val pkey))
+        (cursor-pget-both (when (elephant::lisp-compare-equal pkey primary-key)
+                            (values exists? skey val pkey)))
+        (cursor-pget-both-range (values exists? skey val pkey))))))
+	  
+(defmethod cursor-set ((cursor pm-cursor) key)
+  (cursor-set-helper cursor key 'cursor-set))
 
 (defmethod cursor-set-range ((cursor pm-cursor) key)
   (cursor-set-helper cursor key 'cursor-set-range))
