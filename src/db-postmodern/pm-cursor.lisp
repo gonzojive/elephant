@@ -24,7 +24,7 @@
 
 (defmethod cursor-close ((cursor pm-cursor))
   (when (cursor-initialized-p cursor)
-    (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars?
+    (with-vars ((cursor-btree cursor))
       (cl-postgres:exec-query (active-connection)
                               (format nil "close ~a;" (db-cursor-name-of cursor)))))
   (clean-cursor-state cursor))
@@ -44,7 +44,7 @@
   (let (found key val)
     (when (cursor-initialized-p cursor)
       (assert (current-key-field cursor)) ;; Otherwise the query should be uninitialized
-      (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars
+      (with-vars ((cursor-btree cursor))
         (setf key (postgres-value-to-lisp (current-key-field cursor) (key-type-of (cursor-btree cursor)))
               val (postgres-value-to-lisp (current-value-field cursor) (value-type-of (cursor-btree cursor)))
               found t)))
@@ -59,7 +59,7 @@
             ((bad-db-parameter #'(lambda (c)
                                    (declare (ignore c))
                                    (return-from cursor-init nil))))
-          (with-trans-and-vars (bt) ;;Or maybe just vars?
+          (with-vars (bt)
             (let ((tempname (gensym "TMPCUR")))
               (setf (db-cursor-name-of cursor) (format nil "cur_~a_~a" (table-of bt) tempname))
               (cl-postgres:exec-query (active-connection) (build-cursor-query-helper cursor)))
@@ -86,7 +86,7 @@
 
 (defmethod fetch ((cursor pm-cursor) fetch-direction)
   (when (cursor-initialized-p cursor)
-    (with-trans-and-vars ((cursor-btree cursor)) ;;Or maybe just vars?
+    (with-vars ((cursor-btree cursor))
       (let* ((fetch-stmt (concatenate 'string
                                       "FETCH "
                                       (if (eq fetch-direction 'next)

@@ -237,7 +237,7 @@ and make the old instance refer to the new database table"
   (declare (optimize (debug 3)))
   (let (value exists-p)
     (when (initialized-p bt)
-      (with-trans-and-vars (bt)
+      (with-vars (bt)
         (let ((result (btree-exec-prepared bt 'select
                                            (list (key-parameter key bt))
                                            'first-value-row-reader)))
