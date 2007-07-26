@@ -40,6 +40,7 @@
 
 ;;------------------------------------------------------------------------------
 
+#-char-columns
 (defmethod map-index (fn (index pm-btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)

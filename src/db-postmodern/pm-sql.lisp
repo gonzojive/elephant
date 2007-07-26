@@ -1,5 +1,20 @@
 (in-package :db-postmodern)
 
+;; One postgresql limitation is that indexes can not be created on
+;; columns longer than about 2,000 characters.
+;; In order to avoid problems with that, we can encode strings as blobs.
+;; howvere, if we do the sort order of btree with strings as keys are
+;; based on the oid number rather than string<, which is not entierly
+;; compatible with the other backends. For example it caused a bug
+;; with map-index, a work around is in pm-btree-index.
+;;
+;; Or, we can have strings as keys but truncate the strings after 2000 chars.
+;; This will probably not happen often, so we use this as default,
+;; specified by the #:char-columns feature.
+;;
+(push :char-columns cl::*features*)
+
+
 ;;--------- Stored procedures ---------
 
 (defparameter *stored-procedures* nil)

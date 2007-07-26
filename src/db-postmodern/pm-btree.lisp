@@ -1,12 +1,5 @@
 (in-package :db-postmodern)
 
-;; One limitation is that indexes can not be created on columns longer than about 2,000 characters.
-;; In order to avoid problems with that, strings are encoded as blobs.
-;; If you want to encode strings as strings despite the index limitation,
-;; do this:   (push :char-columns cl::*features*)
-;;
-;; At one time, we might add a testcase for this and similar limitations.
-
 (defclass pm-btree (btree pm-executor)
   ((dbtable :accessor table-of :initform nil :initarg :table-name)
    (key-type :accessor key-type-of :initform nil)
@@ -162,7 +155,9 @@ $$ LANGUAGE plpgsql;
                                  (t (signal 'bad-db-parameter)))))
     #+char-columns 
     (:string (cond
-               ((stringp parameter) parameter)
+               ((stringp parameter) (if (>= (length parameter) 2000)
+                                        (subseq parameter 0 2000)
+                                        parameter))
                ((null parameter)
                 (signal 'bad-db-parameter)
                 "")
