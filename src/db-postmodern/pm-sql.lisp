@@ -12,6 +12,8 @@
 ;; This will probably not happen often, so we use this as default,
 ;; specified by the #:char-columns feature.
 ;;
+
+
 (push :char-columns cl::*features*)
 
 

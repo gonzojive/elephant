@@ -136,6 +136,7 @@ $$ LANGUAGE plpgsql;
 (defmethod initialized-p ((bt pm-btree))
   (not (null (key-type-of bt))))
 
+
 (defun deserialize-binary-result (item)
   (if (and +join-with-blob-optimization+ (arrayp item))
       (deserialize-from-database item (active-controller))
@@ -249,6 +250,7 @@ and make the old instance refer to the new database table"
 (defmethod (setf internal-get-value) (value key (bt pm-btree))
   (unless (initialized-p bt)
     (create-table-from-first-values bt key value))
+  (assert (initialized-p bt)) ;; Should be initialized now
   (unless (eq :object (key-type-of bt))
     (unless (eq (key-type-of bt) (data-type key))
       (upgrade-btree-type bt :object)))

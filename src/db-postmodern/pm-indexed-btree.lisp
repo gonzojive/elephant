@@ -57,6 +57,8 @@
   "Set a key / value pair, and update secondary indices."
   (call-next-method)
   (with-trans-and-vars (bt)
+    (unless (slot-boundp bt 'indices)
+      (setf (indices bt) (make-hash-table)))
     (loop for index being the hash-value of (indices bt) do
           (maybe-insert/update-secondary-index index (key-fn index) key value)))
   value)
