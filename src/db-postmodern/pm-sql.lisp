@@ -134,8 +134,13 @@ $$ LANGUAGE plpgsql;
            (ensure-prepared-on-connection (name-symbol name-string sql)
              (let ((meta (cl-postgres:connection-meta (active-connection))))
                (unless (gethash name-symbol meta)
-                 (cl-postgres:prepare-query (active-connection) name-string sql)
-                 (setf (gethash name-symbol meta) t)))))
+                 (ignore-errors ;; TODO note 20070810: Ugly but I sometimes get:
+                   ;;Database error 42P05: prepared statement "TREE140CURSOR-SET-HELPER" already exists
+                   ;; Despite the attempts above trying to check if it is already prepared.
+                   ;; This error in itself does not cause any problems, so we can ignore it.
+                   ;; But this should be investigated
+                   (cl-postgres:prepare-query (active-connection) name-string sql)
+                   (setf (gethash name-symbol meta) t))))))
     (destructuring-bind (name-string name-symbol stat-identifier sql)
         (ensure-registered-on-class query-identifier)
       (ensure-prepared-on-connection name-symbol name-string sql)
