@@ -6,6 +6,11 @@
    (value-type :accessor value-type-of :initform :object))
   (:documentation "A SQL implementation of a BTree"))
 
+(defmethod print-object ((pm-btree pm-btree) stream)
+  (print-unreadable-object (pm-btree stream :type t :identity t)
+    (format stream "db-table:~a" (table-of pm-btree))))
+
+
 (define-condition db-error (serious-condition) ())
 (define-condition bad-db-parameter (db-error) ())
 (define-condition suspicios-db-parameter (warning) ())
