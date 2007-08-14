@@ -12,6 +12,13 @@
    (val :accessor current-value-field :initform nil))
   (:documentation "A SQL cursor for traversing (primary) BTrees."))
 
+(defmethod print-object ((cursor pm-cursor) stream)
+  (print-unreadable-object (cursor stream :type t :identity t)
+    (format stream "name:~a cur-key:~S cur-val:~S"
+            (db-cursor-name-of cursor)
+            (current-key-field cursor)
+            (current-value-field cursor))))
+
 (defmethod make-cursor ((bt pm-btree))
   (make-instance 'pm-cursor 
 		 :btree bt
