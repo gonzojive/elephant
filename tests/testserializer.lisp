@@ -29,14 +29,28 @@
   (with-buffer-streams (out-buf)
     (equalp var (deserialize (serialize var out-buf *store-controller*) *store-controller*))))
 
-(deftest fixnums
-    (are-not-null
-     (in-out-equal 0)
-     (in-out-equal -1)
-     (in-out-equal 1)
-     (in-out-equal most-positive-fixnum)
-     (in-out-equal most-negative-fixnum))
-  t t t t t)
+
+(defmacro is-in-out-equal (var)
+  `(with-buffer-streams (out-buf)
+     (let ((var ,var))
+       (is (equal var (deserialize (serialize var out-buf *store-controller*) *store-controller*))))))
+
+(test fixnums
+  (is-in-out-equal 0)
+  (is-in-out-equal -1)
+  (is-in-out-equal 1)
+  (is-in-out-equal most-positive-fixnum)
+  (is-in-out-equal most-negative-fixnum))
+
+(test fixnum-or-bignum
+  (is-in-out-equal (expt 2 31))
+  (is-in-out-equal (expt 2 32))
+  (is-in-out-equal (expt 2 33))
+  (is-in-out-equal (- (expt 2 31)))
+  (is-in-out-equal (- (expt 2 32)))
+  (is-in-out-equal (- (expt 2 33)))
+  (is-in-out-equal (+ (expt 2 31) 500))
+  (is-in-out-equal (+ (expt 2 32) 500)))
 
 (deftest fixnum-type-1
     (are-not-null
