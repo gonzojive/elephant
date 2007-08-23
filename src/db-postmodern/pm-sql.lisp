@@ -243,3 +243,7 @@ valuetype text not null);"
                   ;;  "create index idx_blob_bid on blob (bid);" ;;already made implicitly when defining primary key for table
                   "create sequence persistent_seq start with 10;")) ;; make room for some system tables
     (cl-postgres:exec-query connection stmt)))
+
+(defun create-message-table (connection)
+  "This table is (for now) only used as a flag that everything went ok with the initialization"
+  (cl-postgres:exec-query connection "create table message(message text);"))

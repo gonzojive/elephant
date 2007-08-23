@@ -136,23 +136,23 @@
 
 (defun version-table-exists (con)
   (with-conn (con)
-    (postmodern:table-exists-p 'version)))
+    (postmodern:table-exists-p 'versionpm)))
 
 (defun create-version-table (sc)
   (declare (ignore sc))
-  (cl-postgres:exec-query (active-connection) "create table version (dbversion varchar(20) not null)")
-  (cl-postgres:exec-query (active-connection) (format nil "insert into version (dbversion) values('~a')" *elephant-code-version*)))
+  (cl-postgres:exec-query (active-connection) "create table versionpm (dbversion varchar(20) not null)")
+  (cl-postgres:exec-query (active-connection) (format nil "insert into versionpm (dbversion) values('~a')" *elephant-code-version*)))
 
-(defun base-table-existsp (con)
+(defun message-table-existsp (con)
   (with-conn (con)
-    (postmodern:table-exists-p 'blob)))
+    (postmodern:table-exists-p 'message)))
 
 (defmethod database-version ((sc postmodern-store-controller))
   "Returns a list of the form '(0 6 0)"
   (or (postmodern-dbversion sc)
       (setf (postmodern-dbversion sc)
             (read-from-string (cl-postgres:exec-query (active-connection)
-                                                      "select dbversion from version"
+                                                      "select dbversion from versionpm"
                                                       'first-value-row-reader)))))
 
 ;; Henrik todo is this needed
@@ -167,42 +167,41 @@
 			    (recover nil)
 			    (recover-fatal nil)
 			    (thread t))
-  (declare (ignore recover recover-fatal thread))
-  (ensure-thread-table-lock)
-  (the postmodern-store-controller
-    (with-connection-for-thread (sc)
-      (let ((con (active-connection))
-            (make-tables nil))
-        (assert (cl-postgres::database-open-p con ))
+  (declare (ignore recover recover-fatal thread))  
+  (flet ((init-root ()
+           (setf (slot-value sc 'root) (make-instance 'pm-indexed-btree :sc sc :from-oid 0 :table-name "root"))
+           (setf (key-type-of (slot-value sc 'root)) (data-type t))
+           (setf (slot-value sc 'class-root) (make-instance 'pm-indexed-btree :sc sc :from-oid 1 :table-name "classroot"))
+           (setf (key-type-of (slot-value sc 'class-root)) (data-type t))))
+    (ensure-thread-table-lock)
+    (the postmodern-store-controller
+      (with-connection-for-thread (sc)
+        (let ((con (active-connection)))
+          (assert (cl-postgres::database-open-p con ))
 
-        (unless (version-table-exists con)
-          (with-transaction (:store-controller sc)
-            (create-version-table sc)))
+          (unless (version-table-exists con)
+            (with-transaction (:store-controller sc)
+              (create-version-table sc)))
         
-        (initialize-serializer sc)
+          (initialize-serializer sc)
         
-        (setf (persistent-slot-collection-of sc) (make-instance 'pm-btree :table-name "slots" :from-oid 2 :sc sc))
-        (setf (key-type-of (persistent-slot-collection-of sc)) (data-type (form-slot-key 777 'a-typical-slot)))
+          (setf (persistent-slot-collection-of sc) (make-instance 'pm-btree :table-name "slots" :from-oid 2 :sc sc))
+          (setf (key-type-of (persistent-slot-collection-of sc)) (data-type (form-slot-key 777 'a-typical-slot)))
 
-        (unless (base-table-existsp con)
-          (create-base-tables con)
-          (init-stored-procedures con)
-          (with-controller-for-btree (sc)
-            (make-table (persistent-slot-collection-of sc))
-            (setf make-tables t)))
+          (if (message-table-existsp con)
+              (init-root)
+              (with-transaction (:store-controller sc)
+                  (with-controller-for-btree (sc)
+                    (create-base-tables con)
+                    (init-stored-procedures con)
 
-        (setf (slot-value sc 'root) (make-instance 'pm-indexed-btree :sc sc :from-oid 0 :table-name "root"))
-        (setf (key-type-of (slot-value sc 'root)) (data-type t))            
+                    (make-table (persistent-slot-collection-of sc))
+                    (init-root)
 
-        
-        (setf (slot-value sc 'class-root) (make-instance 'pm-indexed-btree :sc sc :from-oid 1 :table-name "classroot"))
-        (setf (key-type-of (slot-value sc 'class-root)) (data-type t))
-
-        (when make-tables
-          (with-controller-for-btree (sc)
-            (make-table (slot-value sc 'root))
-            (make-table (slot-value sc 'class-root))))
-        sc))))
+                    (make-table (slot-value sc 'root))
+                    (make-table (slot-value sc 'class-root))
+                    (create-message-table con))))
+          sc)))))
 
 (defmethod prepare-local-queries ((sc postmodern-store-controller))
   (initialize-global-queries sc))
