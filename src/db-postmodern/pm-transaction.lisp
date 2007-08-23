@@ -30,14 +30,16 @@
                             (setf tran (controller-start-transaction sc))
                             (funcall txn-fn))
                        (controller-abort-transaction sc tran)))
-                   (let (tran)
+                   (let (tran committed)
                      (unwind-protect
                           (prog1
                               (progn
                                 (setf tran (controller-start-transaction sc))
                                 (funcall txn-fn))
-                            (controller-commit-transaction sc tran))
-                       (controller-abort-transaction sc tran))))
+                            (controller-commit-transaction sc tran)
+                            (setf committed t))
+                       (unless committed
+                         (controller-abort-transaction sc tran)))))
             (decf (tran-count-of sc)))))))
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
