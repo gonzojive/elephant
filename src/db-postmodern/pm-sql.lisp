@@ -25,6 +25,8 @@
   `(push ,sql-code *stored-procedures*))
 
 (defun init-stored-procedures (con)
+  (ignore-errors
+    (cl-postgres:exec-query con "CREATE LANGUAGE plpgsql;"))
   (loop for sp-def in *stored-procedures* do
        (cl-postgres:exec-query con sp-def)))
 
