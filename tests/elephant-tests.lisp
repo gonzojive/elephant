@@ -144,7 +144,7 @@
   "For easy interactive running of single tests while debugging"
   (when spec
     (with-open-store (spec)
-      (do-test testname))))
+      (5am:debug! testname))))
 
 (defun do-migration-tests (spec1 spec2 &optional oid-spec)
   "Interface to do explicit migration tests between backends"
