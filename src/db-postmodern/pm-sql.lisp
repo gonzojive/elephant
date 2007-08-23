@@ -24,8 +24,32 @@
 (defmacro define-stored-procedure (sql-code)
   `(push ,sql-code *stored-procedures*))
 
+;;   Postgresql unlike most databases automatically aborts transactions if an error occurs,
+;;   without letting the programmer decide what to do. A way around is to use a savepoint
+;;   when expecting an error.
+;;   http://archives.postgresql.org/pgsql-jdbc/2006-04/msg00002.php
+;;
+;;   But this only works inside a transcation..
+(defmacro with-safe-postgres-error-handler ((connection &optional (error-object nil))
+                                            statement &body error-body)
+  (let ((savepoint (princ-to-string (gensym)))
+        (con (gensym)))
+    `(let ((,con ,connection))
+       (handler-case
+           (progn
+             (ignore-errors ;; We might not be in a transaction, so wrap in ignore errors
+               (cl-postgres:exec-query ,con ,(concatenate 'string "SAVEPOINT " savepoint)))
+             ,statement)
+         (cl-postgres:database-error (,@error-object)
+           (ignore-errors 
+            (cl-postgres:exec-query ,con ,(concatenate 'string "ROLLBACK TO " savepoint)))
+           ,@error-body)))))
+
+(defmacro safe-ignore-postgres-error ((connection) &body body)
+  `(with-safe-postgres-error-handler (,connection) (progn,@body)))
+
 (defun init-stored-procedures (con)
-  (ignore-errors
+  (safe-ignore-postgres-error (con)
     (cl-postgres:exec-query con "CREATE LANGUAGE plpgsql;"))
   (loop for sp-def in *stored-procedures* do
        (cl-postgres:exec-query con sp-def)))
