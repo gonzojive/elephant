@@ -17,7 +17,7 @@
 
 (defmethod execute-transaction ((sc postmodern-store-controller) txn-fn &key (always-rollback nil) &allow-other-keys)
   ;; SQL doesn't support nested transaction
-  (with-conn ((controller-connection-for-thread sc))
+  (with-postmodern-conn ((controller-connection-for-thread sc))
     (if (> (tran-count-of sc) 0)
         (funcall txn-fn)
         (progn
@@ -43,15 +43,15 @@
             (decf (tran-count-of sc)))))))
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
-  (with-conn ((controller-connection-for-thread sc))
+  (with-postmodern-conn ((controller-connection-for-thread sc))
     (let ((transaction (make-instance 'postmodern::transaction-handle)))
       (postmodern:execute "BEGIN")
       transaction)))
 
 (defmethod controller-commit-transaction ((sc postmodern-store-controller) transaction &key &allow-other-keys)
-  (with-conn ((controller-connection-for-thread sc))  
+  (with-postmodern-conn ((controller-connection-for-thread sc))  
     (postmodern:commit-transaction transaction)))
 
 (defmethod controller-abort-transaction ((sc postmodern-store-controller) transaction &key &allow-other-keys)
-  (with-conn ((controller-connection-for-thread sc))
+  (with-postmodern-conn ((controller-connection-for-thread sc))
     (postmodern:abort-transaction transaction)))

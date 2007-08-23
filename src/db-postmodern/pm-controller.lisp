@@ -129,13 +129,13 @@
 ;; way to recover from that automatically.  If it 
 ;; does not exist, return nil so we can create it later!
 
-(defmacro with-conn ((con) &body body)
+(defmacro with-postmodern-conn ((con) &body body)
   `(let ((postmodern:*database* ,con))
     (declare (special postmodern:*database*))
     ,@body))
 
 (defun version-table-exists (con)
-  (with-conn (con)
+  (with-postmodern-conn (con)
     (postmodern:table-exists-p 'versionpm)))
 
 (defun create-version-table (sc)
@@ -144,7 +144,7 @@
   (cl-postgres:exec-query (active-connection) (format nil "insert into versionpm (dbversion) values('~a')" *elephant-code-version*)))
 
 (defun message-table-existsp (con)
-  (with-conn (con)
+  (with-postmodern-conn (con)
     (postmodern:table-exists-p 'message)))
 
 (defmethod database-version ((sc postmodern-store-controller))
@@ -232,7 +232,7 @@
 
 (defmethod next-oid ((sc postmodern-store-controller))
   (with-connection-for-thread (sc)
-    (with-conn ((active-connection))
+    (with-postmodern-conn ((active-connection))
       (postmodern:sequence-next 'persistent_seq))))
 
 (defun deserialize-from-database (x sc)
