@@ -139,16 +139,33 @@ $$ LANGUAGE plpgsql;
                    ;; Despite the attempts above trying to check if it is already prepared.
                    ;; This error in itself does not cause any problems, so we can ignore it.
                    ;; But this should be investigated
+                   ;;
+                   ;; Update: Maybe it has to do with connection pooling within postmodern?
                    (cl-postgres:prepare-query (active-connection) name-string sql)
-                   (setf (gethash name-symbol meta) t))))))
+                   (setf (gethash name-symbol meta) t)))))
+           (exec-prepared (name-string)
+             (cl-postgres:exec-prepared (active-connection)
+                                 name-string
+                                 params
+                                 row-reader)))
     (destructuring-bind (name-string name-symbol stat-identifier sql)
         (ensure-registered-on-class query-identifier)
       (ensure-prepared-on-connection name-symbol name-string sql)
       (with-performance-stat-collector (stat-identifier)
-        (cl-postgres:exec-prepared (active-connection)
-                                 name-string
-                                 params
-                                 row-reader)))))
+        (handler-case
+            (exec-prepared name-string)
+          (cl-postgres:database-error (e)
+            ;; Sometimes the prepared statement might hold references to old oids,
+            ;; which might be have been dropped after a rollback. For safety, try
+            ;; to remove the prepared statement and prepare it again
+            (cond
+              ((string= (cl-postgres:database-error-code e)
+                        "42P01")
+               ;; It seems that this error automatically drops the transaction! Postgresql bug?
+               (cl-postgres:exec-query (active-connection) (concatenate 'string "DEALLOCATE " name-string))
+               (cl-postgres:prepare-query (active-connection) name-string sql)
+               (exec-prepared name-string))
+              (t (error e)))))))))
 
 ;;---------------- Global queries -----------
 
