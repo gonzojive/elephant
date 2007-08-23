@@ -222,7 +222,7 @@ $$ LANGUAGE plpgsql;
     (values value value-set)))
 
 (defun ensure-bob (bid)
-  (sp-select-blob-bob-by-bid (active-connection) (integer-to-string bid) :row-reader 'first-value-row-reader))
+  (sp-select-blob-bob-by-bid (active-connection) (princ-to-string bid) :row-reader 'first-value-row-reader))
 
 (defun serialize-to-postmodern (x sc)
   "Encode object using the store controller's serializer format,"

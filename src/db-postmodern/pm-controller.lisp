@@ -15,10 +15,6 @@
 
 (in-package :db-postmodern)
 
-
-(defun integer-to-string (int)
-  (princ-to-string int))
-
 (defclass postmodern-store-controller (store-controller pm-executor)
   ((dbcons :accessor controller-db-table :initarg :db :initform (make-hash-table :test 'equal))
    (persistent-slot-collection :accessor persistent-slot-collection-of :initform nil)
