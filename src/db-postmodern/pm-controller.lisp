@@ -89,7 +89,7 @@
           (thread-bookkeeper-connection bookkeeper)
           (destructuring-bind (db-type host database user password) (second (controller-spec sc))
             (assert (eq :postgresql db-type))
-            (let ((con (postmodern:connect database user password host :pooled-p t)))
+            (let ((con (postmodern:connect database user password host :pooled-p nil)))
               (setf (gethash (thread-hash) (controller-db-table sc))
                     (make-thread-bookkeeper con))
               con))))))
