@@ -134,15 +134,22 @@ $$ LANGUAGE plpgsql;
            (ensure-prepared-on-connection (name-symbol name-string sql)
              (let ((meta (cl-postgres:connection-meta (active-connection))))
                (unless (gethash name-symbol meta)
-                 (ignore-errors ;; TODO note 20070810: Ugly but I sometimes get:
+                 (handler-case
+                     (cl-postgres:prepare-query (active-connection) name-string sql)
+                   (cl-postgres:database-error (e)
+                     (cond
+                       ((string= (cl-postgres:database-error-code e)
+                                 "42P05")
+                   ;; TODO note 20070810: Ugly but I sometimes get:
                    ;;Database error 42P05: prepared statement "TREE140CURSOR-SET-HELPER" already exists
                    ;; Despite the attempts above trying to check if it is already prepared.
                    ;; This error in itself does not cause any problems, so we can ignore it.
                    ;; But this should be investigated
                    ;;
                    ;; Update: Maybe it has to do with connection pooling within postmodern?
-                   (cl-postgres:prepare-query (active-connection) name-string sql)
-                   (setf (gethash name-symbol meta) t)))))
+                         'ignoring-this-error)
+                       (t (error e)))))
+                 (setf (gethash name-symbol meta) t))))
            (exec-prepared (name-string)
              (cl-postgres:exec-prepared (active-connection)
                                  name-string
