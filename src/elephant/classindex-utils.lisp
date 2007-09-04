@@ -71,7 +71,10 @@
 (defparameter *derived-index-marker* "%%DERIVED%%-")
 
 (defun make-derived-name (name)
-  (intern (format nil "~A~A" *derived-index-marker* name)))
+  (intern (format nil "~A~A" *derived-index-marker* name)
+	  (or (and (symbolp name) (symbol-package name))
+	      :keyword)))
+
 
 (defun derived-name? (name)
   (when (symbolp name) (setf name (symbol-name name)))
@@ -80,9 +83,11 @@
 	   *derived-index-marker*))
 
 (defun get-derived-name-root (dname)
-  (when (symbolp dname) 
-    (setf dname (symbol-name dname)))
-  (intern (subseq dname (length *derived-index-marker*))))
+  (let ((package :keyword))
+    (when (symbolp dname) 
+      (setf package (symbol-package dname)
+	    dname (symbol-name dname)))
+    (intern (subseq dname (length *derived-index-marker*)) package)))
 
 ;;
 ;; Interface fn for slot key forms
