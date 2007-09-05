@@ -80,7 +80,7 @@
   
     (when (duplicates-allowed-p bt)
       (cl-postgres:exec-query (active-connection)
-                              (format nil "create index ~a_idx on ~a(qi,value);"
+                              (format nil "create unique index ~a_idx on ~a(qi,value);"
                                       (table-of bt)
                                       (table-of bt))))
   
@@ -95,8 +95,6 @@
                                   (postgres-type (key-type-of bt))
                                   (postgres-type (value-type-of bt)))
                           "                             
-DECLARE
-    do_update boolean := FALSE;
 BEGIN
     PERFORM qi FROM " (table-of bt)
                           "
@@ -107,16 +105,15 @@ BEGIN
                               )
                           "
     IF FOUND THEN 
-          do_update := TRUE;
-    END IF;
-    
-    IF do_update THEN
-       UPDATE " (table-of bt)
+"   (if (duplicates-allowed-p bt)
+	"NULL;"
+	(concatenate 'string
+	"UPDATE " (table-of bt)
                           "
           SET value = val
-          WHERE qi = the_key;
-    ELSE
-       INSERT INTO " (table-of bt) " (qi, value)
+          WHERE qi = the_key;"))
+"   ELSE
+    INSERT INTO " (table-of bt) " (qi, value)
               VALUES (the_key, val);
     END IF;
 END;
