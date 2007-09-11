@@ -38,7 +38,7 @@
 (use-package "SB-THREAD")
 
 (defclass key ()
-  ((id :type 'integer
+  ((id :type integer
        :initform -1
        :initarg :id
        :accessor k)))
@@ -56,17 +56,17 @@
 ;; I think perhas we could use a better type specifier for this
 ;; than integer.
 (defclass managed-object ()
-  ((mid :type 'key
+  ((mid :type key
 	:initform nil
 	:initarg :mid
 	:accessor mid)
-   (owner :type 'key
+   (owner :type key
 	  ;; This is basically saying that the key 0 had better specify a legitimate
 	  ;; owner --- but that is the responsibility of the clients of this package.
 	  :initform (make-instance 'key :id 0)
 	  :initarg :owner
 	  :accessor :ownr)
-   (tstamp :type 'number
+   (tstamp :type number
 	   ;; This is basically saying that the key 0 had better specify a legitimate
 	   ;; owner --- but that is the responsibility of the clients of this package.
 	   :initform (get-universal-time)
