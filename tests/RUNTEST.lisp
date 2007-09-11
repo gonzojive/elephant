@@ -25,7 +25,7 @@
 
 ;; Test Postgres backend
 (setq *default-spec* *testpg-spec*)
-(do-backend-tests)
+(time (do-backend-tests))
 
 ;; Test BDB backend
 (setq *default-spec* *testbdb-spec*)
@@ -43,7 +43,7 @@
 ;; "create language plpgsql;" inside postgres itself.
 (asdf:operate 'asdf:load-op :ele-postmodern)
 (setq *default-spec* *testpm-spec*)
-(do-backend-tests)
+(time (do-backend-tests))
 
 ;; Test a Migration of data from BDB to postgres
 (do-migration-tests *testbdb-spec* *testpg-spec*)
