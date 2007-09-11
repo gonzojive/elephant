@@ -477,7 +477,7 @@ not), evaluates the forms, then closes the cursor."
 			   (return nil))))
 		     (elephant-deserialization-error 
 		      (e)
-		      (format t "desirializaiton-error: returning nil~%")
+		      (format t "local deserialization-error: returning nil~%")
 		      (return nil)
 		      nil
 		      )
@@ -486,7 +486,7 @@ not), evaluates the forms, then closes the cursor."
 	  ))
       (elephant-deserialization-error 
        (e)
-       (format t "desiralizaiton-error: returning nil~%")
+       (format t "deserialization-error on transaction: returning nil~%")
        nil
        )
       )

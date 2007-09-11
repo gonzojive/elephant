@@ -244,7 +244,8 @@
 	   (setf code (dpb (next-byte 1) (byte 8 0) code))
 	   (setf (schar string i) (code-char code)))
       (incf (elephant-memutil::buffer-stream-position bstream)
-	    (+ pos (* length 2))))
+	    (* length 2)
+	    ))
     (the simple-string string)))
 
 (defmethod deserialize-string ((type (eql :utf32le)) bstream  &optional temp-string)
@@ -266,7 +267,8 @@
 	 (setf code (dpb (next-byte 3) (byte 8 0) code))
 	 (setf (char string i) (code-char code)))
     (incf (elephant-memutil::buffer-stream-position bstream)
-	  (+ pos (* length 4)))
+	  (* length 4)
+	  )
     (the simple-string string))))
 
 

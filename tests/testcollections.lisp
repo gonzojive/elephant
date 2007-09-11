@@ -756,6 +756,8 @@ t
   nil t nil
   )
 
+
+
 (defparameter test-items '(1 2 3 (1) (2) test1 test2))
 
 (deftest pset
@@ -811,3 +813,42 @@ t
 ;;        )
 ;;    nil nil)
 
+;; The following machinery is lifted from the dcm project 
+;; in the contrib/rread directory.  This is a way to 
+;; reproduce an error in the unicde2.lisp file, and 
+;; to prove it works.  Since this particular bugs
+;; relates to stream position, it cannot be easily
+;; reproduced by the "in-out-equal" mechanism in the 
+;; testserializer.lisp file.  There must be a simpler
+;; way to exercixe this particular bug, but I don't know 
+;; how. -- rlr 
+
+(defclass key ()
+  ((id :type integer
+       :initform -1
+       :initarg :id
+       :accessor k)))
+
+(defclass managed-object ()
+  ((mid :type key
+	:initform nil
+	:initarg :mid
+	:accessor mid)
+   )
+  )
+
+(defclass Message (managed-object)
+  ((msgid :type list :initform "" :accessor :msgd :initarg :msgid)
+   (value :type (or list string) :initform "" :accessor :vl :initarg :value)))
+
+(deftest unicodepositiontest
+    (let* ((bt (make-btree *store-controller*))
+	   (utf16string (format nil "~au sugeston?" (code-char 264)))
+	   (mo 
+	    (make-instance 'Message :msgid '("Got a suggestion?" "eo")
+			   :value   utf16string)))
+      (setf (mid mo) (make-instance 'key :id 1000))
+      (setf (get-value (mid mo) bt) mo)
+      (values (equal utf16string (:vl (get-value (mid mo) bt)))))
+  t
+  )
