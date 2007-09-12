@@ -234,14 +234,24 @@ and make the old instance refer to the new database table"
 (defmethod internal-get-value (key (bt pm-btree))
   (declare (optimize (debug 3)))
   (let (value exists-p)
-    (when (initialized-p bt)
+
+    (multiple-value-bind (cached-value cache-hit)
+	(txn-cache-get-value bt key)
+      (when cache-hit
+	(setf value cached-value
+	      exists-p t)))
+
+    (when (and (initialized-p bt) (not exists-p))
       (with-vars (bt)
         (let ((result (btree-exec-prepared bt 'select
                                            (list (key-parameter key bt))
                                            'first-value-row-reader)))
           (when result
             (setf value (postgres-value-to-lisp result (value-type-of bt))
-                  exists-p t)))))
+                  exists-p t)
+
+	    ;;update cache
+	    (txn-cache-set-value bt key value)))))
     (values value exists-p)))
 ;; Comment about implementation: with-trans-and-vars end up in a prog1,
 ;; which only return the primary return value. That's why values form is last.
@@ -256,6 +266,9 @@ and make the old instance refer to the new database table"
   (unless (eq :object (key-type-of bt))
     (unless (eq (key-type-of bt) (data-type key))
       (upgrade-btree-type bt :object)))
+
+  (txn-cache-set-value bt key value)
+
   (with-trans-and-vars (bt)
     (btree-exec-prepared bt 'insert
                          (list (key-parameter key bt)
@@ -264,6 +277,11 @@ and make the old instance refer to the new database table"
   value)
 
 (defmethod existsp (key (bt pm-btree))
+  
+  (multiple-value-bind (value exists)
+      (txn-cache-get-value bt key)
+    (when exists (return-from existsp t)))
+
   (when (initialized-p bt)
     (with-vars (bt)
       (when (btree-exec-prepared bt 'select
@@ -272,6 +290,9 @@ and make the old instance refer to the new database table"
         t))))
 
 (defmethod remove-kv (key (bt pm-btree))
+
+  (txn-cache-clear-value bt key)
+
   (when (initialized-p bt)
     (with-vars (bt)
       (btree-exec-prepared bt 'delete

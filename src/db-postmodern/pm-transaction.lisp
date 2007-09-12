@@ -15,32 +15,36 @@
 
 (in-package :db-postmodern)
 
-(defmethod execute-transaction ((sc postmodern-store-controller) txn-fn &key (always-rollback nil) &allow-other-keys)
+(defvar *txn-value-cache* nil)
+
+(defun txn-cache-get-value (bt key)
+  (cache-get-value *txn-value-cache* bt key))
+
+(defun txn-cache-set-value (bt key value)
+  (cache-set-value *txn-value-cache* bt key value))
+
+(defun txn-cache-clear-value (bt key)
+  (cache-clear-value *txn-value-cache* bt key))
+
+(defmethod execute-transaction ((sc postmodern-store-controller) txn-fn
+				&key (always-rollback nil) &allow-other-keys)
   ;; SQL doesn't support nested transaction
   (with-postmodern-conn ((controller-connection-for-thread sc))
     (if (> (tran-count-of sc) 0)
         (funcall txn-fn)
-        (progn
+        (let (tran 
+	      commited
+	      (*txn-value-cache* (make-value-cache)))
           (incf (tran-count-of sc))
           (unwind-protect
-               (if always-rollback
-                   (let (tran)
-                     (unwind-protect
-                          (progn
-                            (setf tran (controller-start-transaction sc))
-                            (funcall txn-fn))
-                       (controller-abort-transaction sc tran)))
-                   (let (tran committed)
-                     (unwind-protect
-                          (prog1
-                              (progn
-                                (setf tran (controller-start-transaction sc))
-                                (funcall txn-fn))
-                            (controller-commit-transaction sc tran)
-                            (setf committed t))
-                       (unless committed
-                         (controller-abort-transaction sc tran)))))
-            (decf (tran-count-of sc)))))))
+	       (prog2 
+		   (setf tran (controller-start-transaction sc))
+		   (funcall txn-fn) ;;this gets returned
+		 (unless always-rollback ;;automatically commit unless always rollback
+		   (controller-commit-transaction sc tran)
+		   (setf commited t)))
+	    (unless commited (controller-abort-transaction sc tran))
+	    (decf (tran-count-of sc)))))))
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
   (with-postmodern-conn ((controller-connection-for-thread sc))
