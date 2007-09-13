@@ -42,20 +42,6 @@
   (unless *thread-table-lock*
     (setq *thread-table-lock* (elephant-utils::ele-make-lock))))
 
-(defmethod cache-instance ((sc postmodern-store-controller) obj)
-  ;; Since the database may be accessed from different process at the same time
-  ;; a cache is not always safe to use. The cache is disabled for the postmodern controller.
-  (declare (ignorable sc obj))
-  nil)
-
-(defmethod get-cached-instance ((sc postmodern-store-controller) oid class-name)
-  ;; Since the database may be accessed from different process at the same time
-  ;; a cache is not always safe to use. The cache is disabled for the postmodern controller.
-  (declare (type store-controller sc)
-	   (type fixnum oid))
-  (make-instance class-name :from-oid oid :sc sc))
-
-
 ;;------------------------------------------------------------------------------
 ;; Bookkeper, keeps a connection and a transaction count per thread
 
