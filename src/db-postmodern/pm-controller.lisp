@@ -143,6 +143,10 @@
     (declare (special *sc*))
     ,@body))
 
+(defmethod open-controller :around ((sc postmodern-store-controller) &key &allow-other-keys)
+  (let ((*cache-mode* nil)) ;;disable caching during initialization
+    (call-next-method)))
+
 (defmethod open-controller ((sc postmodern-store-controller)
 			    ;; At present these three have no meaning
 			    &key 
@@ -171,10 +175,19 @@
           (setf (key-type-of (persistent-slot-collection-of sc)) (data-type (form-slot-key 777 'a-typical-slot)))
 
           (if (message-table-existsp con)
-              (init-root)
+	      (progn
+		#+ele-global-sync-cache
+		(bootstrap-sync-cache con)
+		(init-root))
               (with-transaction (:store-controller sc)
                   (with-controller-for-btree (sc)
                     (create-base-tables con)
+		    
+		    #+ele-global-sync-cache
+		    (create-sync-cache-tables con)
+		    #+ele-global-sync-cache
+		    (bootstrap-sync-cache con)
+
                     (init-stored-procedures con)
 
                     (make-table (persistent-slot-collection-of sc))

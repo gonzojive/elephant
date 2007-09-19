@@ -13,9 +13,13 @@
 ;; specified by the #:char-columns feature.
 ;;
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (pushnew :char-columns cl::*features*)
 
-(push :char-columns cl::*features*)
+  ;; enables global cache that is synchonized accross instances
+  (pushnew :ele-global-sync-cache cl::*features*))
 
+(defvar *cache-mode* nil)
 
 ;;--------- Stored procedures ---------
 
@@ -280,3 +284,22 @@ valuetype text not null);"
 (defun create-message-table (connection)
   "This table is (for now) only used as a flag that everything went ok with the initialization"
   (cl-postgres:exec-query connection "create table message(message text);"))
+
+#+ele-global-sync-cache
+(defun create-sync-cache-tables (connection)
+  (dolist (stmt '(
+"CREATE TABLE transaction_log (txn_id integer PRIMARY KEY, commit_time double precision not null);"
+"CREATE TABLE update_log (txn_id integer not null, id integer not null, key text not null);"
+"CREATE INDEX update_log_index ON update_log (txn_id);"
+"CREATE INDEX transaction_log_index ON transaction_log (commit_time);"
+"CREATE FUNCTION notify_btree_update (id integer, the_key text) RETURNS void AS $$
+BEGIN END;
+$$ LANGUAGE plpgsql;"
+"CREATE SEQUENCE txn_id;"))
+    (cl-postgres:exec-query connection stmt)))
+
+#+ele-global-sync-cache
+(defun bootstrap-sync-cache (connection)
+  (cl-postgres:exec-query 
+   connection 
+   "INSERT INTO transaction_log (txn_id, commit_time) VALUES (nextval('txn_id'), 0.0);"))

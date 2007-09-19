@@ -34,7 +34,7 @@
         (funcall txn-fn)
         (let (tran 
 	      commited
-	      (*txn-value-cache* (make-value-cache)))
+	      (*txn-value-cache* (make-value-cache sc)))
           (incf (tran-count-of sc))
           (unwind-protect
 	       (prog2 
@@ -53,7 +53,8 @@
       transaction)))
 
 (defmethod controller-commit-transaction ((sc postmodern-store-controller) transaction &key &allow-other-keys)
-  (with-postmodern-conn ((controller-connection-for-thread sc))  
+  (with-postmodern-conn ((controller-connection-for-thread sc))
+    (value-cache-commit *txn-value-cache*)
     (postmodern:commit-transaction transaction)))
 
 (defmethod controller-abort-transaction ((sc postmodern-store-controller) transaction &key &allow-other-keys)
