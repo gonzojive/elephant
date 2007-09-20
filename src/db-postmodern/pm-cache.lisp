@@ -196,39 +196,49 @@ $$ LANGUAGE plpgsql;"))
   (with-connection-for-thread (sc)
     (enable-sync-cache-trigger)))
 
-(defun resync-time-ok (cache)
-  (< (+ (last-update-of cache) (max-resync-time cache))
-     (cl-postgres:exec-query (active-connection)
-			     "SELECT EXTRACT(epoch FROM current_timestamp)"
-			     'first-value-row-reader)))
-
 (defmethod ensure-cache-up-to-date ((cache pm-synchonized-cache))
   (with-connection-for-thread ((store-controller-of cache))
     
-    (cl-postgres:exec-query (active-connection)
-			    "SELECT nextval('txn_id')"
-			    'cl-postgres:ignore-row-reader)
+    (cl-postgres:exec-query (active-connection) "SELECT nextval('txn_id')")
 
-    (unless (resync-time-ok cache)
-      (cache-clear-all (parent-cache cache))
-      (return-from ensure-cache-up-to-date))
-    
-    (let ((rows (cl-postgres:exec-query 
-		 (active-connection)
-		 (format nil
+    (let* ((transaction-start-time
+	    (cl-postgres:exec-query (active-connection)  "SELECT EXTRACT(epoch FROM current_timestamp)"
+				    'first-value-row-reader))
+	   (last-commited-time
+	    (cl-postgres:exec-query (active-connection)  "SELECT MAX(commit_time) FROM transaction_log"
+				    'first-value-row-reader)))
+      
+      (when (plusp (last-update-of cache))
+	;;our cache isn't fresh, need to pull updates
+	(if (> (- transaction-start-time (last-update-of cache)) 
+	       (max-resync-time cache))
+
+	    (cache-clear-all (parent-cache cache)) ;;cache is stale
+	    
+	    (let ((rows (cl-postgres:exec-query 
+			 (active-connection)
+			 (format nil
 "SELECT commit_time, id, key FROM transaction_log 
 INNER JOIN update_log ON  transaction_log.txn_id = update_log.txn_id
-WHERE commit_time > ~a LIMIT ~a"
+WHERE commit_time > ~f LIMIT ~a"
 			  (last-update-of cache) (max-cache-updates cache))
 		 'cl-postgres:list-row-reader)))
-      (when (>= (length rows) (max-cache-updates cache))
-	(cache-clear-all (parent-cache cache))
-	(return-from ensure-cache-up-to-date))
+	      (if (>= (length rows) (max-cache-updates cache)) 
+		  (cache-clear-all (parent-cache cache)) ;; too much updates
+		  (loop for (utime id key) in rows
+			do (cache-clear-value (parent-cache cache) id key))))))
+      (setf (last-update-of cache) 
+	    (if (and (not (eq last-commited-time :null))
+		     (< (- transaction-start-time last-commited-time)
+					   (max-resync-time cache)))
+		;; choose last-commited-time if it exists and isn't stale
+		last-commited-time 
+		;; otherwise a bit of hackery -- equidistant from "current moment" and 
+		;; resync time bound, should be fine for sufficiently large max-resync-time
+		(- transaction-start-time (/ (max-resync-time cache) 2)))))))
+
+
       
-      (loop for (utime id key) in rows
-	    do (cache-clear-value (parent-cache cache) id key)
-	    maximizing utime into max-utime
-	    finally (setf (last-update-of cache) max-utime)))))
 
 (defmethod value-cache-commit ((cache pm-synchonized-cache))
   (with-connection-for-thread ((store-controller-of cache))
@@ -244,8 +254,8 @@ WHERE commit_time > ~a LIMIT ~a"
 (defvar *cache-for-controller-lock* (elephant-utils::ele-make-lock))
 
 (defun make-backend-cache ()
-  #-sbcl (make-hash-table :test 'equal)
-  #+sbcl (make-hash-table :test 'equal :weakness :key-and-value))
+   (make-hash-table :test 'equal)
+  #+nil  (make-hash-table :test 'equal :weakness :key-and-value))
 
 (defun get-cache-for-controller (sc)
   (or 
