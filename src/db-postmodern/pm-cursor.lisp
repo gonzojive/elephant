@@ -32,8 +32,9 @@
 (defmethod cursor-close ((cursor pm-cursor))
   (when (cursor-initialized-p cursor)
     (with-vars ((cursor-btree cursor))
-      (cl-postgres:exec-query (active-connection)
-                              (format nil "close ~a;" (db-cursor-name-of cursor)))))
+      (ignore-errors
+        (cl-postgres:exec-query (active-connection)
+                                (format nil "close ~a;" (db-cursor-name-of cursor))))))
   (clean-cursor-state cursor))
 
 (defun clean-cursor-state (cursor)
