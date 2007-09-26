@@ -173,19 +173,41 @@
    (max-resync-time :accessor max-resync-time :initform *default-max-resync-time* :initarg :max-resync-time)
    (sc :reader store-controller-of :initarg :sc)))
 
+(defvar *sync-cache-trigger-enabled-by-process* nil)
+(defvar *sync-cache-trigger-enabled-by-process-lock* (elephant-utils::ele-make-lock))
+
 (defun enable-sync-cache-trigger ()
-  (cl-postgres:exec-query 
-   (active-connection)
-   (concatenate 
-    'string
-    "CREATE OR REPLACE FUNCTION notify_btree_update (the_id integer, the_key text) RETURNS void AS $$
+  (elephant::ele-with-lock (*sync-cache-trigger-enabled-by-process-lock*)
+    (unless *sync-cache-trigger-enabled-by-process*
+      (let ((tries 10))
+        (block tuple-concurrently-updated-guard
+          (loop
+             (handler-case
+                 (prog1
+                     (cl-postgres:exec-query 
+                      (active-connection)
+                      (concatenate 
+                       'string
+                       "CREATE OR REPLACE FUNCTION notify_btree_update (the_id integer, the_key text) RETURNS void AS $$
 BEGIN 
 INSERT INTO update_log (txn_id, id, key) VALUES (currval('txn_id'), the_id, the_key);"
-#+nil "EXCEPTION WHEN object_not_in_prerequisite_state THEN" 
-"END;
-$$ LANGUAGE plpgsql;")))
+                       #+nil "EXCEPTION WHEN object_not_in_prerequisite_state THEN" 
+                       "END;
+$$ LANGUAGE plpgsql;"))
+                   (setf *sync-cache-trigger-enabled-by-process* t)
+                   (return-from tuple-concurrently-updated-guard))
+               (cl-postgres:database-error (e)
+                 ;; Postgres sometimes shows this error, possibly when creating the procedure at the same time.
+                 ;; ERROR-CODE: "XX000"
+                 ;; MESSAGE: "tuple concurrently updated"
+                 (if (plusp (decf tries))
+                     (sleep 0.02)
+                     (signal e))))))))))
+
 
 (defun disable-sync-cache-trigger ()
+  (elephant::ele-with-lock (*sync-cache-trigger-enabled-by-process-lock*)
+    (setf *sync-cache-trigger-enabled-by-process* nil))
   (cl-postgres:exec-query 
    (active-connection)
    "CREATE OR REPLACE FUNCTION notify_btree_update (id integer, the_key text) RETURNS void AS $$
