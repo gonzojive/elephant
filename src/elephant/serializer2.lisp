@@ -171,6 +171,7 @@
 	((%next-object-id ()
 	   (incf lisp-obj-id))
 	 (%serialize (frob)
+;;	   (format t "Serializing ~A of type ~A~%" frob (type-of frob))
 	   (typecase frob
 	     (fixnum 
 	      (if (< #.most-positive-fixnum +2^31+) ;; should be compiled away

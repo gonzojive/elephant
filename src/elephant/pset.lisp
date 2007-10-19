@@ -72,7 +72,7 @@
 (defmethod build-pset ((sc store-controller))
   "Default pset method; override if backend has better policy"
   (let ((btree (make-btree sc)))
-    (make-instance 'default-pset :btree btree :sc sc))) ;; :from-oid (oid btree))))
+    (make-instance 'default-pset :btree btree :sc sc)))
 
 (defun make-pset (&key items pset (sc *store-controller*))
   (let ((new-pset (build-pset sc)))
@@ -107,7 +107,10 @@
 		 (pset-btree pset))))
 
 (defmethod map-pset (fn (pset default-pset))
-  (map-btree fn (pset-btree pset))
+  (map-btree (lambda (key value) 
+	       (declare (ignore value))
+	       (funcall fn key))
+	     (pset-btree pset))
   pset)
 
 (defmethod pset-list ((pset default-pset))

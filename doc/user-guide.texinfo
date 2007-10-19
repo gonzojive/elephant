@@ -1310,7 +1310,7 @@ There are some limitations to the current migration implementation:
 @enumerate
 @item Migrate currently will not handle circular list objects
 
-@item Migrate does not support arrays with nested persistent objects
+@comment @item Migrate does not support arrays with nested persistent objects
 
 @item Indexed classes only have their class index copied if you use the
    top level migration.  Objects will be copied without slot data if you

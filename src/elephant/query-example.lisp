@@ -30,13 +30,47 @@
   (format t "Name: ~A~%" (slot-value inst 'name)))
 
 (defpclass person ()
-  ((name :initarg :name :index t)
-   (salary :initarg :salary :index t)
-   (department :initarg :dept)))
+  ((name :accessor name :initarg :name :index t)
+   (age :accessor age :initarg :age)
+   (father :accessor father :initarg :father)
+   (school :accessor school :initarg :school)))
 
-(defpclass department ()
-  ((name :initarg :name)
-   (manager :initarg :manager)))
+(defpclass school ()
+  ((name :accessor name :initarg :name :index t)))
+
+(defun make-instances ()
+  (with-transaction ()
+    (mapcar #'(lambda (initargs) (apply #'make-instance 'school initargs))
+	    '((:name "Appleton Elementary")
+	      (:name "Frederick Elementary")
+	      (:name "Zebra School")))
+    (mapcar #'(lambda (initargs) (apply #'make-instance 'person initargs))
+	    `((:name "Bob" :age 40 :father nil 
+		     :school ,(get-instance-by-value 'school 'name "Zebra School"))))
+    (mapcar #'(lambda (initargs) (apply #'make-instance 'person initargs))
+	    `((:name "Fred" :age 12 :father nil 
+		     :school ,(get-instance-by-value 'school 'name "Appleton Elementary"))
+	      (:name "Sally" :age 30 :father ,(get-instance-by-value 'person 'name "Bob")
+		     :school ,(get-instance-by-value 'school 'name "Frederick Elementary"))
+	      (:name "George" :age 18 :father ,(get-instance-by-value 'person 'name "Bob")
+		     :school ,(get-instance-by-value 'school 'name "Zebra School"))))))
+
+(defun do-query1 ()
+  (query-select #'(lambda (person) (format t "Person named: ~A~%" (name person)))
+		'(select ((?p person))
+		  (where (string= (name ?p) "Bob")))))
+
+(defun do-query2 ()
+  (query-select #'(lambda (person school) (format t "Person named: ~A at ~A~%" (name person) (name school)))
+		'(select ((?p person) (?s school))
+		  (where (and (> (age ?p) 10) (< (age ?p) 25))
+		         (string> (name (school ?p)) "Foo")
+		         (= (name (school ?p) (name ?s))))))
+
+
+#|
+
+OLD TEST...
 
 (defparameter *names* 
     '("Jacob"
@@ -92,4 +126,4 @@
 		   `((person salary >= ,low-salary)
 		     (person salary <= ,high-salary))))
 
-		   
+|#		   

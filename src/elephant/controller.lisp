@@ -269,7 +269,8 @@
 
 (defparameter *elephant-upgrade-table*
   '( ((0 6 0) (0 5 0))
-     ((0 6 1) (0 6 0))
+     ((0 9 0) (0 6 0))
+     ((0 9 1) (0 9 0))
    ))
 
 (defmethod up-to-date-p ((sc store-controller))

@@ -31,7 +31,7 @@
 
 (in-package :elephant-serializer2)
 
-(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0)))
+(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 2)))
 
 ;; 
 ;; Serialize string: simplify store by discovering utf8/utf16 and utf32; trade off
