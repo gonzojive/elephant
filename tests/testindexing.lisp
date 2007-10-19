@@ -42,131 +42,190 @@
     (disable-class-indexing 'idx-one  :errorp nil)
     (setf (find-class 'idx-one) nil)))
 
-(def-fixture with-disabled-class-indexing ()
-  (defclass idx-one ()
-    ((slot1 :initarg :slot1 :accessor slot1 :index t))
-    (:metaclass persistent-metaclass))
+(defun wipe-class (name)
+  (when (find-class name nil)
+    (disable-class-indexing name :errorp nil)
+    (setf (find-class name nil) nil)))
 
-  (disable-class-indexing 'idx-one :errorp nil)
-  (setf (find-class 'idx-one nil) nil)
-      
-  (defclass idx-one ()
-    ((slot1 :initarg :slot1 :accessor slot1 :index t))
-    (:metaclass persistent-metaclass))
+(defun wipe-all ()
+  (mapcar #'wipe-class
+	  '(idx-one-a idx-one-b idx-one-c idx-one-d idx-one-e idx-one-f
+	    idx-two idx-cslot idx-three idx-four idx-unbound-del
+	    idx-five-del idx-five idx-six idx-seven idx-eight)))
 
-  (defmethod print-object ((obj idx-one) stream)
-    (print-unreadable-object (obj stream)
-      (format stream "idx-one slot1 = ~A"
-              (if (slot-boundp obj 'slot1)
-                  (slot1 obj)
-                  "unbound slot"))))
-  ;; The (&body) form below is the 5am way to insert the test code in the fixture
-  (&body))
+(deftest index-reset
+    (listp (wipe-all))
+  t)
 
-(deftest (indexing-basic-trivial :fixture with-disabled-class-indexing)
+;;   (defmethod print-object ((obj idx-one) stream)
+;;     (print-unreadable-object (obj stream)
+;;       (format stream "idx-one slot1 = ~A"
+;;               (if (slot-boundp obj 'slot1)
+;;                   (slot1 obj)
+;;                   "unbound slot")))))
+
+(deftest (indexing-basic-trivial :depends-on index-reset)
     (progn
+      (defclass idx-one-a ()
+	((slot1 :initarg :slot1 :accessor slot1 :index t))
+	(:metaclass persistent-metaclass))
+  
+      (wipe-class 'idx-one-a)
+
+      (defclass idx-one-a ()
+	((slot1 :initarg :slot1 :accessor slot1 :index t))
+	(:metaclass persistent-metaclass))
+
       (with-transaction (:store-controller *store-controller*)
-	(setq inst1 (make-instance 'idx-one :slot1 101 :sc *store-controller*))
-	(setq inst1 (make-instance 'idx-one :slot1 101 :sc *store-controller*)))
+	(setq inst1 (make-instance 'idx-one-a :slot1 101 :sc *store-controller*))
+	(setq inst1 (make-instance 'idx-one-a :slot1 101 :sc *store-controller*)))
       
-;; The real problem is that this call doesn't seem to see it, and the make-instance
-;; doesn't seem to think it needs to write anything!
-      (length (get-instances-by-class 'idx-one))
-       (disable-class-indexing 'idx-one  :sc *store-controller* :errorp nil)
-       (setf (find-class 'idx-one) nil)
-       (signals-error (get-instances-by-class 'idx-one))
+      ;; The real problem is that this call doesn't seem to see it, and the make-instance
+      ;; doesn't seem to think it needs to write anything!
+      (length (get-instances-by-class 'idx-one-a))
+      (wipe-class 'idx-one-a)
+      (signals-error (get-instances-by-class 'idx-one-a))
       )
   t)
 
 ;; put list of objects, retrieve on value, range and by class
-(test (indexing-basic :fixture with-disabled-class-indexing)
+(test (indexing-basic :depends-on index-reset)
+  (defclass idx-one-f ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (wipe-class 'idx-one-b)
+
+  (defclass idx-one-f ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
     (let ((n 105))
       (with-transaction (:store-controller *store-controller*)
-        (setq inst1 (make-instance 'idx-one :slot1 n :sc *store-controller*))
-        (setq inst2 (make-instance 'idx-one :slot1 n :sc *store-controller*))
-        (setq inst3 (make-instance 'idx-one :slot1 (+ 1 n) :sc *store-controller*)))
+	(setq inst1 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	(setq inst2 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	(setq inst3 (make-instance 'idx-one-f :slot1 (+ 1 n) :sc *store-controller*)))
+    
+      (is (= 3 (length (get-instances-by-class 'idx-one-f))))
+      (is (= 2 (length (get-instances-by-value 'idx-one-f 'slot1 n))))
+      (is (= 1 (length (get-instances-by-value 'idx-one-f 'slot1 (+ 1 n)))))
+      (is (equal (first (get-instances-by-value 'idx-one-f 'slot1 (+ 1 n))) inst3))
+      (is (= 3 (length (get-instances-by-range 'idx-one-f 'slot1 n (+ 1 n)))))))
 
-      (is (= 3 (length (get-instances-by-class 'idx-one))))
-      (is (= 2 (length (get-instances-by-value 'idx-one 'slot1 n))))
-      (is (= 1 (length (get-instances-by-value 'idx-one 'slot1 (+ 1 n)))))
-      (is (equal (first (get-instances-by-value 'idx-one 'slot1 (+ 1 n))) inst3))
-      (is (= 3 (length (get-instances-by-range 'idx-one 'slot1 n (+ 1 n)))))))
+(test (indexing-basic-with-string :depends-on index-reset)
+    (defclass idx-one-b ()
+      ((slot1 :initarg :slot1 :accessor slot1 :index t))
+      (:metaclass persistent-metaclass))
+  
+    (wipe-class 'idx-one-b)
 
-(test (indexing-basic-with-string :fixture with-disabled-class-indexing)
+    (defclass idx-one-b ()
+      ((slot1 :initarg :slot1 :accessor slot1 :index t))
+      (:metaclass persistent-metaclass))
+
   (with-transaction (:store-controller *store-controller*)
-    (setq inst1 (make-instance 'idx-one :slot1 "one" :sc *store-controller*))
-    (setq inst2 (make-instance 'idx-one :slot1 "two" :sc *store-controller*))
-    (setq inst3 (make-instance 'idx-one :slot1 "one" :sc *store-controller*))
-    (setq inst4 (make-instance 'idx-one :slot1 "onethousand" :sc *store-controller*))
-    (setq inst5 (make-instance 'idx-one :slot1 "only" :sc *store-controller*))
-    (setq inst6 (make-instance 'idx-one :slot1 "twothousand" :sc *store-controller*)))
-  (is (= 6 (length (get-instances-by-class 'idx-one))))
-  (is (= 2 (length (get-instances-by-value 'idx-one 'slot1 "one"))))
-  (is (equal (get-instances-by-value 'idx-one 'slot1 "two")
+    (setq inst1 (make-instance 'idx-one-b :slot1 "one" :sc *store-controller*))
+    (setq inst2 (make-instance 'idx-one-b :slot1 "two" :sc *store-controller*))
+    (setq inst3 (make-instance 'idx-one-b :slot1 "one" :sc *store-controller*))
+    (setq inst4 (make-instance 'idx-one-b :slot1 "onethousand" :sc *store-controller*))
+    (setq inst5 (make-instance 'idx-one-b :slot1 "only" :sc *store-controller*))
+    (setq inst6 (make-instance 'idx-one-b :slot1 "twothousand" :sc *store-controller*)))
+  (is (= 6 (length (get-instances-by-class 'idx-one-b))))
+  (is (= 2 (length (get-instances-by-value 'idx-one-b 'slot1 "one"))))
+  (is (equal (get-instances-by-value 'idx-one-b 'slot1 "two")
              (list inst2))))
 
-(test (larger-indexing :fixture with-disabled-class-indexing)
+(test (larger-indexing :depends-on index-reset)
+  (defclass idx-one-c ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (wipe-class 'idx-one-c)
+
+  (defclass idx-one-c ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
   (let ((nr 100)
         instances)
     (flet ((last-in-string (str)
              (subseq str (1- (length str)))))
       (with-transaction (:store-controller *store-controller*)
         (dotimes (i nr)
-          (push (make-instance 'idx-one
+          (push (make-instance 'idx-one-c
                                :slot1 (read-from-string (last-in-string (princ-to-string i)))
                                :sc *store-controller*)
                 instances)))
       (setf instances (nreverse instances))
-      (is (= nr (length (get-instances-by-class 'idx-one))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 2))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 8))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 0))))
-      (is (equal (first (get-instances-by-value 'idx-one 'slot1 0))
+      (is (= nr (length (get-instances-by-class 'idx-one-c))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-c 'slot1 2))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-c 'slot1 8))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-c 'slot1 0))))
+      (is (equal (first (get-instances-by-value 'idx-one-c 'slot1 0))
                  (first instances)))
-      (is (equal (second (get-instances-by-value 'idx-one 'slot1 0))
+      (is (equal (second (get-instances-by-value 'idx-one-c 'slot1 0))
                  (elt instances 10))))))
 
-(test (larger-indexing-with-string :fixture with-disabled-class-indexing)
+(test (larger-indexing-with-string :depends-on index-reset)
+  (defclass idx-one-d ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (wipe-class 'idx-one-d)
+
+  (defclass idx-one-d ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
   (let ((nr 100)
         instances)
     (flet ((last-in-string (str)
              (subseq str (1- (length str)))))
       (with-transaction (:store-controller *store-controller*)
         (dotimes (i nr)
-          (push (make-instance 'idx-one
+          (push (make-instance 'idx-one-d
                                :slot1 (last-in-string (princ-to-string i))
                                :sc *store-controller*)
                 instances)))
       (setf instances (nreverse instances))
-      (is (= nr (length (get-instances-by-class 'idx-one))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 "2"))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 "8"))))
-      (is (= 10 (length (get-instances-by-value 'idx-one 'slot1 "0"))))
-      (is (equal (first (get-instances-by-value 'idx-one 'slot1 "0"))
+      (is (= nr (length (get-instances-by-class 'idx-one-d))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-d 'slot1 "2"))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-d 'slot1 "8"))))
+      (is (= 10 (length (get-instances-by-value 'idx-one-d 'slot1 "0"))))
+      (is (equal (first (get-instances-by-value 'idx-one-d 'slot1 "0"))
                  (first instances)))
-      (is (equal (second (get-instances-by-value 'idx-one 'slot1 "0"))
+      (is (equal (second (get-instances-by-value 'idx-one-d 'slot1 "0"))
                  (elt instances 10))))))
 
-(test (indexing-basic-with-symbol :fixture with-disabled-class-indexing)
+(test (indexing-basic-with-symbol :depends-on index-reset)
+  (defclass idx-one-e ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  
+  (wipe-class 'idx-one-e)
+
+  (defclass idx-one-e ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
   (with-transaction (:store-controller *store-controller*)
-    (setq inst1 (make-instance 'idx-one :slot1 'one :sc *store-controller*))
-    (setq inst2 (make-instance 'idx-one :slot1 'two :sc *store-controller*))
-    (setq inst3 (make-instance 'idx-one :slot1 'one :sc *store-controller*)))
-  (is (= 3 (length (get-instances-by-class 'idx-one))))
-  (is (= 2 (length (get-instances-by-value 'idx-one 'slot1 'one))))
-  (is (= 1 (length (get-instances-by-value 'idx-one 'slot1 'two))))
-  (is (equal (get-instances-by-value 'idx-one 'slot1 'two)
+    (setq inst1 (make-instance 'idx-one-e :slot1 'one :sc *store-controller*))
+    (setq inst2 (make-instance 'idx-one-e :slot1 'two :sc *store-controller*))
+    (setq inst3 (make-instance 'idx-one-e :slot1 'one :sc *store-controller*)))
+  (is (= 3 (length (get-instances-by-class 'idx-one-e))))
+  (is (= 2 (length (get-instances-by-value 'idx-one-e 'slot1 'one))))
+  (is (= 1 (length (get-instances-by-value 'idx-one-e 'slot1 'two))))
+  (is (equal (get-instances-by-value 'idx-one-e 'slot1 'two)
              (list inst2))))
 
-(deftest indexing-class-opt
+(deftest (indexing-class-opt :depends-on index-reset)
     (progn
       (defclass idx-cslot ()
 	((slot1 :initarg :slot1 :initform 0 :accessor slot1))
 	(:metaclass persistent-metaclass) 
 	(:index t))
 
-      (disable-class-indexing 'idx-cslot :errorp nil)
-      (setf (find-class 'idx-cslot) nil)
+      (wipe-class 'idx-cslot)
       
       (defclass idx-cslot ()
 	((slot1 :initarg :slot1 :initform 0 :accessor slot1))
@@ -180,7 +239,7 @@
 
 
 ;; test inherited slots
-(deftest indexing-inherit
+(deftest (indexing-inherit :depends-on index-reset)
     (progn 
 ;;      (format t "inherit store: ~A  ~A~%" *store-controller* (controller-path *store-controller*))
 
@@ -197,11 +256,8 @@
 	 (slot4 :initarg :slot4 :initform 40 :accessor slot4 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-two :sc *store-controller* :errorp nil)
-      (setf (find-class 'idx-two) nil)
-
-      (disable-class-indexing 'idx-three :sc *store-controller* :errorp nil)
-      (setf (find-class 'idx-three) nil)
+      (wipe-class 'idx-two)
+      (wipe-class 'idx-three)
 
       (defclass idx-two ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
@@ -235,21 +291,19 @@
 		       '(slot1 slot3 slot4)))))
   1 2 3 4 1 20 30 40 t t)
 
-(deftest indexing-range
+(deftest (indexing-range :depends-on index-reset)
     (progn
-      ;;      (format t "range store: ~A  ~A~%" *store-controller* (controller-path *store-controller*))
+;;       (format t "range store: ~A  ~A~%" *store-controller* (elephant::controller-spec *store-controller*))
 
       (defclass idx-four ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-four :errorp nil)
-      (setf (find-class 'idx-four nil) nil)
+      (wipe-class 'idx-four)
 
-	(defclass idx-four ()
+      (defclass idx-four ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))
-      
 
       (defun make-idx-four (val)
 	(make-instance 'idx-four :slot1 val))
@@ -274,15 +328,14 @@
       )
   t t t)
 
-(deftest indexing-slot-makunbound
+(deftest (indexing-slot-makunbound :depends-on index-reset)
     (progn
 
       (defclass idx-unbound-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-unbound-del :errorp nil)
-      (setf (find-class 'idx-five-del) nil)
+      (wipe-class 'idx-unbound-del)
 
       (defclass idx-unbound-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
@@ -300,15 +353,14 @@
   1 1 nil)
       
 
-(deftest indexing-wipe-index
+(deftest (indexing-wipe-index :depends-on index-reset)
     (progn 
 
       (defclass idx-five-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-five-del :errorp nil)
-      (setf (find-class 'idx-five-del) nil)
+      (wipe-class 'idx-five-del)
 
       (defclass idx-five-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
@@ -330,7 +382,7 @@
 			  'slot1)))))
   t t t)
 
-(deftest indexing-reconnect-db
+(deftest (indexing-reconnect-db :depends-on index-reset)
     (progn 
 
       (defclass idx-five ()
@@ -339,8 +391,7 @@
 	 (slot3 :initarg :slot3 :initform 3 :accessor slot3 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-five :errorp nil)
-      (setf (find-class 'idx-five) nil)
+      (wipe-class 'idx-five)
 
       (defclass idx-five ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
@@ -372,7 +423,7 @@
 		(signals-error (length (get-instances-by-value 'idx-five 'slot2 2))))))
   2 2 t)
 
-(deftest indexing-change-class 
+(deftest (indexing-change-class  :depends-on index-reset)
     (progn
 
       (defclass idx-six ()
@@ -380,8 +431,7 @@
 	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-six :errorp nil)
-      (setf (find-class 'idx-six) nil)
+      (wipe-class 'idx-six)
 
       (defclass idx-seven ()
 	((slot1 :initarg :slot1 :initform 10 :accessor slot1 :index nil)
@@ -389,8 +439,7 @@
 	 (slot4 :initarg :slot4 :initform 40 :accessor slot4 :index t))
 	(:metaclass persistent-metaclass))
 
-      (disable-class-indexing 'idx-seven :errorp nil)
-      (setf (find-class 'idx-seven) nil)
+      (wipe-class 'idx-seven)
 
       (defclass idx-six ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
@@ -429,7 +478,7 @@
 	 )))
  1 t 2 40 nil nil nil 1 1)
 
-(deftest indexing-redef-class
+(deftest (indexing-redef-class :depends-on index-reset)
     (progn
 
       (defclass idx-eight ()
@@ -440,8 +489,8 @@
 	 (slot5 :accessor slot5 :initarg :slot5))
 	(:metaclass persistent-metaclass))
       
-      (disable-class-indexing 'idx-eight :errorp nil)
-      (setf (find-class 'idx-eight nil) nil)
+      (wipe-class 'idx-eight)
+
       ;;      (format t "sc: ~A  ct: ~A~%" *store-controller* *current-transaction*)
       (defclass idx-eight ()
 	((slot1 :accessor slot1 :initarg :slot1 :index t)
@@ -574,7 +623,7 @@
 	    index-check))
     index-check))
   
-(deftest indexing-timing
+(deftest (indexing-timing :depends-on index-reset)
     (progn
       (make-stress-classes)
       (let ((insts (get-instances-by-class 'stress-index))

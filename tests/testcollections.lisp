@@ -102,7 +102,7 @@
 ;; For some unkown reason, this fails on my server unless
 ;; I put the variable "first-key" here rather than use the string
 ;; "key-1".  I need to understand this, but don't at present....
-(test (remove-kv :depends-on btree-put)
+(test (remove-kv :depends-on btree-get)
   (5am:finishes 
     (with-transaction (:store-controller *store-controller*)
       (remove-kv first-key bt)))
@@ -183,7 +183,7 @@
          for key in keys
          do (setf (get-value key indexed) obj)))))
 
-(test (indexed-get :depends-on add-indices)
+(test (indexed-get :depends-on indexed-put)
   (is-true
    (loop for key in keys
       for i from 1 to 1000
@@ -192,14 +192,14 @@
       (and (= (slot1 obj) i)
            (= (slot2 obj) (* i 100))))))
 
-(test (simple-slot-get :depends-on add-indices)
+(test (simple-slot-get :depends-on indexed-put)
   (setf (get-value (nth 0 keys) indexed)
         (nth 0 objs)) ;; Henrik comment 20070720: Why? 
   (let ((obj (get-value 1 index1)))
     (is (= (slot1 obj) 1))
     (is (= (slot2 obj) (* 1 100)))))
 
-(test (indexed-get-from-slot1 :depends-on simple-slot-get)
+(test (indexed-get-from-slot1 :depends-on indexed-put)
   (is-true
    (loop with index = (get-index indexed 'slot1)
       for i from 1 to 1000
@@ -207,7 +207,7 @@
       always
       (= (slot1 obj) i))))
 	  
-(test (indexed-get-from-slot2 :depends-on simple-slot-get)
+(test (indexed-get-from-slot2 :depends-on indexed-put)
   (is-true
    (loop with index = (get-index indexed 'slot2)
       for i from 1 to 1000
@@ -215,7 +215,8 @@
       always
       (= (slot2 obj) (* i 100)))))
 
-(test (remove-kv-tests :depends-on simple-slot-get)
+(test (remove-kv-tests :depends-on (and indexed-put indexed-get simple-slot-get
+					indexed-get-from-slot1 indexed-get-from-slot2))
   (5am:finishes (remove-kv first-key indexed))
   (is-false (get-value first-key indexed))
   (is-false (get-primary-key 1 index1))
@@ -318,7 +319,7 @@
 	  (= (slot2 v) 600))))
   t)
 
-(deftest (map-indexed-index :depends-on remove-kv-tests)
+(deftest (map-indexed-index :depends-on (and set set2 set-range set-range2))
     (let ((sum 0))
       (flet ((collector (key value pkey)
 	       (incf sum (slot1 value))))
@@ -331,7 +332,7 @@
        10945 ;; sum 990 to 1000 inclusive
        ))
 
-(deftest (map-index-from-end :depends-on remove-kv-tests)
+(deftest (map-index-from-end :depends-on (and set set2 set-range set-range2))
     (let ((sum 0))
       (flet ((collector (key value pkey)
 	       (incf sum (slot1 value))))
@@ -344,21 +345,21 @@
        10945 ;; sum 990 to 1000 inclusive
        ))
 
-(test (map-index-value-param :depends-on remove-kv-tests)
+(test (map-index-value-param :depends-on map-indexed-index)
   (let ((sum 0))
     (flet ((collector (key value pkey)
              (incf sum (slot1 value))))
       (map-index #'collector index1 :value 990))
     (is (= sum 990))))
 
-(test (map-index-collect-param :depends-on remove-kv-tests)
+(test (map-index-collect-param :depends-on  map-indexed-index)
   (flet ((returner (key value pkey)
            (slot1 value)))
     (is (equal (map-index #'returner index1 :value 990 :collect t)
                (list 990)))))
 
 
-(deftest (rem-kv :depends-on remove-kv-tests)
+(deftest (rem-kv :depends-on map-indexed-index)
     (with-transaction (:store-controller *store-controller*)
       (let ((ibt (make-indexed-btree *store-controller*)))
 	(loop for i from 0 to 10
@@ -507,8 +508,8 @@ t
 (deftest (prev-nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-        (multiple-value-bind (m k v) (cursor-last curs)
-          (assert (= -10000 v) nil "precondition for this test is wrong (~a), check dependencies between tests" v))
+        (cursor-last curs)
+;;          (assert (= -10000 v) nil "precondition for this test is wrong (~a), check dependencies between tests" v))
 	(let ((pk nil))
 	(loop for (m k v) = (multiple-value-list (cursor-prev-nodup curs))
 	      for i from -9999 to -9 by 10
@@ -535,8 +536,8 @@ t
 (deftest (pprev-nodup-test :depends-on put-indexed2)
     (with-transaction (:store-controller *store-controller*)
       (with-btree-cursor (curs index3)
-        (multiple-value-bind (m k v) (cursor-last curs)
-          (assert (= -10000 v) nil "precondition for this test is wrong, check dependencies between tests"))
+	(cursor-last curs)
+;;          (assert (= -10000 v) nil "precondition for this test is wrong, check dependencies between tests"))
 	(let ((pk nil))
 	  (loop for (m k v p) = (multiple-value-list (cursor-pprev-nodup curs))
 	     for i from 9999 downto 9 by 10
@@ -547,7 +548,9 @@ t
 		      (setf pk k))))))
   t)
 
-(deftest (cur-del1 :depends-on put-indexed2) 
+(deftest (cur-del1 :depends-on (and put-indexed2 get-indexed2 get-from-index3 dup-test
+				    nodup-test prev-nodup-test pnodup-test pprev-nodup-test))
+			
     (with-transaction (:store-controller *store-controller*)
       (let* ((ibt (make-indexed-btree *store-controller*))
 	     (id1 (add-index ibt :index-name 'idx1 :key-form 'odd)))
@@ -580,7 +583,7 @@ t
      (get-value 1000 index3))
   nil nil)
 		      
-(deftest (indexed-delete2 :depends-on indexed-delete)
+(deftest (indexed-delete2 :depends-on test-deleted)
     (finishes
       (with-transaction (:store-controller *store-controller*)
 	(with-btree-cursor (curs index3)
@@ -698,7 +701,7 @@ t
       (crunch s k v)
     (values index? (princ-to-string value))))
 
-(test (crunch-as-string :depends-on cur-del2)
+(test (crunch-as-string :depends-on pcursor2)
     (5am:finishes
      (with-transaction (:store-controller *store-controller*) 
        (setq index-string

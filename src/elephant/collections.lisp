@@ -404,7 +404,7 @@ not), evaluates the forms, then closes the cursor."
 (defun lisp-compare<= (a b)
   (let ((ta (type-of a))
 	(tb (type-of b)))
-    (if (equal ta tb)
+    (if (or (subtypep ta tb) (subtypep tb ta))
 	(typecase a
 	  (number (<= a b))
 	  (persistent (<= (oid a) (oid b)))
@@ -417,7 +417,7 @@ not), evaluates the forms, then closes the cursor."
 (defun lisp-compare< (a b)
   (let ((ta (type-of a))
 	(tb (type-of b)))
-    (if (equal ta tb)
+    (if (or (subtypep ta tb) (subtypep tb ta))
 	(typecase a
 	  (number (< a b))
 	  (persistent (< (oid a) (oid b)))

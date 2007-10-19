@@ -492,7 +492,7 @@
   (get-instances-by-range (find-class class) slot-name start end))
 
 (defmethod get-instances-by-range ((class persistent-metaclass) idx-name start end)
-  (declare (type (or number string null) start end)
+  (declare (type (or number symbol string null) start end)
 	   (type symbol idx-name))
   (map-inverted-index #'identity2 class idx-name :start start :end end :collect t))
 

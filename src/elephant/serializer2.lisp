@@ -212,7 +212,7 @@
 	      ;; CLHS says it should, but gives the class object itself,
 	      ;; which cannot be directly serialized....
 	      (let ((tp (type-of frob)))
-		#+(or sbcl)
+		#+(or sbcl allegro)
 		(if (not (symbolp tp))
 		    (setf tp (class-name (class-of frob))))
 		(%serialize tp))

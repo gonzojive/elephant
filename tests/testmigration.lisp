@@ -28,7 +28,7 @@
   t)
 
 ;; Simple root element copy
-(deftest migrate-basic
+(deftest (migrate-basic :depends-on remove-element)
     (if (or (not (boundp '*test-spec-secondary*) )
 	    (null *test-spec-secondary*))
 	(progn
@@ -40,7 +40,8 @@
       (unwind-protect 
 	   (progn
 	     (mapcar (lambda (x) 
-		       (disable-class-indexing x :sc sc1))
+		       (when (find-class x nil)
+			 (disable-class-indexing x :sc sc1)))
 		     '(idx-two idx-three idx-four idx-five idx-six idx-seven idx-eight
 		       idx-five-del stress-index idx-unbound-del))
 	     (add-to-root "x" "y" :sc sc1)
@@ -52,7 +53,7 @@
   t)
 
 ;; Simple test of a btree
-(deftest migrate-btree
+(deftest (migrate-btree :depends-on migrate-basic)
     (if (or (not (boundp '*test-spec-secondary*) )
 	    (null *test-spec-secondary*))
 	(progn
@@ -78,7 +79,7 @@
   nil)
 
 ;; Simple test of indexed btrees
-(deftest migrate-idx-btree
+(deftest (migrate-idx-btree :depends-on migrate-btree)
     (if (or (not (boundp '*test-spec-secondary*) )
 	    (null *test-spec-secondary*))
 	(progn
@@ -120,7 +121,7 @@
   t)
 
 ;; Simple test of persistent classes
-(deftest migrate-pclass
+(deftest (migrate-pclass :depends-on migrate-idx-btree)
     (if (or (not (boundp '*test-spec-secondary*) )
 	    (null *test-spec-secondary*))
 	(progn
@@ -161,7 +162,7 @@
 
 (defstruct simple-struct s1 s2)
 
-(deftest migrate-mult-pclass 
+(deftest (migrate-mult-pclass :depends-on migrate-pclass)
     (if (or (not (boundp '*test-spec-secondary*) )
 	    (null *test-spec-secondary*))
 	(progn
@@ -226,7 +227,7 @@
   ((slot1 :accessor slot1 :initarg :slot1 :index t)))
 
 ;; Simple test of persistent classes with indexed slots
-(deftest migrate-ipclass
+(deftest (migrate-ipclass :depends-on migrate-mult-pclass)
     (if (or (not (boundp '*test-spec-secondary*))
 	    (null *test-spec-secondary*))
 	(progn

@@ -270,7 +270,8 @@ slots."
 
 (defun valid-persistent-reference-p (object sc)
   "Ensures that object can be written as a reference into store sc"
-  (eq (dbcn-spc-pst object) (controller-spec sc)))
+  (or (not (slot-boundp object 'dbconnection-spec-pst))
+      (eq (dbcn-spc-pst object) (controller-spec sc))))
 
 (define-condition cross-reference-error (error)
   ((object :accessor cross-reference-error-object :initarg :object)

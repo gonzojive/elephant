@@ -484,7 +484,7 @@
 
 (deftest test-serialization-unicode-slot
     (let ((s (make-instance 'spud :msgid '(a b c) :value (format nil "Mesa~Ao Teksto" (code-char 267)))))
-      (in-out-deep-equal-p s)))
+      (in-out-deep-equalp s)))
    
 
 (defclass pfoo ()

@@ -154,13 +154,7 @@
     (if oid-spec
 	(set-oid-spec oid-spec)
 	(set-oid-spec nil))
-    (print (do-test 'remove-element))
-    (print (do-test 'migrate-basic))
-    (print (do-test 'migrate-btree))
-    (print (do-test 'migrate-idx-btree))
-    (print (do-test 'migrate-pclass))
-    (print (do-test 'migrate-mult-pclass))
-    (print (do-test 'migrate-ipclass))
+    (do-test 'migrate-ipclass)
     (when oid-spec
       (set-oid-spec nil))))
     

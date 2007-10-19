@@ -83,7 +83,7 @@
 	  (assert (= i j))
 	  finally (db-bdb::db-sequence-remove seq))))
 
-(deftest test-seq1
+(deftest (test-seq1 :depends-on prepares-bdb)
     (if (not db)
 	(progn 
 	  (format t "Berkeley db not loaded, so not runnning test test-seq1~%")
@@ -105,7 +105,7 @@
 	  (assert (= i j))
 	  finally (db-bdb::db-sequence-remove seq))))
 
-(deftest test-seq2
+(deftest (test-seq2 :depends-on test-seq1)
     (if (not db)
 	(progn 
 	  (format t "BDB db not valid, so not runnning test test-seq2~%")
@@ -120,7 +120,7 @@
   (setq env (db-bdb::db-env-create))
   (db-bdb::db-env-remove env "test"))
 
-(deftest cleansup-bdb
+(deftest (cleansup-bdb :depends-on test-seq2)
     (if (not db)
 	(progn 
 	  (format t "Berkeley DB not open, so not runnning test cleanup-bdb~%")
