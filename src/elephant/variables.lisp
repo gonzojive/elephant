@@ -84,9 +84,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Enables warnings of various kinds
 
-(defvar *warn-on-manual-class-finalization* nil
+(defparameter *warn-on-manual-class-finalization* nil
   "Issue a printed warnings when the class mechanism has
    to finalize a class to access indexing information")
+
+(defparameter *warn-when-dropping-persistent-slots* nil
+  "Assert a signal when the user is about to delete a bunch of
+   persistent slot values on class redefinition.  This is nil by
+   default to stop annoying message and confusing new users, but
+   it will help keep users from shooting themselves in the foot
+   and losing significant amounts of data during debugging and
+   development.  It can be disabled if change-class is used a
+   bunch in the application rather than just defclass changes
+   interactively.")
+
+(defmacro with-inhibited-warnings (&body body)
+  `(let ((*warn-on-manual-class-finalization* nil)
+	 (*warn-when-dropping-persistent-slots* nil))
+     (declare (special *warn-on-manual-class-finalization*
+		       *warn-when-dropping-persistent-slots*))
+     ,@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Forward references

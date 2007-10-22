@@ -264,7 +264,13 @@
 
    #:struct-constructor
 
+   ;; Various signals and warnings
+   #:*warn-on-manual-class-finalization*
+   #:*warn-when-dropping-persistent-slots*
+   #:dropping-persistent-slot-data
+
    ;; Various error conditions
+   #:with-inhibited-warnings
    #:cross-reference-error
    #:controller-lost-error
    #:persistent-class-not-indexed

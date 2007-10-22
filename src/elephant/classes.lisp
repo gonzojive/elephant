@@ -165,6 +165,31 @@ slots."
 	     (setf (slot-value-using-class class instance slot-def)
 		   (funcall initfun))))))))
 
+
+(define-condition dropping-persistent-slot-data ()
+  ((operation :initarg :operation :reader persistent-slot-drop-operation)
+   (class :initarg :class :reader persistent-slot-drop-class)
+   (slots :initarg :slotnames :reader persistent-slot-drop-names))
+  (:report (lambda (cond stream)
+	     (with-slots (class slots operation) cond
+	       (format stream "Dropping slot(s) ~A for class ~A in ~A."
+		       slots class operation)))))
+
+(defun warn-about-dropped-slots (op class names)
+  (when (and *warn-when-dropping-persistent-slots* names)
+    (cerror "Drop the slots" 
+	    'dropping-persistent-slot-data
+	    :operation op
+	    :class class
+	    :slotnames names)))
+
+(defun drop-slots (class instance slotnames)
+  (when slotnames
+    (loop for slot-def in (class-slots class)
+       when (member (slot-definition-name slot-def) slotnames)
+       do (slot-makunbound-using-class class instance slot-def))))
+
+
 ;;
 ;; CLASS REDEFINITION PROTOCOL
 ;;
@@ -175,10 +200,16 @@ slots."
       (call-next-method)
     (let* ((class (class-of instance))
 	   (new-persistent-slots (set-difference (persistent-slots class)
-						 (old-persistent-slots class))))
-      ;; Update new persistent slots, the others we get for free (same oid!)
-      ;; Isn't this done by the default call-next-method?
-      (apply #'shared-initialize instance new-persistent-slots initargs))))
+						 (old-persistent-slots class)))
+	   (dropped-persistent-slots (set-difference (old-persistent-slots class)
+						     (persistent-slots class))))
+      (warn-about-dropped-slots 'update-instance (class-of instance) dropped-persistent-slots)
+      (ensure-transaction (:store-controller (get-con instance))
+	;; Drop deprecated slot values
+	(drop-slots (class-of instance) instance dropped-persistent-slots)
+	;; Update new persistent slots, the others we get for free (same oid!)
+	;; Isn't this done by the default call-next-method?
+	(apply #'shared-initialize instance new-persistent-slots initargs)))))
 
 ;;
 ;; CLASS CHANGE PROTOCOL
@@ -188,6 +219,11 @@ slots."
   (declare (ignorable initargs))
   (unless (subtypep (type-of new-class) 'persistent-metaclass)
     (error "Persistent instances cannot be changed to non-persistent classes in change-class"))
+  ;; Inform user, if warnings are active, that slot values are about to be dropped
+  (warn-about-dropped-slots 'change-class (class-of previous) 
+			    (set-difference 
+			     (persistent-slots (class-of previous))
+			     (persistent-slots new-class)))
   (call-next-method))
 
 (defmethod change-class :around ((previous standard-object) (new-class persistent-metaclass) &rest initargs)
@@ -199,19 +235,21 @@ slots."
 (defmethod update-instance-for-different-class :around ((previous persistent) (current persistent) &rest initargs &key)
   (let* ((old-class (class-of previous))
 	 (new-class (class-of current))
-	 (new-persistent-slots (set-difference
-				(persistent-slots new-class)
-				(persistent-slots old-class)))
-	 (raw-retained-persistent-slots (intersection (persistent-slots new-class)
-						      (persistent-slots old-class)))
+	 (old-pslots (persistent-slots old-class))
+	 (new-pslots (persistent-slots new-class))
+	 (new-persistent-slots (set-difference new-pslots old-pslots))
+	 (dropped-persistent-slots (set-difference old-pslots new-pslots))
+	 (raw-retained-persistent-slots (intersection new-pslots old-pslots))
 	 (retained-unbound-slots (loop for slot-name in raw-retained-persistent-slots
 				       when (not (persistent-slot-boundp (get-con previous) previous slot-name))
 				       collect slot-name))
  	 (retained-persistent-slots (set-difference raw-retained-persistent-slots retained-unbound-slots)))
     ;; Apply default values for unbound & new slots (updates class index)
     (apply #'shared-initialize current (append new-persistent-slots retained-unbound-slots) initargs)
-    ;; Copy values from old class (updates class index)
     (ensure-transaction (:store-controller (get-con current))
+      ;; Reclaim space from dropped slots
+      (drop-slots old-class previous dropped-persistent-slots)
+      ;; Copy old slot values to new slot values
       (loop for slot-def in (class-slots new-class)
 	 when (member (slot-definition-name slot-def) retained-persistent-slots)
 	 do (setf (slot-value-using-class new-class
