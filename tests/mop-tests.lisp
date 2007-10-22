@@ -67,13 +67,13 @@
      (finalize-inheritance (find-class 'make-persistent)))
   t)
 
-(deftest bad-inheritence
+(deftest (bad-inheritence :depends-on class-definers)
     (signals-condition
      ;; This should fail
      (defclass bad-inheritence (p-class) ()))
   t)
 
-(deftest mixes
+(deftest (mixes :depends-on class-definers)
     (finishes
      ;; but this should be fine
      (defclass mix-1 (p-class nonp-class) ()
@@ -101,7 +101,7 @@
      (finalize-inheritance (find-class 'mix-6)))
   t)
 
-(deftest mixes-right-slots
+(deftest (mixes-right-slots :depends-on mixes)
     (are-not-null
      (typep (find-slot-def 'mix-1 'slot1) 'ele::persistent-slot-definition)
      (typep (find-slot-def 'mix-1 'slot2) 'ele::transient-slot-definition)
@@ -123,7 +123,7 @@
      (typep (find-slot-def 'mix-6 'slot3) 'ele::transient-slot-definition))
   t t t t t t t t t t t t t t t t t t)
 
-(deftest inherit     
+(deftest (inherit :depends-on class-definers)
     (finishes
      (defclass make-persistent2 (p-class)
        ((slot2 :accessor slot2)
@@ -132,7 +132,7 @@
      (finalize-inheritance (find-class 'make-persistent2)))
   t)
 
-(deftest inherit-right-slots
+(deftest (inherit-right-slots :depends-on inherit)
     (are-not-null
      (typep (find-slot-def 'make-persistent2 'slot1) 
 	    'ele::persistent-slot-definition)
@@ -155,11 +155,11 @@
       )
   t)
       
-(deftest initform-test
+(deftest (initform-test :depends-on initform-classes)
     (slot-value (make-instance 'p-initform-test :sc *store-controller*) 'slot1)
   10)
 
-(deftest initarg-test
+(deftest (initarg-test :depends-on initform-classes)
     (values
      (slot-value (make-instance 'p-initform-test-2 :sc *store-controller*) 'slot1)
      (slot-value (make-instance 'p-initform-test-2 :slot1 20 :sc *store-controller*) 'slot1))
@@ -181,7 +181,7 @@
       (is-not-null (subtypep 'redef 'persistent-object)))
   t)
 
-(deftest makunbound
+(deftest (makunbound :depends-on class-definers)
     (let ((p (make-instance 'p-class :sc *store-controller*)))
       (with-transaction (:store-controller *store-controller*)
 	(setf (slot1 p) t)
@@ -235,7 +235,7 @@
 ;; 	(is-not-null (indices foo))))
 ;;   t)
 
-(deftest change-class3
+(deftest (change-class3 :depends-on change-class)
     (progn
       (defclass class-one ()
 	((slot1 :accessor slot1))
