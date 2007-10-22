@@ -73,7 +73,7 @@
 					 &allow-other-keys)
   (assert (not *current-transaction*))
   (db-transaction-begin (controller-environment sc)
-			:parent parent
+			:parent (if parent parent +NULL-VOID+)
 			:txn-nosync txn-nosync
 			:txn-nowait txn-nowait
 			:txn-sync txn-sync
