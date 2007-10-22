@@ -379,8 +379,8 @@
 	    (if (and key (= (buffer-read-oid key) (cursor-oid cursor)))
 		(values t (deserialize key sc)
 			(deserialize val sc))
-		(setf (cursor-initialized-p cursor) nil))))
-	(cursor-last cursor))))
+		(setf (cursor-initialized-p cursor) nil)))))
+      (cursor-last cursor)))
 	  
 (defmethod cursor-set ((cursor bdb-cursor) key)
   (let ((sc (get-con (cursor-btree cursor))))
@@ -644,7 +644,7 @@
 	    (setf (cursor-initialized-p cursor) nil))))))
 
 (defmethod cursor-delete ((cursor bdb-secondary-cursor))
-  "Delete by cursor: deletes ALL secondary indices."
+  "Delete by cursor: deletes ALL secondary index values."
   (if (cursor-initialized-p cursor)
       (with-buffer-streams (key-buf pkey-buf value-buf)
 	(multiple-value-bind (key pkey val)

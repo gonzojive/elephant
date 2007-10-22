@@ -118,6 +118,36 @@
     (is-true (and (subsetp ks (cdr keys) :test #'equalp) 
                   (subsetp (cdr keys) ks :test #'equalp)))))
 
+(test (btree-cursor :depends-on remove-kv)
+  (with-transaction (:store-controller *store-controller*)
+    (with-btree-cursor (cur bt)
+      (cursor-set cur "key-100")
+      (multiple-value-bind (has k v)
+	  (cursor-current cur)
+	(is-true (and has (= (slot1 v) 100))))
+      (multiple-value-bind (has k v)
+	  (cursor-next cur)
+	(is-true (and has (string= k "key-1000") (= (slot1 v) 1000))))
+      (multiple-value-bind (has k v)
+	  (cursor-prev cur)
+	(is-true (and has (= (slot1 v) 100))))
+      (multiple-value-bind (has k v)
+	  (cursor-last cur)
+	(is-true (and has (string= k "key-999") (= (slot1 v) 999))))
+      (multiple-value-bind (has k v)
+	  (cursor-set-range cur "key-1001")
+	(is-true (and has (string= k "key-101") (= (slot1 v) 101)))
+	(multiple-value-bind (has k2 v2)
+	    (cursor-get-both cur "key-101" v)
+	  (is-true (and has (string= k2 "key-101") (= (slot1 v2) 101)))
+	  (multiple-value-bind (has k3 v3)
+	      (cursor-get-both-range cur "key-101" v)
+	    (is-true (and has (string= k3 "key-101") (= (slot1 v3) 101)))))))))
+
+
+      
+	
+
 ;;------------------------------------------------------------------------------
 
 (in-suite* collections-indexed :in testcollections )
