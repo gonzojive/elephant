@@ -261,20 +261,44 @@
 (setf (gethash 'fixnum array-type-to-byte) #x07)
 (setf (gethash 'bit array-type-to-byte) #x08)
 
-(defun type= (t1 t2)
+(defun type-num (obj)
+  "Define a type order; no guarantee that backend and front-end match
+   so we can't iterate over types, just all members of a give type class
+   (i.e. numbers, etc)"
+  (cond ((numberp obj) 1)
+	((symbolp obj) 13)
+	((stringp obj) 2)
+	((subtypep (type-of obj) 'persistent) 15)
+	((consp obj) 16)
+	((subtypep (type-of obj) 'standard-object) 18)
+	((pathnamep obj) 12)
+	((hash-table-p obj) 17)
+	((subtypep (type-of obj) 'structure-object) 20)
+	((complexp obj) 22)))
+
+(defun type<= (obj1 obj2)
+  (<= (type-num obj1) (type-num obj2)))
+
+(defun type< (obj1 obj2)
+  (< (type-num obj1) (type-num obj2)))
+
+(defun type= (obj1 obj2)
+  (= (type-num obj1) (type-num obj2)))
+
+(defun array-type= (t1 t2)
   (and (subtypep t1 t2) (subtypep t2 t1)))
 
 (let ((counter 8))
   (loop for i from 2 to 65
 	for spec = (list 'unsigned-byte i)
 	for uspec = (upgraded-array-element-type spec)
-	when (type= spec uspec)
+	when (array-type= spec uspec)
 	do
 	(setf (gethash spec array-type-to-byte) (incf counter)))
   (loop for i from 2 to 65
 	for spec = (list 'signed-byte i)
 	for uspec = (upgraded-array-element-type spec)
-	when (type= spec uspec)
+	when (array-type= spec uspec)
 	do
 	(setf (gethash spec array-type-to-byte) (incf counter))))
 

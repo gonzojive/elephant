@@ -402,34 +402,33 @@ not), evaluates the forms, then closes the cursor."
 ;; =======================================
 
 (defun lisp-compare<= (a b)
-  (let ((ta (type-of a))
-	(tb (type-of b)))
-    (if (or (subtypep ta tb) (subtypep tb ta))
-	(typecase a
-	  (number (<= a b))
-	  (persistent (<= (oid a) (oid b)))
-	  (string (string<= a b))
-	  (symbol (string<= (symbol-name a) (symbol-name b)))
-	  (pathname (string<= (namestring a) (namestring b)))
-	  (t nil)))))
-;;	(string< (symbol-name (type-of a)) (symbol-name (type-of b))))))
+  (declare (optimize (speed 3) (safety 2) (debug 0)))
+  (handler-case 
+      (typecase a
+	(number (<= a b))
+	(string (string-not-greaterp a b))
+	(symbol (string-not-greaterp (symbol-name a) (symbol-name b)))
+	(pathname (string-not-greaterp (namestring a) (namestring b)))
+	(persistent (<= (oid a) (oid b)))
+	(t nil))
+    (error () 
+      (type<= a b))))
 
 (defun lisp-compare< (a b)
-  (let ((ta (type-of a))
-	(tb (type-of b)))
-    (if (or (subtypep ta tb) (subtypep tb ta))
-	(typecase a
-	  (number (< a b))
-	  (persistent (< (oid a) (oid b)))
-	  (string (string< a b))
-	  (symbol (string< (symbol-name a) (symbol-name b)))
-	  (pathname (string< (namestring a) (namestring b)))
-	  (t nil)))))
-;;	(string< (symbol-name (type-of a)) (symbol-name (type-of b))))))
-;;     (string< (format nil "~A" a) (format nil "~A" b))) ?
+  (declare (optimize (speed 3) (safety 2) (debug 0)))
+  (handler-case 
+      (typecase a
+	(number (< a b))
+	(string (string-lessp a b))
+	(symbol (string-lessp (symbol-name a) (symbol-name b)))
+	(pathname (string-lessp (namestring a) (namestring b)))
+	(persistent (< (oid a) (oid b)))
+	(t nil))
+    (error () 
+      (type< a b))))
 
 (defun lisp-compare-equal (a b)
-  (equal a b))
+  (equalp a b))
 
 (defgeneric map-btree (fn btree &rest args &key start end value from-end collect &allow-other-keys)
   (:documentation   "Map btree maps over a btree from the value start to the value of end.
@@ -522,7 +521,8 @@ not), evaluates the forms, then closes the cursor."
 (defmethod map-index (fn (index btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
-  (declare (dynamic-extent args))
+  (declare (optimize (speed 1) (safety 3) (debug 0))
+	   (dynamic-extent args))
   (unless (or (null start) (null end) (lisp-compare<= start end))
     (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
 	   start end))
@@ -536,7 +536,7 @@ not), evaluates the forms, then closes the cursor."
       (declare (dynamic-extent (function collector)))
       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
 	(with-btree-cursor (cur index)
-	  (labels ((continue-p (key) 
+	  (labels ((continue-p (key)
 		     ;; Do we go to the next value?
 		     (or (if from-end (null start) (null end))
 			 (if from-end 
