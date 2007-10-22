@@ -208,6 +208,12 @@
 				:element-type 'base-char)))
   t t t)
 
+(deftest characters
+    (are-not-null
+     (in-out-equal #\A)
+     (in-out-equal #\B))
+  t t)
+
 (deftest strings
     (are-not-null
      (in-out-equal "")

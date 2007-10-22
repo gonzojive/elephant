@@ -266,6 +266,7 @@
    so we can't iterate over types, just all members of a give type class
    (i.e. numbers, etc)"
   (cond ((numberp obj) 1)
+	((characterp obj) 1)
 	((symbolp obj) 13)
 	((stringp obj) 2)
 	((subtypep (type-of obj) 'persistent) 15)

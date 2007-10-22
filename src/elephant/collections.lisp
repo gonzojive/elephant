@@ -406,12 +406,13 @@ not), evaluates the forms, then closes the cursor."
   (handler-case 
       (typecase a
 	(number (<= a b))
+	(character (<= (char-code a) (char-code b)))
 	(string (string-not-greaterp a b))
 	(symbol (string-not-greaterp (symbol-name a) (symbol-name b)))
 	(pathname (string-not-greaterp (namestring a) (namestring b)))
 	(persistent (<= (oid a) (oid b)))
 	(t nil))
-    (error () 
+    (error ()
       (type<= a b))))
 
 (defun lisp-compare< (a b)
@@ -419,6 +420,7 @@ not), evaluates the forms, then closes the cursor."
   (handler-case 
       (typecase a
 	(number (< a b))
+	(character (< (char-code a) (char-code b)))
 	(string (string-lessp a b))
 	(symbol (string-lessp (symbol-name a) (symbol-name b)))
 	(pathname (string-lessp (namestring a) (namestring b)))

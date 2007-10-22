@@ -1125,6 +1125,8 @@ double read_num2(unsigned char *buf) {
   case S2_FIXNUM64:
   case S2_SYMBOL_ID:
     return (double)read_int(buf, 1);
+  case S2_CHAR:
+    return (double)read_uint32(buf, 1);
   case S2_SHORT_FLOAT:
     return (double)read_float(buf, 1);
   case S2_SINGLE_FLOAT:
@@ -1148,6 +1150,7 @@ double read_num2(unsigned char *buf) {
     }
     return result;
   case S2_RATIONAL:
+  case S2_COMPLEX:
   default:
     switch ((++buf)[0]) {
     case S2_FIXNUM32:

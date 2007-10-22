@@ -249,7 +249,7 @@
 	     (character
 	      (buffer-write-byte +char+ bs)
 	      ;; might be wide!
-	      (buffer-write-uint (char-code frob) bs))
+	      (buffer-write-uint32 (char-code frob) bs))
 	     (cons
 	      (buffer-write-byte +cons+ bs)
 	      (let ((idp (gethash frob circularity-hash)))
@@ -457,7 +457,7 @@
 	     ((= tag +double-float+)
 	      (buffer-read-double bs))
 	     ((= tag +char+)
-	      (code-char (buffer-read-uint bs)))
+	      (code-char (buffer-read-uint32 bs)))
 	     ((= tag +pathname+)
 	      (parse-namestring (or (%deserialize bs) "")))
 	     ((= tag +positive-bignum+) 
