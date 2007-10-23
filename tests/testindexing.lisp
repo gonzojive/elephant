@@ -423,8 +423,7 @@
 		(signals-error (length (get-instances-by-value 'idx-five 'slot2 2))))))
   2 2 t)
 
-(deftest (indexing-change-class  :depends-on index-reset)
-    (progn
+(test (indexing-change-class :depends-on index-reset)
 
       (defclass idx-six ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
@@ -459,24 +458,20 @@
 
       (let ((foo (make-instance 'idx-six)))
 	(change-class foo 'idx-seven)
-	
-	(values 
 	 ;; shared data from original slot
-	 (slot1 foo)
-	 ;; verify old instance access fails
-	 (signals-error (slot2 foo))
-	 ;; verify new instance is there
-	 (slot3 foo)
-	 (slot4 foo)
-	 ;; verify proper indexing changes (none should lookup a value)
-	 (get-instances-by-class 'idx-six)
-	 (get-instances-by-value 'idx-six 'slot1 1)
-	 (get-instances-by-value 'idx-six 'slot2 2)
-	 ;; new indexes
-	 (length (get-instances-by-class 'idx-seven))
-	 (length (get-instances-by-value 'idx-seven 'slot3 2))
-	 )))
- 1 t 2 40 nil nil nil 1 1)
+	(is (= (slot1 foo) 1))
+	;; verify old instance access fails
+	(signals program-error (slot2 foo))
+	;; verify new instance is there
+	(is (= (slot3 foo) 2))
+	(is (= (slot4 foo) 40))
+	;; verify proper indexing changes (none should lookup a value)
+	(is-false (get-instances-by-class 'idx-six))
+	(is-false (get-instances-by-value 'idx-six 'slot1 1))
+	(is-false (get-instances-by-value 'idx-six 'slot2 2))
+	;; new indexes
+	(is (= (length (get-instances-by-class 'idx-seven)) 1))
+	(is (= (length (get-instances-by-value 'idx-seven 'slot3 2)) 1))))
 
 (deftest (indexing-redef-class :depends-on index-reset)
     (progn

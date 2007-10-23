@@ -460,12 +460,14 @@ t
     t
   )
 
+(defun index-cdr (bt pk val)
+  (declare (ignore bt pk))
+  (values t (cdr val)))
+
 (deftest test-indexed-character-values
     (with-transaction (:store-controller *store-controller*)
       (let ((ibt (make-indexed-btree *store-controller*)))
-	(add-index ibt :index-name 'name :key-form '(lambda (bt pk val)
-						     (declare (ignore bt pk))
-						     (cdr val)))
+	(add-index ibt :index-name 'name :key-form 'index-cdr)
 	(setf (get-value 1 ibt) (cons 1 #\A))
 	(setf (get-value 2 ibt) (cons 2 #\B))
 	(setf (get-value 3 ibt) (cons 3 #\C))
@@ -474,10 +476,9 @@ t
 			     k)
 			   (get-index ibt 'name)
 			   :start #\B
-			   :end #\C))))
+			   :end #\C
+			   :collect t))))
   2)
-
-      
 
 (in-suite* indexed2-tests :in testcollections)
 

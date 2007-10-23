@@ -247,8 +247,6 @@ slots."
     ;; Apply default values for unbound & new slots (updates class index)
     (apply #'shared-initialize current (append new-persistent-slots retained-unbound-slots) initargs)
     (ensure-transaction (:store-controller (get-con current))
-      ;; Reclaim space from dropped slots
-      (drop-slots old-class previous dropped-persistent-slots)
       ;; Copy old slot values to new slot values
       (loop for slot-def in (class-slots new-class)
 	 when (member (slot-definition-name slot-def) retained-persistent-slots)
@@ -258,10 +256,13 @@ slots."
 		  (slot-value-using-class old-class
 					  previous
 					  (find-slot-def-by-name old-class (slot-definition-name slot-def))))))
-    ;; Delete this instance from its old class index, if exists
-    (when (indexed old-class)
-      (remove-kv (oid previous) (find-class-index old-class)))
-    (call-next-method)))
+    (call-next-method)
+    (ensure-transaction (:store-controller (get-con current))
+      ;; Reclaim space from dropped slots
+      (drop-slots old-class previous dropped-persistent-slots)
+      ;; Delete this instance from its old class index, if exists
+      (when (indexed old-class)
+	(remove-kv (oid previous) (find-class-index old-class))))))
 
 
 ;; =============================================
