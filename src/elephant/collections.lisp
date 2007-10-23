@@ -401,7 +401,12 @@ not), evaluates the forms, then closes the cursor."
 ;;   Generic Mapping Functions
 ;; =======================================
 
+;; Utilities
+
 (defun lisp-compare<= (a b)
+  "A comparison function that mirrors the ordering of the data stores for <=
+   on all sortable types.  It does not provide ordering on non-sorted values
+   other than by type class (i.e. not serialized lexical values)"
   (declare (optimize (speed 3) (safety 2) (debug 0)))
   (handler-case 
       (typecase a
@@ -416,6 +421,9 @@ not), evaluates the forms, then closes the cursor."
       (type<= a b))))
 
 (defun lisp-compare< (a b)
+  "A comparison function that mirrors the ordering of the data stores for <
+   on all sortable types.  It does not provide ordering on non-sorted values
+   other than by type class (i.e. not serialized lexical values)"
   (declare (optimize (speed 3) (safety 2) (debug 0)))
   (handler-case 
       (typecase a
@@ -430,7 +438,21 @@ not), evaluates the forms, then closes the cursor."
       (type< a b))))
 
 (defun lisp-compare-equal (a b)
+  "A lisp compare equal in same spirit as lisp-compare<.  Case insensitive for strings."
   (equalp a b))
+
+(defvar *current-cursor* nil
+  "This dynamic variable is referenced only when deleting elements
+   using the following function.  This allows mapping functions to
+   delete elements as they map.  This is safe as we don't revisit
+   values during maps")
+
+(defun remove-current-kv ()
+  (unless *current-cursor*
+    (error "Cannot call remove-current-kv outside of a map-btree or map-index function argument"))
+  (cursor-delete *current-cursor*))
+
+;; The primary mapping function
 
 (defgeneric map-btree (fn btree &rest args &key start end value from-end collect &allow-other-keys)
   (:documentation   "Map btree maps over a btree from the value start to the value of end.
@@ -452,60 +474,62 @@ not), evaluates the forms, then closes the cursor."
 	(results nil))
     (ensure-transaction (:store-controller (get-con btree) :degree-2 *map-using-degree2*)
       (handler-case 
-      (with-btree-cursor (curs btree)
-	(flet ((continue-p (key)
-		 ;; Do we go to the next value?
-		 (or (if from-end (null start) (null end))
-		     (if from-end 
-			 (or (not (lisp-compare<= key start))
-			     (lisp-compare-equal key start))
-			 (lisp-compare<= key end))))
-		 (collector (k v)
-		   (push (funcall fn k v) results)))
-	  (let ((fn (if collect #'collector fn)))
-	    (declare (dynamic-extent (function continue-p) (function collector)))
-	    (multiple-value-bind (exists? key value)
-		(cond (value-set-p
-		       (cursor-set curs value))
-		      ((and (not from-end) (null start))
-		       (cursor-first curs))
-		      ((and from-end (null end))
-		       (cursor-last curs))
-		      (t (if from-end
-			     (cursor-set-range curs end)
-			     (cursor-set-range curs start))))
-	      (declare (dynamic-extent exists? k v))
-	      (if exists?
-		  (funcall fn key value)
-		  (return-from map-btree nil))
-	      (loop
-	       (handler-case 
-		   (progn
-		     (multiple-value-bind (exists? k v)
-			 (if from-end
-			     (cursor-prev curs)
-			     (cursor-next curs))
-		       (declare (dynamic-extent exists? k v))
-		       (if (and exists? (continue-p k))
-			   (funcall fn k v)
-			   (return nil))))
-		     (elephant-deserialization-error 
-		      (e)
-		      (format t "local deserialization-error: returning nil~%")
-		      (return nil)
-		      nil
-		      )
-		 )
-	       )))
-	  ))
-      (elephant-deserialization-error 
-       (e)
-       (format t "deserialization-error on transaction: returning nil~%")
-       nil
-       )
+	  (with-btree-cursor (curs btree)
+	    (flet ((continue-p (key)
+		     ;; Do we go to the next value?
+		     (or (if from-end (null start) (null end))
+			 (if from-end 
+			     (or (not (lisp-compare<= key start))
+				 (lisp-compare-equal key start))
+			     (lisp-compare<= key end))))
+		   (collector (k v)
+		     (push (funcall fn k v) results)))
+	      (let ((fn (if collect #'collector fn))
+		    (*current-cursor* curs))
+		(declare (dynamic-extent (function continue-p) (function collector))
+			 (special *current-cursor*))
+		(multiple-value-bind (exists? key value)
+		    (cond (value-set-p
+			   (cursor-set curs value))
+			  ((and (not from-end) (null start))
+			   (cursor-first curs))
+			  ((and from-end (null end))
+			   (cursor-last curs))
+			  (t (if from-end
+				 (cursor-set-range curs end)
+				 (cursor-set-range curs start))))
+		  (declare (dynamic-extent exists?))
+		  (if exists?
+		      (funcall fn key value)
+		      nil)
+		  (loop
+		     (handler-case 
+			 (progn
+			   (multiple-value-bind (exists? k v)
+			       (if from-end
+				   (cursor-prev curs)
+				   (cursor-next curs))
+			     (declare (dynamic-extent exists?))
+			     (if (and exists? (continue-p k))
+				 (funcall fn k v)
+				 (return nil))))
+		       (elephant-deserialization-error (e)
+			 (declare (ignore e))
+			 (format t "local deserialization-error: returning nil~%")
+			 (return nil)
+			 nil))
+		     )))
+	      ))
+	(elephant-deserialization-error (e)
+	  (declare (ignore e))
+	  (format t "deserialization-error on transaction: returning nil~%")
+	  nil
+	  )
+	)
       )
-      )
-    results))
+    (nreverse results)))
+
+;; Special support for mapping indexes of a secondary btree
 
 (defgeneric map-index (fn index &rest args &key start end value from-end collect &allow-other-keys)
   (:documentation "Map-index is like map-btree but for secondary indices, it
@@ -523,7 +547,7 @@ not), evaluates the forms, then closes the cursor."
 (defmethod map-index (fn (index btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
-  (declare (optimize (speed 1) (safety 3) (debug 0))
+  (declare (optimize (speed 3) (safety 2) (debug 1))
 	   (dynamic-extent args))
   (unless (or (null start) (null end) (lisp-compare<= start end))
     (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
@@ -535,9 +559,11 @@ not), evaluates the forms, then closes the cursor."
     (flet ((collector (k v pk)
 	     (push (funcall fn k v pk) results)))
       (let ((fn (if collect #'collector fn)))
-      (declare (dynamic-extent (function collector)))
+      (declare (dynamic-extent (function collector))
+	       (special *current-cursor*))
       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
 	(with-btree-cursor (cur index)
+	  (let ((*current-cursor* cur))
 	  (labels ((continue-p (key)
 		     ;; Do we go to the next value?
 		     (or (if from-end (null start) (null end))
@@ -559,8 +585,7 @@ not), evaluates the forms, then closes the cursor."
 			   (progn
 			     (funcall fn skey val pkey)
 			     (map-duplicates skey))
-			   (return-from map-index 
-			     (nreverse results)))))
+			   (nreverse results))))
 		   (next-duplicate (key)
 		     (if from-end
 			 (pprev-dup-hack cur key)
@@ -593,7 +618,7 @@ not), evaluates the forms, then closes the cursor."
 		  (progn
 		    (funcall fn skey val pkey)
 		    (map-duplicates skey))
-		  nil)))))))))
+		  nil))))))))))
 
 (defun pset-range-for-descending (cur end)
   (if (cursor-pset cur end)

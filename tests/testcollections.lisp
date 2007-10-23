@@ -118,7 +118,7 @@
     (is-true (and (subsetp ks (cdr keys) :test #'equalp) 
                   (subsetp (cdr keys) ks :test #'equalp)))))
 
-(test (btree-cursor :depends-on remove-kv)
+(test (btree-cursor :depends-on (and remove-kv map-btree))
   (with-transaction (:store-controller *store-controller*)
     (with-btree-cursor (cur bt)
       (cursor-set cur "key-100")
@@ -144,9 +144,17 @@
 	      (cursor-get-both-range cur "key-101" v)
 	    (is-true (and has (string= k3 "key-101") (= (slot1 v3) 101)))))))))
 
-
-      
-	
+(test (map-btree-remove :depends-on (and btree-make btree-cursor map-btree))
+  (flet ((mapper (k v) 
+	   (declare (ignore k))
+	   (when (and (>= (slot1 v) 100) (< (slot1 v) 200))
+	     (remove-current-kv))))
+    (map-btree #'mapper bt)
+    (is-false (get-value "key-100" bt))
+    (is-false (get-value "key-199" bt))
+    (is-false (get-value "key-150" bt))
+    (is (= (slot1 (get-value "key-200" bt)) 200))
+    (is (= (slot1 (get-value "key-99" bt)) 99))))
 
 ;;------------------------------------------------------------------------------
 
@@ -265,7 +273,7 @@
   (is-false (get-primary-key 300 index2)))
 
 
-(deftest (map-indexed :depends-on remove-kv-tests)
+(deftest (map-indexed :depends-on (and btree-make remove-kv-tests))
     (let ((ks nil)
 	  (vs nil))
       (flet ((mapper (k v) (push k ks) (push v vs)))
@@ -349,9 +357,10 @@
 	  (= (slot2 v) 600))))
   t)
 
-(deftest (map-indexed-index :depends-on (and set set2 set-range set-range2))
+(deftest (map-indexed-index :depends-on (and set set2 set-range set-range2 map-indexed))
     (let ((sum 0))
       (flet ((collector (key value pkey)
+	       (declare (ignore key pkey))
 	       (incf sum (slot1 value))))
 	(map-index #'collector index1 :start nil :end 10)
 	(map-index #'collector index1 :start 990 :end nil)
@@ -362,9 +371,10 @@
        10945 ;; sum 990 to 1000 inclusive
        ))
 
-(deftest (map-index-from-end :depends-on (and set set2 set-range set-range2))
+(deftest (map-index-from-end :depends-on (and set set2 set-range set-range2 map-indexed))
     (let ((sum 0))
       (flet ((collector (key value pkey)
+	       (declare (ignore key pkey))
 	       (incf sum (slot1 value))))
 	(map-index #'collector index1 :start nil :end 10 :from-end t)
 	(map-index #'collector index1 :start 990 :end nil :from-end t)
@@ -378,6 +388,7 @@
 (test (map-index-value-param :depends-on map-indexed-index)
   (let ((sum 0))
     (flet ((collector (key value pkey)
+	     (declare (ignore key pkey))
              (incf sum (slot1 value))))
       (map-index #'collector index1 :value 990))
     (is (= sum 990))))
@@ -388,8 +399,34 @@
     (is (equal (map-index #'returner index1 :value 990 :collect t)
                (list 990)))))
 
+(test (map-indexed-remove :depends-on (and indexed-btree-make test-indices map-indexed-index))
+  (flet ((mapper (k v)
+	   (declare (ignore k))
+	   (when (and (> (slot1 v) 100) (< (slot1 v) 110))
+	     (remove-current-kv))))
+    (map-btree #'mapper indexed)
+    (is-false (get-value 101 index1))
+    (is-false (get-value 10100 index2))
+    (is-false (get-value "key-101" indexed))
+    (is (= (slot1 (get-value "key-110" indexed)) 110))))
 
-(deftest (rem-kv :depends-on map-indexed-index)
+(test (map-index-remove :depends-on map-indexed-remove)
+  (flet ((mapper (k v pk) 
+	   (declare (ignore v pk))
+	   (when (and (>= k 110) (< k 115))
+	     (remove-current-kv))))
+    (map-index #'mapper index1)
+    (is-false (get-value 110 index1))
+    (is-false (get-value 11000 index2))
+    (is-false (get-value "key-110" indexed))
+    (is-false (get-value "key-114" indexed))
+    (is-false (get-value 114 index1))
+    (is-false (get-value 11400 index2))
+    (is-false (get-value "key-112" indexed))
+    (is (= (slot1 (get-value "key-115" indexed)) 115))
+    (is (= (slot1 (get-value "key-99" indexed)) 99))))
+
+(deftest rem-kv 
     (with-transaction (:store-controller *store-controller*)
       (let ((ibt (make-indexed-btree *store-controller*)))
 	(loop for i from 0 to 10
@@ -399,20 +436,19 @@
 	(remove-kv 1 ibt)
 	(remove-kv 10 ibt)
 	(equal (list 
-	 (get-value 0 ibt)
-	 (get-value 1 ibt)
-	 (get-value 10 ibt)
-	 (get-value 5 ibt)
-	)
+		(get-value 0 ibt)
+		(get-value 1 ibt)
+		(get-value 10 ibt)
+		(get-value 5 ibt)
+		)
 	       '(nil nil nil 25))
-	       ))
-t
-    )
+	))
+  t
+  )
 
 (defun odd (s k v)
   (declare (ignore s k))
-	   (values t (mod v 2)
-))
+  (values t (mod v 2)))
 
 (defun twice (s k v)
   (declare (ignore s k))
@@ -422,7 +458,7 @@ t
   (declare (ignore s v))
   (values t (floor (/ k 2))))
 
-(deftest (rem-idexkv :depends-on rem-kv)
+(deftest rem-idexkv 
     (with-transaction (:store-controller *store-controller*)
     (let* ((ibt (make-indexed-btree *store-controller*))
 	   (id1 (add-index ibt :index-name 'idx1 :key-form 'odd)))

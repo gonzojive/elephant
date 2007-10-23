@@ -43,7 +43,7 @@
 
 (defun delete-spec (spec)
   "Delete the storage associated with spec"
-  )
+  ())
 
 (defun copy-spec (src targ)
   "Copy files associated with spec from src to targ"

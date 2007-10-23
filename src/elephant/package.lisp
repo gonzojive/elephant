@@ -218,6 +218,7 @@
    #:get-primary-key #:primary #:key-form #:key-fn
    #:with-btree-cursor #:map-btree #:map-index #:drop-btree
    #:empty-btree-p #:dump-btree #:btree-keys #:btree-differ-p
+   #:remove-current-kv 
 
    #:cursor #:secondary-cursor #:make-cursor #:make-simple-cursor
    #:cursor-close #:cursor-duplicate #:cursor-current #:cursor-first

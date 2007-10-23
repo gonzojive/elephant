@@ -236,7 +236,7 @@
 			secondary-buf key-buf
 			:transaction (my-current-transaction sc))
 		       (reset-buffer-stream secondary-buf))))
-		(db-delete-buffered (controller-btrees (get-con bt)) 
+		(db-delete-buffered (controller-btrees (get-con bt))
 				    key-buf
 				    :transaction (my-current-transaction sc)))))))))
 
