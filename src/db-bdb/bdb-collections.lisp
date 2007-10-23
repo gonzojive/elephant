@@ -460,17 +460,24 @@
   (if key-specified-p
       (setf (get-value key (cursor-btree cursor)) value)
       (if (cursor-initialized-p cursor)
-	  (with-buffer-streams (key-buf value-buf)
-	    (multiple-value-bind (k v)
-		(db-cursor-move-buffered (cursor-handle cursor) key-buf 
-					 value-buf :current t)
-	      (declare (ignore v))
-	      (if (and k (= (buffer-read-oid k) (cursor-oid cursor)))
-		  (setf (get-value 
-			 (deserialize k (get-con (cursor-btree cursor))) 
-			 (cursor-btree cursor)) 
-			value)
-		  (setf (cursor-initialized-p cursor) nil))))
+	  (let ((sc (get-con (cursor-btree cursor))))
+	    (with-buffer-streams (key-buf value-buf)
+	      (multiple-value-bind (k v)
+		  (db-cursor-move-buffered (cursor-handle cursor) key-buf 
+					   value-buf :current t)
+		(declare (ignore v))
+		(if (and k (= (buffer-read-oid k) (cursor-oid cursor)))
+		    (progn
+		      (setf (get-value (deserialize k sc) (cursor-btree cursor))
+			    value)
+		      (reset-buffer-stream key-buf) (reset-buffer-stream value-buf)
+		      (multiple-value-bind (k v)
+			  (db-cursor-move-buffered (cursor-handle cursor) key-buf
+						   value-buf :next t)
+			(if (and key (= (buffer-read-oid k) (cursor-oid cursor)))
+			    (values t (deserialize k sc) (deserialize v sc))
+			    (setf (cursor-initialized-p cursor) nil))))
+		    (setf (cursor-initialized-p cursor) nil)))))
 	  (error "Can't put with uninitialized cursor!"))))
 
 ;; Secondary cursors
