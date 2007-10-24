@@ -31,7 +31,9 @@
       (funcall txn-fn)
       (progn
 	(clsql::set-autocommit nil)
-	(let ((db (controller-db sc)))
+	(let ((db (controller-db sc))
+	      (*store-controller* sc))
+	  (declare (special *store-conroller*))
 	  (unwind-protect
 	       (multiple-value-prog1
 		   (progn

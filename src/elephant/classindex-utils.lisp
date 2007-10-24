@@ -47,7 +47,7 @@
 (defmethod class-index-cached? ((class persistent-metaclass) sc)
   (and (slot-boundp class '%index-cache)
        (subtypep (type-of (%index-cache class)) 'btree)
-       (eq (controller-spec sc) (dbcn-spc-pst (%index-cache class)))))
+       (or (null sc) (eq (controller-spec sc) (dbcn-spc-pst (%index-cache class))))))
 
 (defmethod determine-synch-method ((class persistent-metaclass))
   "This method should be called on the class if the %index-cache slot is

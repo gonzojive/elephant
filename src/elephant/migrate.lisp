@@ -112,7 +112,7 @@
 		 ;; Add inverse indices to new main class index
 		 (map-indices (lambda (name srciidx)
 				(let ((key-form (key-form srciidx)))
-`				  (with-transaction (:store-controller dst)
+				  (with-transaction (:store-controller dst)
 				    (add-index newcidx
 					       :index-name name 
 					       :key-form key-form
@@ -145,7 +145,6 @@
   (if (eq *store-controller* src)
       (setf *store-controller* dst)
       (setf *store-controller* nil))
-  (close-controller src)
   dst)
 
 (defun copy-cindex-contents (new old)
@@ -426,14 +425,12 @@
    After this call, all in-memory references point into the new store, the objects
    used to copy into migrate have been flushed and the original store cache is also
    flushed."
+  (flush-instance-cache dst)
   (map-cache (lambda (src-oid src-obj)
-	       (format t "src: ~A~%" src-obj)
 	       (when (>= src-oid 0)
 		 (let* ((dst-obj (retrieve-copied-object dst src-obj))
 			(dst-oid (when dst-obj (oid dst-obj))))
 		   (when dst-obj
-		     (format t "dst: ~A~%" dst-oid dst-obj)
-		     (print dst-oid) (print dst-obj)
 		     (setf (dbcn-spc-pst src-obj) (dbcn-spc-pst dst-obj))
 		     (setf (oid src-obj) dst-oid)
 		     (uncache-instance src src-oid) ;; removes old reference
