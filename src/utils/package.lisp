@@ -32,6 +32,11 @@
    #:ele-thread-hash-key
    #:launch-background-program
    #:kill-background-program
+   #:copy-directory
+   #:copy-file-to-dir
+   #:copy-file
+   #:create-temp-dirname
+   #:create-temp-filename
    #:do-subsets
    #:subsets
    #:remove-keywords

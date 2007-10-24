@@ -262,6 +262,7 @@
    #:translate-and-intern-symbol
    #:lookup-persistent-symbol
    #:lookup-persistent-symbol-id
+   #:stop-and-copy-gc
 
    #:struct-constructor
 

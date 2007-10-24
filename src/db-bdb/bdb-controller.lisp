@@ -61,6 +61,30 @@ et cetera."))
 	 (string t)
 	 (otherwise nil))))
 
+(defmethod temp-spec ((type (eql :BDB)) spec)
+  (let ((dirname (create-temp-dirname (second spec))))
+    (ensure-directories-exist dirname)
+    `(:BDB ,dirname)))
+
+(defmethod delete-spec ((type (eql :BDB)) spec)
+  "BDB delete spec to support automated data store management"
+  (assert (eq (first spec) :BDB))
+  (let ((directory (second spec)))
+    (when (probe-file directory)
+      (loop for file in (directory directory) do
+	   (delete-file file)))
+    (delete-file directory)))
+
+(defmethod copy-spec ((type (eql :BDB)) source target)
+  "BDB copy spec to support automated data store mgmt, 
+   deletes target and copies source to target."
+  (assert (and (eq (first source) :BDB) (eq (first target) :BDB)))
+  (let ((source-dir (second source))
+	(target-dir (second target)))
+    (assert (probe-file source-dir))
+    (delete-spec :BDB target)
+    (copy-directory source-dir target-dir)))
+
 ;;
 ;; Store-specific transaction support
 ;;
@@ -89,8 +113,7 @@ et cetera."))
     (db-env-open env (namestring (second (controller-spec sc)))
 		 :create t :init-rep nil :init-mpool t :thread thread
 		 :init-lock t :init-log t :init-txn t 
-		 :recover recover :recover-fatal recover-fatal
-		 )
+		 :recover recover :recover-fatal recover-fatal)
     (let ((metadata (db-create env))
 	  (db (db-create env))
 	  (btrees (db-create env))

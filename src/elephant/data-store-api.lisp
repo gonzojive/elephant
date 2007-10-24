@@ -57,6 +57,9 @@
    #:controller-serialize
    #:controller-deserialize
    #:root #:spec #:class-root
+   #:temp-spec
+   #:copy-spec
+   #:delete-spec
 
    #:get-cached-instance
    #:cache-instance

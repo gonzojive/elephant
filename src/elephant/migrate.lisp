@@ -37,7 +37,8 @@
 ;;   the class object belonging to one store or another
 ;;
 ;; - Migrate assumes that after migration, indexed classes belong to the
-;;   target store. 
+;;   target store.  All class instances in memory should be updated to point
+;;   to their location in the new store and transient values should be preserved.
 ;;
 ;; - In general, migration is a one-time activity and afterwards (or after
 ;;   a validation test) the source store should be closed.  Any failures
@@ -56,10 +57,11 @@
 ;;   between objects across stores (different oid namespaces) so user
 ;;   beware of the pitfalls of partial migrations...
 ;;
-;; - Migration does not maintain OID equivalence so any datastructures which
-;;   index into those will have to have a way to reconstruct themselves (better
-;;   to keep the object references themselves rather than oids in general)
-;;   but they can overload the migrate method to accomplish this cleanly
+;; - Migration does not maintain OID equivalence so any datastructures
+;;   which index into a store using OIDs will have to have a way to
+;;   reconstruct themselves (better to keep the object references
+;;   themselves rather than oids in general) but they can overload the
+;;   migrate method to accomplish this cleanly
 ;; 
 ;; CUSTOMIZE MIGRATION:
 ;; - To customize migration overload a version of migrate to specialize on
@@ -100,14 +102,17 @@
 	       ;; Class indexes should never be copied already; this checks
                ;; for users breaking the class-index abstraction
 	       (assert (not (object-was-copied-p classidx)))
-	       (format t "Migrating class indexes for: ~A~%" classname)
+	       (when *migrate-messages*
+		 (if *migrate-verbose*
+		     (format t "Migrating class indexes for: ~A~%" classname)
+		     (print ".")))
 	       (let ((newcidx
 		      (with-transaction (:store-controller dst)
 			(build-indexed-btree dst))))
 		 ;; Add inverse indices to new main class index
 		 (map-indices (lambda (name srciidx)
 				(let ((key-form (key-form srciidx)))
-				  (with-transaction (:store-controller dst)
+`				  (with-transaction (:store-controller dst)
 				    (add-index newcidx
 					       :index-name name 
 					       :key-form key-form
@@ -125,13 +130,22 @@
 		 (register-copied-object classidx newcidx)))
 	     (controller-class-root src))
   ;; Copy all other reachable objects
-  (format t "Copying the root:~%")
+  (when *migrate-messages*
+    (if *migrate-verbose*
+	(format t "Copying the root:~%")
+	(print ".")))
   (map-btree (lambda (key value)
 	       (let ((newval (migrate dst value)))
 		 (unless (eq key *elephant-properties-label*)
 		   (ensure-transaction (:store-controller dst :txn-nosync t)
 		     (add-to-root key newval :sc dst)))))
 	     (controller-root src))
+  ;; Clean up current memory state
+  (update-in-memory-objects src dst)
+  (if (eq *store-controller* src)
+      (setf *store-controller* dst)
+      (setf *store-controller* nil))
+  (close-controller src)
   dst)
 
 (defun copy-cindex-contents (new old)
@@ -140,7 +154,8 @@
     (map-btree (lambda (oldoid oldinst)
 		 (declare (ignore oldoid))
 		 (when (= (mod (1- (incf count)) 1000) 0)
-		   (format t "~A objects copied~%" count))
+		   (when (and *migrate-messages* *migrate-verbose*)
+		     (format t "~A objects copied~%" count)))
 		 (let ((newinst (migrate sc oldinst)))
 		   (ensure-transaction (:store-controller sc)
 		     ;; This isn't redundant in most cases, but we may have
@@ -269,7 +284,8 @@
 	(ensure-transaction (:store-controller dst :txn-nosync t)
 	  (copy-btree-contents dst newbtree src))
 	(map-indices (lambda (name srciidx)
-		       (format t "Adding index: ~A~%" name)
+		       (when (and *migrate-messages* *migrate-verbose*)
+			 (format t "Adding index: ~A~%" name))
 		       (let ((key-form (key-form srciidx)))
 			 (ensure-transaction (:store-controller dst :txn-nosync t)
 			   (add-index newbtree :index-name name :key-form key-form :populate t))))
@@ -365,8 +381,9 @@
     (setf *oid-btree* nil)
     (close-store *oid-store*)
     (setf *oid-store* nil))
-  (when *oid-hash* 
-    (setf *oid-hash* nil)))
+;;  (when *oid-hash* 
+;;    (setf *oid-hash* nil))
+  )
 
 (defun object-was-copied-p (src)
   "Test whether a source object has been copied"
@@ -378,7 +395,6 @@
 	(t (warn "Test for persistent copy not inside top level call; returning nil")
 	   nil)))
 
-
 (defun register-copied-object (src dst)
   "When copying a source object, store it in the oid map"
   (assert (not (equal (dbcn-spc-pst src) (dbcn-spc-pst dst))))
@@ -387,6 +403,11 @@
 	(setf (get-value (oid src) *oid-btree*)
 	      (cons (oid dst) (type-of dst)))
 	(setf (gethash (oid src) *oid-hash*) dst))))
+
+;;(defun unregister-copied-object (old-oid)
+;;  (if *oid-btree*
+;;      (remove-kv old-oid *oid-btree*)
+;;      (remhash old-oid *oid-hash*)))
   
 (defun retrieve-copied-object (dst src)
   "Get a copied object from the oid map"
@@ -398,6 +419,26 @@
 	 (gethash (oid src) *oid-hash*))
 	(t (error "Cannot retrieve an object from oid-to-oid map 
                    when not inside top-level call"))))
+
+
+(defun update-in-memory-objects (src dst)
+  "Takes all in-memory objects from src and maps the instances into the dst store.
+   After this call, all in-memory references point into the new store, the objects
+   used to copy into migrate have been flushed and the original store cache is also
+   flushed."
+  (map-cache (lambda (src-oid src-obj)
+	       (format t "src: ~A~%" src-obj)
+	       (when (>= src-oid 0)
+		 (let* ((dst-obj (retrieve-copied-object dst src-obj))
+			(dst-oid (when dst-obj (oid dst-obj))))
+		   (when dst-obj
+		     (format t "dst: ~A~%" dst-oid dst-obj)
+		     (print dst-oid) (print dst-obj)
+		     (setf (dbcn-spc-pst src-obj) (dbcn-spc-pst dst-obj))
+		     (setf (oid src-obj) dst-oid)
+		     (uncache-instance src src-oid) ;; removes old reference
+		     (cache-instance dst src-obj))))) ;; wipes out original reference
+	     (instance-cache src)))
 	 
 
 

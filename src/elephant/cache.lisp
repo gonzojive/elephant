@@ -104,3 +104,12 @@ collected, so are the keys."
   )
 
 (defsetf get-cache setf-cache)
+
+(defun map-cache (fn cache)
+  (with-hash-table-iterator (nextfn cache)
+    (loop  
+       (multiple-value-bind (valid? key value) (nextfn)
+	 (when (not valid?)
+	   (return-from map-cache))
+	 (funcall fn key value)))))
+

@@ -115,7 +115,7 @@
 (defclass indexing-record ()
   ((class :accessor indexing-record-class :initarg :class :initform nil)
    (slots :accessor indexing-record-slots :initarg :slots :initform nil)
-   (derived-count :accessor indexing-record-derived :initarg :derived :initform 0)))
+   (derived :accessor indexing-record-derived :initarg :derived :initform 0)))
 
 (defmethod print-object ((obj indexing-record) stream)
   (format stream "#INDEXING-RECORD<islt: ~A dslt: ~A>" 

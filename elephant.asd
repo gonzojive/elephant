@@ -318,6 +318,7 @@ directory to my-config.sexp and edit it appropriately."))
 		       (:file "serializer2") ;; 0.6.1 db's
 		       (:file "unicode2")
 		       (:file "migrate")
+		       (:file "gc")
 ;;		       (:file "query")
 		       (:file "data-store-api"))
 		      :serial t

@@ -73,3 +73,49 @@
 ;;	 :wait t)
   )
 
+
+;; File stuff
+
+(defun create-temp-filename (hint)
+  (let ((directory (pathname-directory hint))
+	(name (pathname-name hint))
+	(type (pathname-type hint)))
+    (loop for i from 1 to 10000 do
+	 (let ((fname (make-pathname :directory directory :name (format nil "~A~A" name i) :type type)))
+	   (when (not (probe-file fname))
+	     (return fname))))))
+
+(defun create-temp-dirname (hint)
+  (let ((directory (pathname-directory hint)))
+    (let ((dirname (first (last directory))))
+      (loop for i from 1 upto 10000 do
+	   (setf (car (last directory))
+		 (format nil "~A~A" dirname i))
+	   (let ((dirstring (make-pathname :directory directory)))
+	     (when (not (probe-file dirstring))
+	       (return (namestring dirstring))))))))
+
+(defun copy-directory (source-dir target-dir)
+  (ensure-directories-exist target-dir)
+  #+allegro
+  (excl:copy-directory source-dir target-dir :quiet t)
+  #-allegro
+  (loop for file in (directory source-dir) do
+       (copy-file-to-dir file target-dir)))
+
+(defun copy-file-to-dir (source-path target-dir)
+  (let ((target-path (make-pathname :directory target-dir :name (pathname-name source-path) 
+				    :type (pathname-type source-path))))
+    (copy-file source-path target-path)))
+
+(defun copy-file (source-path target-path)
+  #+allegro
+  (excl.osi:copy-file source-path target-path :overwrite t :if-does-not-exist :create :if-exists :overwrite)
+  #-allegro
+  (with-open-file (src source-path :direction :input :if-does-not-exist :error)
+    (with-open-file (targ target-path :direction :output :if-exists :supersede
+			  :if-does-not-exist :create)
+      (handler-case 
+	  (loop (write-byte (read-byte src :eof-error-p t) targ))
+	(end-of-file () t)))))
+

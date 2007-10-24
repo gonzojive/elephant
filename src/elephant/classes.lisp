@@ -140,7 +140,7 @@ slots."
 	;;   via a cursor without going through the cursor abstraction. There has to be a 
 	;;   better way to do this.
 	(when (and (indexed class) (not from-oid))
-	  (let ((class-index (find-class-index class)))
+	  (let ((class-index (find-class-index class :sc (get-con instance))))
 	    (when class-index
 	      (setf (get-value oid class-index) instance))))
 	))))

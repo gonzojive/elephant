@@ -100,7 +100,7 @@
   (if (not (indexed class))
       (when errorp
 	(signal-class-not-indexed class))
-      (if (class-index-cached? class)
+      (if (class-index-cached? class sc)
 	  (%index-cache class) ;; we've got a cached reference, just return it
 	  (multiple-value-bind (btree found)
 	      (get-value (class-name class) (controller-class-root sc))
@@ -316,11 +316,11 @@
 	(warn "Slot index ~A not found for class ~A" slot-name (class-name class))
 	nil)))
 
-(defmethod add-class-derived-index ((class symbol) name derived-defun &key (sc *store-controller*) (populate t))
-  (add-class-derived-index (find-class class) name derived-defun :sc sc :populate populate))
+(defmethod add-class-derived-index ((class symbol) name derived-defun &key (sc *store-controller*) (populate t) (hints nil))
+  (add-class-derived-index (find-class class) name derived-defun :sc sc :populate populate :hints hints))
 
 (defmethod add-class-derived-index ((class persistent-metaclass) name derived-defun &key 
-				    (populate t) (sc *store-controller*) (update-class t))
+				    (populate t) (sc *store-controller*) (update-class t) (hints nil))
   (let ((class-idx (find-class-index class :sc sc)))
     (if (find-inverted-index class (make-derived-name name) :null-on-fail t)
 	(error "Duplicate derived index requested named ~A on class ~A" name (class-name class))
@@ -329,6 +329,7 @@
 	  (add-index class-idx
 		     :index-name (make-derived-name name)
 		     :key-form (make-derived-key-form derived-defun)
+		     :key-hints hints
 		     :populate populate)))))
 
 (defmethod remove-class-derived-index ((class symbol) name &key (sc *store-controller*))

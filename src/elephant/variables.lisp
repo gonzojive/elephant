@@ -88,6 +88,12 @@
   "Issue a printed warnings when the class mechanism has
    to finalize a class to access indexing information")
 
+(defparameter *migrate-messages* t
+  "Print information during migrate to update user on ongoing progress")
+
+(defparameter *migrate-verbose* t
+  "Print more than a simple status line")
+
 (defparameter *warn-when-dropping-persistent-slots* nil
   "Assert a signal when the user is about to delete a bunch of
    persistent slot values on class redefinition.  This is nil by
