@@ -89,4 +89,3 @@
   (:method (type src targ)
     (declare (ignore src targ))
     (error "copy-spec not implemented for type: ~A" type)))
-pe
