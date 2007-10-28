@@ -84,30 +84,34 @@
 
 ;; Only for use within an operation...
 (defun my-generic-less-than (a b)
-  (cond
-    ((and (typep a 'persistent) (typep b 'persistent))
-     (< (oid a) (oid b))
-     )
-    ((and (numberp a ) (numberp b))
-     (< a b))
-    ((and (stringp a) (stringp b))
-     (string< a b))
-    (t
-     (string< (format nil "~A" a) (format nil "~A" b)))
-    ))
+  (lisp-compare< a b))
+
+;;   (cond
+;;     ((and (typep a 'persistent) (typep b 'persistent))
+;;      (< (oid a) (oid b))
+;;      )
+;;     ((and (numberp a ) (numberp b))
+;;      (< a b))
+;;     ((and (stringp a) (stringp b))
+;;      (string< a b))
+;;     (t
+;;      (string< (format nil "~A" a) (format nil "~A" b)))
+;;     ))
 
 (defun my-generic-at-most (a b)
-  (cond
-    ((and (typep a 'persistent) (typep b 'persistent))
-     (<= (oid a) (oid b))
-     )
-    ((and (numberp a ) (numberp b))
-     (<= a b))
-    ((and (stringp a) (stringp b))
-     (string<= a b))
-    (t
-     (string<= (format nil "~A" a) (format nil "~A" b)))
-    ))
+  (lisp-compare<= a b))
+
+;;   (cond
+;;     ((and (typep a 'persistent) (typep b 'persistent))
+;;      (<= (oid a) (oid b))
+;;      )
+;;     ((and (numberp a ) (numberp b))
+;;      (<= a b))
+;;     ((and (stringp a) (stringp b))
+;;      (string<= a b))
+;;     (t
+;;      (string<= (format nil "~A" a) (format nil "~A" b)))
+;;     ))
 
 (defmethod cursor-un-init ((cursor sql-cursor) &key (returnpk nil))
   (setf (cursor-initialized-p cursor) nil)
@@ -231,6 +235,7 @@
   ;; the initialized state...
   (unless (cursor-initialized-p cursor)
     (cursor-init cursor))
+  (cursor-first cursor)
   (let ((len (length (sql-crsr-ks cursor)))
 	(vs '()))
     (do ((i 0 (1+ i)))
@@ -252,10 +257,10 @@
 
 
 (defmethod cursor-get-both ((cursor sql-cursor) key value)
-  (declare (optimize (speed 3)))
+;;  (declare (optimize (speed 3)))
   (let* ((bt (cursor-btree cursor))
 	 (v (get-value key bt)))
-    (if (equal v value)
+    (if (lisp-compare-equal v value)
 ;; We need to leave this cursor properly posistioned....
 ;; For a secondary cursor it's harder, but for this, it's simple
 	(cursor-set cursor key)
@@ -269,7 +274,7 @@
     ;; Since we don't allow duplicates in primary cursors, I 
     ;; guess this is all that needs to be done!
     ;; If there were a test to cover this, the semantics would be clearer...
-    (if (equal v value)
+    (if (lisp-compare-equal v value)
 	(cursor-set cursor key)
 	(cursor-un-init cursor))))
 
@@ -488,7 +493,7 @@ the cursor."
       (progn
 	(let ((cur-pk (get-current-key cursor)))
 	  (incf (sql-crsr-ck cursor))
-	  (if (equal cur-pk (get-current-key cursor))
+	  (if (lisp-compare-equal cur-pk (get-current-key cursor))
 	      (incf (dp-nmbr cursor))
 	      (setf (dp-nmbr cursor) 0))
 	  (has-key-value-scnd cursor :returnpk returnpk)))
@@ -503,7 +508,7 @@ the cursor."
       (progn
 	(let ((prior-pk (get-current-key cursor)))
 	  (decf (sql-crsr-ck cursor))
-	  (if (eq prior-pk (get-current-key cursor))
+	  (if (lisp-compare-equal prior-pk (get-current-key cursor))
 	      (setf (dp-nmbr cursor) (max 0 (- (dp-nmbr cursor) 1)))
 	      (setf (dp-nmbr cursor)
 		    (1- (sql-get-from-clcn-cnt (cursor-oid cursor)
