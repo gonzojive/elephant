@@ -94,7 +94,7 @@
     ((slot1 :initarg :slot1 :accessor slot1 :index t))
     (:metaclass persistent-metaclass))
   
-  (wipe-class 'idx-one-b)
+  (wipe-class 'idx-one-f)
 
   (defclass idx-one-f ()
     ((slot1 :initarg :slot1 :accessor slot1 :index t))
@@ -461,9 +461,9 @@
 	 ;; shared data from original slot
 	(is (= (slot1 foo) 1))
 	;; verify old instance access fails
-	#-sbcl
+	#+allegro
 	(signals program-error (slot2 foo))
-	#+sbcl
+	#-allegro
 	(signals simple-error (slot2 foo))
 	;; verify new instance is there
 	(is (= (slot3 foo) 2))
