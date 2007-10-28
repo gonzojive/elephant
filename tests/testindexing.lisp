@@ -461,7 +461,10 @@
 	 ;; shared data from original slot
 	(is (= (slot1 foo) 1))
 	;; verify old instance access fails
+	#-sbcl
 	(signals program-error (slot2 foo))
+	#+sbcl
+	(signals simple-error (slot2 foo))
 	;; verify new instance is there
 	(is (= (slot3 foo) 2))
 	(is (= (slot4 foo) 40))
