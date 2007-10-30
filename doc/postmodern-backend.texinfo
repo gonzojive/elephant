@@ -1,0 +1,119 @@
+@c -*-texinfo-*-
+
+@node Postmodern back-end
+@comment node-name, next, previous, up
+@chapter Postmodern back-end
+@cindex Postmodern back-end
+
+@menu
+* Postmodern-Introduction:: The design and status of the Postmodern back-end.
+* Postmodern Cache:: Details about the globally synced cache.
+@end menu
+
+@node Postmodern-Introduction
+@comment node-name, next, previous, up
+@section Postmodern-Introduction
+
+The Postmodern backend is yet another sql based backend, but only
+compatible with postgresql. The idea was to take advantages of
+optimization opportunities that exist with vendor specific features
+such as stored procedures. It is based on the postgresql specific Lisp
+library Postmodern by Marijn Haverbeke,
+http://common-lisp.net/project/postmodern/. Or rather its low level
+parts cl-postgres, but the postmodern name is so good we named the
+backend after it.
+
+The other big implementation difference to the clsql backend is that the
+postmodern backend makes a new database table for each btree, which
+makes it possible to traverse over bigger btrees, since clsql loads
+the whole btree into main memory. 
+
+The elephant (bdb based) cursor model and the sql cursor model are not
+Always the same, so in some cases the postmodern backend needs to do
+some tricks to make it compatible. Particularly if you need flexible
+cursor that move in different directions, the postmodern backend might
+be slow. Also, there is an ugly implementation of the the map-index
+method, see the file pm-btree-index.lisp.
+
+The postmodern backend is optimized for use with several parallel Lisp
+processes connected to the same database. For that purpose it contains
+an optional object cache that is synchronized across processes. Note
+that this cache is not shared between threads, so use in several
+threads multiplies the memory usage.
+
+The postmodern backend is faster than clsql but still slower than
+Berkeley DB, and we believe that the bottle neck is with the quite
+heavy context switching. Before you go out and buy a raid server or
+more memory you should do some good performance tests to see were the
+bottleneck is. We have no ambitions to optimize the the postmodern
+backend performance further.
+
+@node Postmodern Cache
+@comment node-name, next, previous, up
+@section Postmodern Cache
+These instructions are from the comments in pm-cache.lisp.
+
+pluggable implementation of value caching.
+only btree value caching implemented by now (indices don't get cached).
+
+cache should be enabled setting db-postmodern::*cache-mode* to one of available options.
+
+two options implemented by now:
+
+:per-transaction-cache -- performs caching only inside one transaction.
+cache is not preserved between transactions. 
+this mode has minimal effect on properties on application -- it's unlikely to produce any
+wrong interference, but acceleration from this type of cache is not great too.
+it's possible to enable :per-transaction-cache only for some transactions.
+
+:global-sync-cache -- caches data accross boundaries of transactions.
+this caching is much more efficient, but its more likely to introduce some interference.
+(caching is designed to be safe, and tests prove that, but as in any complex product
+elephant/backend can have bugs..)
+all changes to btree values are logged into special database table, so it's oriented only
+on read-instensive applications.
+
+it's not possible to switch between global-sync-cache and other modes in "automatic" way.
+it's possible to have global-sync-cache only when code is compiled with :ele-global-sync-cache
+feature, and this feature has to be enabled when creating the store, as it requires some
+additional definitions and instrumentation of btree update stored procedure.
+(so it's not possible to use global-sync-cache with store that is created without this feature).
+however, feature itself does not enable sync cache, it's only gets enabled when you set *cache-mode*
+variable to :global-sync-cache for the first time.
+
+once global-sync-cache is enabled it cannot be disabled setting variable back. also, it should be
+enabled on all clients using the store -- because otherwise changes will not properly propagate to
+other clients using cache.
+
+it's possible to do initial import with cache disabled (since caching logs all changes to database,
+reducing performance), and then enable cache for actual database clients.
+to disable global-sync-cache safely, you should shutdown all accessing clients, connect to store and
+execute (db-postmodern:disable-sync-cache-trigger), 
+having an active connection (in store transaction, for example)
+
+when global-sync-cache is enabled, database requires maintenance -- stale log entries should be removed
+from it. with default settings cache gets stale when it's not used for 10 minutes, so it's safe to remove 
+update and transaction log entries older than that:
+
+@lisp
+DELETE FROM transaction_log WHERE commit_time < (extract(epoch from current_timestamp) - 610);
+DELETE FROM update_log WHERE txn_id NOT IN (SELECT txn_id FROM transaction_log);
+@end lisp
+
+for busy environments this values probably should be tuned. On Unix
+you can use the crontab and psql to execute these statements
+periodically. 
+
+caching is optimized for single executor thread 
+(it's assumed you have multiple clients with one thread in each)
+if you have transactions in more than one thread simultaneously, multiple independent cache instances 
+will be created.
+
+in order to implement robust behaviour, in some cases implementation clears whole cache,
+ assuming it's stale or broken. this cases are:
+* last update is older than max-resync-time, which defaults to 10 minutes. 
+* too many enties arrived since last update -- defaults to 150 entries.
+* transaction is aborted (in this case cache is assumed broken).
+
+to avoid potentially infinite growth of cache table, on SBCL weak hash tables are used.
+GC can delete cache entries almost at any time. possibly it's not the best solution..
