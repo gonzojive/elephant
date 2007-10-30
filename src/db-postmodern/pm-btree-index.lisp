@@ -48,11 +48,17 @@
   ;; This is because the default map-index method relies on the sort order of strings,
   ;; which is not implemented in the db-postmodern backend as it is now
   (flet ((my-lisp-compare<= (a b)
-           (etypecase a
-               (number (<= a b))
-               (string (string= a b)) ;; This is the important change
-               (persistent (<= (oid a) (oid b)))
-               (symbol (string= (symbol-name a) (symbol-name b))))))
+           (handler-case 
+               (typecase a
+                 (number (<= a b))
+                 (character (<= (char-code a) (char-code b)))
+                 (string (string= a b)) ;; This is the important change
+                 (symbol (string= (symbol-name a) (symbol-name b)))
+                 (pathname (string= (namestring a) (namestring b)))
+                 (persistent (<= (oid a) (oid b)))
+                 (t nil))
+             (error ()
+               (elephant::type<= a b)))))
     (let ((fn-before (symbol-function 'elephant::lisp-compare<=)))
       (unwind-protect
            (progn
