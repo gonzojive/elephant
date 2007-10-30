@@ -113,8 +113,11 @@
 
 (defmethod cursor-delete ((cursor pm-secondary-cursor))
   "Delete by cursor: deletes ALL secondary indices."
-  (remove-kv (postgres-value-to-lisp (current-value-field cursor) (value-type-of (cursor-btree cursor)))
-             (primary  (cursor-btree cursor))))
+    (if (cursor-initialized-p cursor)
+      (let ((key (postgres-value-to-lisp (current-key-field cursor) (key-type-of (cursor-btree cursor)))))
+        (cursor-close cursor)
+        (remove-kv key (cursor-btree cursor)))
+      nil))
 
 (defmethod cursor-get-both ((cursor pm-secondary-cursor) key value)
   "cursor-get-both not implemented for secondary indices.
