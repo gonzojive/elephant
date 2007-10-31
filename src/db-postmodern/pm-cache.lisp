@@ -72,9 +72,6 @@
 ;; * too many enties arrived since last update -- defaults to 150 entries.
 ;; * transaction is aborted (in this case cache is assumed broken).
 
-;; to avoid potentially infinite growth of cache table, on SBCL weak hash tables are used.
-;; GC can delete cache entries almost at any time. possibly it's not the best solution..
-
 (in-package :db-postmodern)
 
 (defgeneric cache-get-value (cache id key))
