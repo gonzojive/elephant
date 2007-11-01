@@ -13,6 +13,8 @@
 
 (in-package :ele-tests)
 
+(in-suite* testserializer :in elephant-tests)
+
 (defun in-out-value (var)
   (with-buffer-streams (out-buf)
     (deserialize (serialize var out-buf *store-controller*) *store-controller*)))
@@ -525,3 +527,34 @@
        (progn (setf (get-value f2 h) f2)
 	      (eq (get-value f2 h) f2))))
    t t t t t t t t)
+
+
+;; --------- Random testing ----------
+;;  random testing - A black-box testing approach in which
+;;  software is tested by choosing an arbitrary subset of all
+;;  possible input values. Random testing helps to avoid the problem
+;;  of only testing what you know will work.
+
+(def-suite random-tests :in elephant-tests)
+
+(test (fixnum-random-test :suite random-tests)
+  (setf fiveam::*num-trials* 10000) ;; default is only 100
+  (for-all ((a (gen-integer)))
+    (is-in-out-equal a)))
+
+(test (integer-64-bit-range-random-test :suite random-tests)
+  (for-all ((a (gen-integer :min -1152921504606846976
+                            :max 1152921504606846975)))
+    (is-in-out-equal a)))
+
+(test (universal-time-random-test :suite random-tests)
+  (is-in-out-equal (get-universal-time))
+  (for-all ((a (gen-integer :min (- (get-universal-time) 1000)
+                            :max (+ (get-universal-time) 1000))))
+    (is-in-out-equal a)))
+
+(test (list-of-strings-random :suite random-tests)
+  (for-all ((a (gen-list :elements (gen-string))))
+    (is-in-out-equal a))
+  nil)
+
