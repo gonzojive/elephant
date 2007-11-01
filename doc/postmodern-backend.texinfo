@@ -48,6 +48,10 @@ more memory you should do some good performance tests to see were the
 bottleneck is. We have no ambitions to optimize the the postmodern
 backend performance further.
 
+For installing and configuring postgresql, see the hints in the file
+POSTMODERN-tests.lisp.
+
+
 @node Postmodern Cache
 @comment node-name, next, previous, up
 @section Postmodern Cache
