@@ -150,8 +150,8 @@
 			    (recurse (rest exprs)))))))
 	      (t (error "Expression: ~A unrecognized~%" expr))))))
 
-    (when (recurse constraints)
-      (return-from filter-by-clauses (apply fn (cdrs bindings))))))
+;;    (when (recurse constraints)
+;;      (return-from filter-by-clauses (apply fn (cdrs bindings))))))
 
 (defun interpret-single-constraint (fn constraint bindings)
   (interpret-constraints fn (list constraint) bindings))
