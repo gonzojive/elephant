@@ -162,7 +162,6 @@ $$ LANGUAGE plpgsql;
                                   ;; Round up, because it is probably a query in for greater than.
                                   (ceiling parameter))
                                  (t (signal 'bad-db-parameter)))))
-    #+char-columns 
     (:string (cond
                ((stringp parameter) (if (>= (length parameter) 2000)
                                         (subseq parameter 0 2000)
@@ -172,32 +171,25 @@ $$ LANGUAGE plpgsql;
                 "")
                (t (warn "Suspect string input to postgres-format.")
                   (format nil "~a" parameter))))
-    #-char-columns
-    (:string (princ-to-string (ensure-bid (serialize-to-postmodern parameter (active-controller)))))    
     (:object (princ-to-string (ensure-bid (serialize-to-postmodern parameter (active-controller)))))    
     ))
 
 (defun postgres-value-to-lisp (value data-type)
   (ecase data-type
     (:integer value)
-    #+char-columns 
     (:string value)
-    #-char-columns
-    (:string (deserialize-binary-result value))    
     (:object (deserialize-binary-result value))))
 
 (defun data-type (item)
   (typecase item
     (integer :integer)
-    #+char-columns 
     (string  :string)
     (t :object)))
 
 (defun postgres-type (data-type)
   (ecase data-type
     (:integer 'bigint)
-    #+char-columns (:string 'text)
-    #-char-columns (:string 'bigint)    
+    (:string 'text)
     (:object 'bigint))) ;; Object are integers that refer to blob table
 
 (defmethod create-table-from-first-values ((bt pm-btree) key value)

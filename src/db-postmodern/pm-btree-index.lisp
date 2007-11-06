@@ -38,32 +38,3 @@
                                  (postgres-format value (value-type-of bt)))
                            'cl-postgres:ignore-row-reader))))
 
-;;------------------------------------------------------------------------------
-
-;;Having #-char-columns here was not enough, this patch is always needed.
-
-(defmethod map-index (fn (index pm-btree-index) &rest args 
-		      &key start end (value nil value-set-p) from-end collect 
-		      &allow-other-keys)
-  ;; This is because the default map-index method relies on the sort order of strings,
-  ;; which is not implemented in the db-postmodern backend as it is now
-  (flet ((my-lisp-compare<= (a b)
-           (handler-case 
-               (typecase a
-                 (number (<= a b))
-                 (character (<= (char-code a) (char-code b)))
-                 (string (string= a b)) ;; This is the important change
-                 (symbol (string= (symbol-name a) (symbol-name b)))
-                 (pathname (string= (namestring a) (namestring b)))
-                 (persistent (<= (oid a) (oid b)))
-                 (t nil))
-             (error ()
-               (elephant::type<= a b)))))
-    (let ((fn-before (symbol-function 'elephant::lisp-compare<=)))
-      (unwind-protect
-           (progn
-             (setf (symbol-function 'elephant::lisp-compare<=)
-                   #'my-lisp-compare<=)
-             (common-lisp:call-next-method))
-        (setf (symbol-function 'elephant::lisp-compare<=)
-              fn-before)))))
