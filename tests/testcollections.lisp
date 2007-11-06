@@ -21,8 +21,9 @@
 ;;  This is not captured by the :depends-on parameter,
 ;;  so when running single tests be aware of this.
 ;;  
-;;  Todo: Update FiveAM run-resolving-dependencies to fix this problem,
-;;  for example by having a :before option.
+;;  However, since november 2007 a :before option
+;;  was added to FiveAM darcs branch. Someday later
+;;  maybe add :before dependencies were needed.
 
 
 (in-suite* testcollections :in elephant-tests)
