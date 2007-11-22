@@ -329,7 +329,6 @@
 	  (add-index class-idx
 		     :index-name (make-derived-name name)
 		     :key-form (make-derived-key-form derived-defun)
-		     :key-hints hints
 		     :populate populate)))))
 
 (defmethod remove-class-derived-index ((class symbol) name &key (sc *store-controller*))

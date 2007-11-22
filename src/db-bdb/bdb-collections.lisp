@@ -106,8 +106,7 @@
 (defmethod build-btree-index ((sc bdb-store-controller) &key primary key-form)
   (make-instance 'bdb-btree-index :primary primary :key-form key-form :sc sc))
 
-(defmethod add-index ((bt bdb-indexed-btree) &key index-name key-form key-hints (populate t))
-  (declare (ignore key-hints))
+(defmethod add-index ((bt bdb-indexed-btree) &key index-name key-form (populate t))
   (let ((sc (get-con bt)))
 ;; Setting the value of *store-controller* is unfortunately
 ;; absolutely required at present, I think because the copying 
