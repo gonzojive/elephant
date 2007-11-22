@@ -515,7 +515,7 @@ true."))
   "Add an arbitrary persistent thing to the root, so you can
    retrieve it in a later session.  Anything referenced by an
    object added to the root is considered reachable and thus live"
-  (declare (type store-controller store-controller))
+  (declare (type store-controller sc))
   (assert (not (eq key *elephant-properties-label*)))
   (setf (get-value key (controller-root sc)) value))
 
