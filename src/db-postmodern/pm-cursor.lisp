@@ -3,7 +3,7 @@
 (defvar *default-fetch-size* 500)
 
 (defclass pm-cursor (cursor)
-  ((name :accessor db-cursor-name-of)
+  ((name :accessor db-cursor-name-of :initform nil)
    (db-oid :accessor current-row-identifier :initform nil
            :documentation "This oid is the postgresql oid, not the elephant oid. Unfortunately they share name")
    (key :accessor current-key-field :initform nil)
@@ -25,9 +25,7 @@
 		 :oid (oid bt)))
 
 (defmethod cursor-duplicate ((cursor pm-cursor))
-  (make-instance (type-of cursor)
-		 :initialized-p (cursor-initialized-p cursor)
-		 :oid (cursor-oid cursor)))
+  (error "Cursor duplicate is not implemented in db-postmodern."))
 
 (defmethod cursor-close ((cursor pm-cursor))
   (when (cursor-initialized-p cursor)
