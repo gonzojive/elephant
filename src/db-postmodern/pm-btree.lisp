@@ -239,7 +239,9 @@ and make the old instance refer to the new database table"
 	(setf value cached-value
 	      exists-p t)))
 
-    (when (and (initialized-p bt) (not exists-p))
+    (when (and (not exists-p)
+               (initialized-p bt)
+               key)
       (with-vars (bt)
         (let ((result (btree-exec-prepared bt 'select
                                            (list (key-parameter key bt))
@@ -258,20 +260,21 @@ and make the old instance refer to the new database table"
   (setf (internal-get-value key bt) value))
 
 (defmethod (setf internal-get-value) (value key (bt pm-btree))
-  (unless (initialized-p bt)
-    (create-table-from-first-values bt key value))
-  (assert (initialized-p bt)) ;; Should be initialized now
-  (unless (eq :object (key-type-of bt))
-    (unless (eq (key-type-of bt) (data-type key))
-      (upgrade-btree-type bt :object)))
+  (when key
+    (unless (initialized-p bt)
+      (create-table-from-first-values bt key value))
+    (assert (initialized-p bt)) ;; Should be initialized now
+    (unless (eq :object (key-type-of bt))
+      (unless (eq (key-type-of bt) (data-type key))
+        (upgrade-btree-type bt :object)))
 
-  (txn-cache-set-value bt key value)
+    (txn-cache-set-value bt key value)
 
-  (with-trans-and-vars (bt)
-    (btree-exec-prepared bt 'insert
-                         (list (key-parameter key bt)
-                               (value-parameter value bt))
-                         'cl-postgres:ignore-row-reader))
+    (with-trans-and-vars (bt)
+      (btree-exec-prepared bt 'insert
+                           (list (key-parameter key bt)
+                                 (value-parameter value bt))
+                           'cl-postgres:ignore-row-reader)))
   value)
 
 (defmethod existsp (key (bt pm-btree))
