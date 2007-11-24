@@ -3,10 +3,9 @@
 (defvar *cursor-window-size* 10)
 
 (defclass pm-cursor (cursor)
-  ((name :accessor db-cursor-name-of)
-   (db-oid :accessor current-row-identifier :initform nil
-           :documentation "This oid is the postgresql oid, not the elephant oid. Unfortunately they share name")
-   (key :accessor current-key-field :initform nil)
+  ((key :accessor current-key-of :initform nil :initarg key)
+   (value :accessor current-value-of :initform nil :initarg value)   
+   (current-row :accessor current-row-of :initform nil :initarg current-row)
    (rows :accessor cached-rows-of :initform nil)
    (prior-rows :accessor cached-prior-rows-of :initform nil)))
 
@@ -17,16 +16,12 @@
 
 (defmethod cursor-duplicate ((cursor pm-cursor))
   (make-instance (type-of cursor)
-		 :initialized-p (cursor-initialized-p cursor)
-		 :oid (cursor-oid cursor)))
-
-(defmethod cursor-close ((cursor pm-cursor))
-  (when (cursor-initialized-p cursor)
-    (with-vars ((cursor-btree cursor))
-      (ignore-errors
-        (cl-postgres:exec-query (active-connection)
-                                (format nil "close ~a;" (db-cursor-name-of cursor))))))
-  (clean-cursor-state cursor))
+		 :btree bt
+		 :oid (oid bt)
+		 :current-row (current-row-of cursor)
+		 :key (current-key-of cursor)
+		 :value (current-value-of cursor)))
+;; we do not copy cached rows because they are mutable..		 
 
 (defmethod print-object ((cursor pm-cursor) stream)
   (print-unreadable-object (cursor stream :type t :identity t)
