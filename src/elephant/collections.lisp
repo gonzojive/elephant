@@ -639,7 +639,7 @@ not), evaluates the forms, then closes the cursor."
 		(pset-range-for-descending cur end) 
 		(cursor-plast cur))
      :continue (or (null start) (lisp-compare>= key start))
-     :step (cursor-pprev-nodup cur))))
+     :step (cursor-pprev cur))))
 
 (defmethod old-map-index (fn (index btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
