@@ -450,6 +450,11 @@ not), evaluates the forms, then closes the cursor."
    delete elements as they map.  This is safe as we don't revisit
    values during maps")
 
+(defmacro with-current-cursor ((cur) &body body)
+  `(let ((*current-cursor* ,cur))
+     (declare (special *current-cursor*))
+     ,@body))
+
 (defun remove-current-kv ()
   (unless *current-cursor*
     (error "Cannot call remove-current-kv outside of a map-btree or map-index function argument"))
@@ -547,7 +552,96 @@ not), evaluates the forms, then closes the cursor."
    each call of fn in a fresh list and return that list in the 
    same order the calls were made (first to last)"))
 
-(defmethod map-index (fn (index btree-index) &rest args 
+
+(defun validate-map-index-call (start end)
+  (unless (or (null start) (null end) (lisp-compare<= start end))
+    (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
+	   start end)))
+
+(defmacro with-map-collector ((fn collect-p) &body body)
+  "Binds free var results to the collected results of function in
+   symbol-argument fn based on boolean parameter collect-p,
+   otherwise result is nil"
+  (with-gensyms (collector k v pk)
+    `(let ((results nil))
+       (flet ((,collector (,k ,v ,pk)
+		(push (funcall ,fn ,k ,v ,pk) results)))
+	 (declare (dynamic-extent (function ,collector)))
+	 (let ((,fn (if ,collect-p #',collector ,fn))) 
+	   ,@body)))))
+
+(defmacro with-map-index-wrapper ((fn index collect cur) &body body)
+  "Binds variable sc to the store controller, overrieds fn with a collector
+   if dynamic value of collect is true and binds variable named cur to
+   the current cursor"
+  `(let ((sc (get-con index)))
+     (with-map-collector (,fn ,collect)
+       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
+	 (with-btree-cursor (,cur ,index)
+	   (with-current-cursor (,cur)
+	     ,@body))))))
+
+(defmacro with-cursor-values (expr &body body)
+  "Binds exists?, skey, val and pkey from expression assuming
+   expression returns a set of cursor operation values or nil"
+  `(multiple-value-bind (exists? skey val pkey)
+       ,expr
+     (declare (ignorable exists? skey val pkey))
+     ,@body))
+
+(defmacro iterate-map-index (&key start continue step)
+  "In context with bound variables: cur, sc, value, start, end, fn
+   Provide a start expression that returns index cursor values
+   Provide a continue expression that uses the
+     bound variables key, start, value or end to determine if 
+     the iteration should continue
+   Provide a step expression that returns index cursor values."
+  `(labels ((continue-p (key)
+	      (declare (ignorable key))
+	      ,continue))
+     (with-cursor-values ,start
+       (when exists?
+	 (funcall fn skey val pkey)
+	 (loop  
+	    (with-cursor-values ,step
+	      (if (and exists? (continue-p skey))
+		  (funcall fn skey val pkey)
+		  (return (nreverse results)))))))))
+
+(defmethod map-index (fn (index btree-index) &rest args
+		      &key start end (value nil value-set-p) from-end collect 
+		      &allow-other-keys)
+  (validate-map-index-call start end)
+  (cond (value-set-p (map-index-values fn index value collect))
+	(from-end (map-index-from-end fn index start end collect))
+	(t (map-index-from-start fn index start end collect))))
+
+(defmethod map-index-values (fn index value collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+	:start (cursor-pset cur value)
+	:continue t
+	:step (cursor-pnext-dup cur))))
+
+(defmethod map-index-from-start (fn index start end collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+      :start (if start 
+		 (cursor-pset-range cur start) 
+		 (cursor-pfirst cur))
+      :continue (or (null end) (lisp-compare<= key end))
+      :step (cursor-pnext cur))))
+
+(defmethod map-index-from-end (fn index start end collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+     :start (if end 
+		(pset-range-for-descending cur end) 
+		(cursor-plast cur))
+     :continue (or (null start) (lisp-compare>= key start))
+     :step (cursor-pprev-nodup cur))))
+
+(defmethod old-map-index (fn (index btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
   (declare (optimize (speed 3) (safety 2) (debug 1))
@@ -561,9 +655,9 @@ not), evaluates the forms, then closes the cursor."
 	(results nil))
     (flet ((collector (k v pk)
 	     (push (funcall fn k v pk) results)))
-      (let ((fn (if collect #'collector fn)))
       (declare (dynamic-extent (function collector))
 	       (special *current-cursor*))
+      (let ((fn (if collect #'collector fn)))
       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
 	(with-btree-cursor (cur index)
 	  (let ((*current-cursor* cur))

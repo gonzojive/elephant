@@ -88,8 +88,8 @@
   (declare (ignore sc))
   (cl-base64::usb8-array-to-base64-string
    (elephant-memutil::buffer-read-byte-vector bs)
-)
-)
+   )
+  )
 
 (defun deserialize-from-base64-string (x sc)
   "Decode a base64-string using the store controller's deserialize method"
