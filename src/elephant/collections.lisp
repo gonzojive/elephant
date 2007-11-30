@@ -441,6 +441,9 @@ not), evaluates the forms, then closes the cursor."
   "A lisp compare equal in same spirit as lisp-compare<.  Case insensitive for strings."
   (equalp a b))
 
+(defun lisp-compare>= (a b)
+  (not (lisp-compare< a b)))
+
 (defvar *current-cursor* nil
   "This dynamic variable is referenced only when deleting elements
    using the following function.  This allows mapping functions to

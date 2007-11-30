@@ -479,15 +479,12 @@
   (declare (type (or string symbol) slot-name))
   (map-inverted-index #'identity2 class slot-name :value value :collect t))
 
-(defmethod get-instance-by-value ((class symbol) slot-name value)
-  (let ((list (get-instances-by-value (find-class class) slot-name value)))
-    (when (consp list)
-      (car list))))
-
 (defmethod get-instance-by-value ((class persistent-metaclass) slot-name value)
-  (let ((list (get-instances-by-value class slot-name value)))
-    (when (consp list)
-      (car list))))
+  (awhen (find-inverted-index class slot-name)
+    (get-value value it)))
+
+(defmethod get-instance-by-value ((class symbol) slot-name value)
+ (get-instance-by-value (find-class class) slot-name value))
 
 (defmethod get-instances-by-range ((class symbol) slot-name start end)
   (get-instances-by-range (find-class class) slot-name start end))
