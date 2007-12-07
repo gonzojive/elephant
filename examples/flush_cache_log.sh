@@ -8,7 +8,7 @@ psql -c "DELETE FROM update_log WHERE txn_id NOT IN (SELECT txn_id FROM transact
 #this script might be suboptimal in case of large number of transactions.
 #possibly a better one:
 # BEGIN;
-# DELETE FROM update_log USING transaction_log WHERE (update_log.txn_id = transaction_log.txn_id) AND 
+# DELETE FROM update_log USING transaction_log WHERE (update_log.txn_id = transaction_log.txn_id) AND (commit_time < (extract(epoch from current_timestamp) - 610));
 # DELETE FROM transaction_log WHERE commit_time < (extract(epoch from current_timestamp) - 610);
 # COMMIT;
 
