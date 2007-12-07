@@ -38,3 +38,60 @@
                                  (postgres-format value (value-type-of bt)))
                            'cl-postgres:ignore-row-reader))))
 
+(defmethod internal-get-values (key (bt pm-btree))
+  (let (value exists-p)
+    (when (initialized-p bt)
+      (with-vars (bt)
+        (let ((results (btree-exec-prepared bt 'select
+                                           (list (key-parameter key bt))
+					   #'cl-postgres:list-row-reader)))
+          (when results
+	    (setf value (mapcar #'car results)
+		  exists-p t)))))
+    (values value exists-p)))
+
+(defmethod map-index (fn (index pm-btree-index) &rest args 
+		      &key start end (value nil value-set-p) from-end collect 
+		      &allow-other-keys)
+  (if value-set-p
+      (progn 
+	(if collect
+	    (loop with pbt = (primary index)
+		  for pkey in (internal-get-values value index)
+		  for (val exists) = (multiple-value-list (get-value pkey pbt))		  
+		  when exists
+		  collect (funcall fn value val pkey))
+	    (loop with pbt = (primary index)
+		  for pkey in (internal-get-values value index)
+		for (val exists) = (multiple-value-list (get-value pkey pbt))
+		when exists do (funcall fn value val pkey))))
+      (call-next-method)))
+
+#|
+;; caching for map-index calls for testing purposes
+(defparameter *mi-cache* (make-hash-table :test 'equal))
+
+(defmethod map-index (fn (index pm-btree-index) &rest args 
+		      &key start end (value nil value-set-p) from-end collect 
+		      &allow-other-keys)
+  (let* ((ck (list index value start end from-end))
+	 (results (gethash ck *mi-cache*)))
+    (if results
+	(progn
+	  (loop for (a b c) in (car results)
+		do (funcall fn a b c))
+	  (copy-tree (cdr results)))
+	(let (abcs)
+	  (flet ((pusher (a b c)
+		   (push (list a b c) abcs)
+		   (funcall fn a b c)))
+	    (let ((collected
+		   (if value-set-p
+		       (call-next-method #'pusher index :start start
+					 :end end :value value :from-end from-end :collect collect)
+		       (call-next-method #'pusher index :start start
+					 :end end :from-end from-end :collect collect))))
+	      (setf (gethash ck *mi-cache*) (cons abcs collected))
+	      (copy-tree collected)))))))
+		   
+|#
