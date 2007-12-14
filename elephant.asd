@@ -311,8 +311,8 @@ directory to my-config.sexp and edit it appropriately."))
 		       (:file "serializer")
 		       (:file "controller")
 		       (:file "collections")
-		       (:file "pset")
 		       (:file "classindex-utils")
+		       (:file "pset")
 		       (:file "classindex")
 		       (:file "serializer1") ;; 0.6.0 db's
 		       (:file "serializer2") ;; 0.6.1 db's
