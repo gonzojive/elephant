@@ -216,7 +216,7 @@
 	   (get-cache oid (instance-cache sc)))))
     (if obj obj
 	;; Should get cached since make-instance calls cache-instance
-	(recreate-instance-using-class (find-class class-name) :from-oid oid :sc sc))))
+	(make-instance class-name :from-oid oid :sc sc))))
 
 (defmethod uncache-instance ((sc store-controller) oid)
   (ele-with-fast-lock ((instance-cache-lock sc))
