@@ -10,127 +10,105 @@
 		 :btree bt
 		 :oid (oid bt)))
 
-(defvar *in-secondary-cursor-mover* nil)
+(defvar *cursor-current-internal* nil "disables value dereferencing in cursor-current, useful to implement cursor-p* methods")
 
-(defun key-field= (a b)
-  (equalp a b))
-
-(defun secondary-cursor-mover (cursor movement-function &key dup nodup return-pk)
-  (let ((value-column-before (current-key-field cursor))
-        (row-id-before (current-row-identifier cursor))
-        (*in-secondary-cursor-mover* t))
-    (declare (special *in-secondary-cursor-mover*))
-    (block main-block
-      (loop
-       (multiple-value-bind (found key-column value-column)
-           (funcall movement-function cursor)
-         ;;         (format t "sec-cur-mover ~S " (list found key-column value-column))
-         (cond
-           ((or (not found)
-                (and dup
-                     (not (key-field= (current-key-field cursor)
-                                      value-column-before))))
-            (return-from main-block nil))
-           ((and (eq (current-row-identifier cursor) row-id-before)
-                 (not (eql movement-function #'cursor-current)))
-            (error "Movement function doesn't move"))
-           ((and nodup
-                 (key-field= (current-key-field cursor)
-                             value-column-before))
-            (setf row-id-before (current-row-identifier cursor)) ;;TODO row-id stuff can maybe be removed later?
-            'continue)
-           (t (return-from main-block
-                (secondary-cursor-return-values cursor
-                                                key-column
-                                                value-column
-                                                :return-pk return-pk)))))))))
-
-(defun secondary-cursor-return-values (cursor key-column value-column &key return-pk)
-  (when key-column
-    (if return-pk
-        (let ((value (internal-get-value value-column (primary (cursor-btree cursor)))))
-          (values t key-column value value-column))
-        (let ((value (internal-get-value value-column (primary (cursor-btree cursor)))))
-          (values t value-column value)))))
+(defmethod cursor-current-query-params-auto ((cursor pm-secondary-cursor))
+  (with-slots (btree) cursor 
+    (list (ensure-string (current-raw-key-of cursor))
+	  (ensure-string (current-raw-value-of cursor)))))
 
 (defmethod cursor-current ((cursor pm-secondary-cursor))
-  (if *in-secondary-cursor-mover*
+  (if *cursor-current-internal*
       (call-next-method)
       (multiple-value-bind (has key value)
           (call-next-method)
         (when has
-          (values t
-                  key
-                  (internal-get-value value (primary (cursor-btree cursor))))))))
+          (values t key (internal-get-value value (primary (cursor-btree cursor))))))))
 
-;;--------------------------------------------------------------------------------
-;;                        Secondary cursor specific methods
-;;--------------------------------------------------------------------------------
-(defmethod cursor-next-dup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-next :dup t))
+(defmacro def-cursor-p-synonym (name base-name &rest params)
+  `(defmethod ,name ((cursor pm-secondary-cursor) ,@params)
+    (let ((*cursor-current-internal* t))
+      (multiple-value-bind (found key val)
+	  (,base-name cursor ,@params)
+	(when found
+	  (values t key (internal-get-value val (primary (cursor-btree cursor))) val))))))
 
-(defmethod cursor-next-nodup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-next :nodup t))
+(def-cursor-p-synonym cursor-pfirst cursor-first)
+(def-cursor-p-synonym cursor-plast cursor-last)
+(def-cursor-p-synonym cursor-pnext cursor-next)
+(def-cursor-p-synonym cursor-pprev cursor-prev)
+(def-cursor-p-synonym cursor-pcurrent cursor-current)
 
-(defmethod cursor-pnext ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-next :return-pk t))
+(defmacro def-cursor-dup-mover (myname basename) ; macro just for two functions ain't really good, but..
+  `(defmethod ,myname ((cursor pm-secondary-cursor))
+    (unless (cursor-initialized-p cursor) (return-from ,myname))
+    (let ((ckey (current-raw-key-of cursor)))
+      (multiple-value-bind (found k v)
+	  (,basename cursor)
+	(if (and found (equal ckey (current-raw-key-of cursor)))
+	    (values found k v)
+	    (cursor-close cursor))))))
 
-(defmethod cursor-pnext-dup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-next :dup t :return-pk t))
+(def-cursor-dup-mover cursor-next-dup cursor-next)
+(def-cursor-dup-mover cursor-prev-dup cursor-prev)
 
-(defmethod cursor-pnext-nodup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-next :nodup t :return-pk t))
+(def-cursor-p-synonym cursor-pnext-dup cursor-next-dup)
+(def-cursor-p-synonym cursor-pprev-dup cursor-prev-dup)
 
-(defmethod cursor-pcurrent ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-current :return-pk t))
+(defmacro def-cursor-nodup-mover (name from-cache-fetcher cache-filler)
+  `(defmethod ,name ((cursor pm-secondary-cursor))
+    (unless (cursor-initialized-p cursor) (return-from ,name))
+    (let ((okey (current-raw-key-of cursor)))
+      (loop (multiple-value-bind (found k v)
+		(,from-cache-fetcher cursor)
+	      (cond
+		((and found (not (equal (current-raw-key-of cursor) okey)))
+		 (return-from ,name (values t k v)))
+		((not found)
+		 ,cache-filler
+		 (return-from ,name (,from-cache-fetcher cursor)))
+	      (t :continue)))))))
 
-(defmethod cursor-pfirst ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-first :return-pk t))
+(def-cursor-nodup-mover cursor-next-nodup cursor-fetch-next-from-cache
+  (cursor-fetch-auto cursor 'next-nodup 
+		     (:key-compare '> :value-compare nil)
+		     ((list (ensure-string okey)) :reset-cache t)))
 
-(defmethod cursor-plast ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-last :return-pk t))
-	  
-(defmethod cursor-pprev ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-prev :return-pk t))
+(def-cursor-nodup-mover cursor-prev-nodup cursor-fetch-prev-from-cache
+  (cursor-fetch-auto cursor 'prev-nodup
+		     (:key-compare '< :value-compare nil :key-order "DESC")
+		     ((list (ensure-string okey)) :reset-cache t :cache-prior t)))
 
-(defmethod cursor-prev-nodup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-prev :nodup t))
+(def-cursor-p-synonym cursor-pnext-nodup cursor-next-nodup)
+(def-cursor-p-synonym cursor-pprev-nodup cursor-prev-nodup)
 
-(defmethod cursor-pprev-nodup ((cursor pm-secondary-cursor))
-  (secondary-cursor-mover cursor #'cursor-prev :nodup t :return-pk t))
+(def-cursor-p-synonym cursor-pset cursor-set key)
+(def-cursor-p-synonym cursor-pset-range cursor-set-range key)
 
-(defmethod cursor-pset ((cursor pm-secondary-cursor) key)
-  (cursor-set-helper cursor key 'cursor-pset))
+(defmethod cursor-get-both-range ((cursor pm-secondary-cursor) key pkey)
+  (cursor-fetch-auto cursor 'get-both
+		     (:key-compare nil :value-compare '>=)
+		     ((list (key-parameter key btree)
+			    (value-parameter pkey btree)) :reset-cache t))
+  (cursor-fetch-next-from-cache cursor))
 
-(defmethod cursor-pset-range ((cursor pm-secondary-cursor) key)
-  (cursor-set-helper cursor key 'cursor-pset-range))
+(defmethod cursor-get-both ((cursor pm-secondary-cursor) key pkey)
+  (multiple-value-bind (found k v)
+      (cursor-get-both-range cursor key pkey)
+    (if (and found (ele::lisp-compare-equal pkey (current-value-of cursor)))
+	(values t k v)
+	(cursor-close cursor))))
 
-(defmethod cursor-pget-both ((cursor pm-secondary-cursor) key pkey)
-  (cursor-pget-both-helper cursor key pkey 'cursor-pget-both))
-
-(defmethod cursor-pget-both-range ((cursor pm-secondary-cursor) key pkey)
-  (cursor-pget-both-helper cursor key pkey 'cursor-pget-both-range))
+(def-cursor-p-synonym cursor-pget-both cursor-get-both key pkey)
+(def-cursor-p-synonym cursor-pget-both-range cursor-get-both-range key pkey)
 
 (defmethod cursor-delete ((cursor pm-secondary-cursor))
   "Delete by cursor: deletes ALL secondary indices."
   (if (cursor-initialized-p cursor)
-      (let ((key (postgres-value-to-lisp (current-value-field cursor) (value-type-of (cursor-btree cursor)))))
+      (let ((pkey (current-value-of cursor)))
         (cursor-close cursor)
-        (remove-kv key (primary (cursor-btree cursor))))
-      nil))
-
-(defmethod cursor-get-both ((cursor pm-secondary-cursor) key value)
-  "cursor-get-both not implemented for secondary indices.
-Use cursor-pget-both."
-  (declare (ignore key value))
-  (error "cursor-get-both not implemented on secondary
-indices.  Use cursor-pget-both."))
-
-(defmethod cursor-get-both-range ((cursor pm-secondary-cursor) key value)
-  "cursor-get-both-range not implemented for secondary indices.
-Use cursor-pget-both-range."
-  (declare (ignore key value))
-  (error "cursor-get-both-range not implemented on secondary indices.  Use cursor-pget-both-range."))
+        (remove-kv pkey (primary (cursor-btree cursor))))
+      (error "Can't delete with uninitialized cursor")))
 
 (defmethod cursor-put ((cursor pm-secondary-cursor) value &rest rest)
   "Puts are forbidden on secondary indices.  Try adding to

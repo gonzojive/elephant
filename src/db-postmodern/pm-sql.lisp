@@ -133,6 +133,9 @@ $$ LANGUAGE plpgsql;
 (defmethod make-local-name ((ex pm-executor) name)
   (read-from-string (format nil "~a~a" (executor-prefix ex) name)))
 
+(defmethod lookup-query ((ex pm-executor) query-identifier)
+  (cdr (assoc query-identifier (queries-of ex))))
+
 (defmethod register-query ((ex pm-executor) query-identifier sql)
   (let ((local-name (make-local-name ex query-identifier)))
     (pushnew (cons query-identifier
