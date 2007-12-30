@@ -849,14 +849,14 @@ of a string."
     #+(and sbcl sb-unicode)
     (let ((res (make-string byte-length :element-type 'base-char)))
       #+#.(elephant-memutil::new-style-copy-p)
-      (sb-kernel:copy-ub8-from-system-area 
+      (sb-kernel::copy-ub8-from-system-area 
         (sb-alien:alien-sap (buffer-stream-buffer bs))
         position
         res 
 	0
         byte-length)
       #-#.(elephant-memutil::new-style-copy-p)
-      (sb-kernel:copy-from-system-area 
+      (sb-kernel::copy-from-system-area 
        (sb-alien:alien-sap (buffer-stream-buffer bs))
        (* position sb-vm:n-byte-bits)
        res 
@@ -891,14 +891,14 @@ of a string."
     (setf (buffer-stream-position bs) (+ position byte-length))
     (let ((res (make-string (/ byte-length 4) :element-type 'character)))
       #+#.(elephant-memutil::new-style-copy-p)
-       (sb-kernel:copy-ub8-from-system-area 
+       (sb-kernel::copy-ub8-from-system-area 
         (sb-alien:alien-sap (buffer-stream-buffer bs))
         position 
         res 
 	0
         byte-length)
        #-#.(elephant-memutil::new-style-copy-p)
-      (sb-kernel:copy-from-system-area 
+      (sb-kernel::copy-from-system-area 
        (sb-alien:alien-sap (buffer-stream-buffer bs))
        (* position sb-vm:n-byte-bits)
        res 
