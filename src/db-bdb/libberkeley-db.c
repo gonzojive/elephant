@@ -1254,13 +1254,13 @@ int utf16_cmp(const unsigned char *s1, int32_t length1,
 
   if(length1<length2) {
     lengthResult=-1;
-    limit1=s1+length1;
+    limit1=s1+2*length1;
   } else if(length1==length2) {
     lengthResult=0;
-    limit1=s1+length1;
+    limit1=s1+2*length1;
   } else /* length1>length2 */ {
     lengthResult=1;
-    limit1=s1+length2;
+    limit1=s1+2*length2;
   }
 
   if(s1==s2) return lengthResult;
