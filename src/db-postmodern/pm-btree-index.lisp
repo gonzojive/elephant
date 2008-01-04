@@ -39,16 +39,18 @@
                            'cl-postgres:ignore-row-reader))))
 
 (defmethod internal-get-values (key (bt pm-btree))
-  (let (value exists-p)
-    (when (initialized-p bt)
-      (with-vars (bt)
-        (let ((results (btree-exec-prepared bt 'select
-                                           (list (key-parameter key bt))
-					   #'cl-postgres:list-row-reader)))
-          (when results
-	    (setf value (mapcar #'car results)
-		  exists-p t)))))
-    (values value exists-p)))
+  (flet ((value-from-row (db-row)
+           (postgres-value-to-lisp (car db-row) (value-type-of bt))))
+    (let (value exists-p)
+      (when (and key (initialized-p bt))
+        (with-vars (bt)
+          (let ((results (btree-exec-prepared bt 'select
+                                              (list (key-parameter key bt))
+                                              #'cl-postgres:list-row-reader)))
+            (when results
+              (setf value (mapcar #'value-from-row results)
+                    exists-p t)))))
+      (values value exists-p))))
 
 (defmethod map-index (fn (index pm-btree-index) &rest args 
 		      &key start end (value nil value-set-p) from-end collect 
