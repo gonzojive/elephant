@@ -199,7 +199,7 @@ tests use:
 
 @lisp
 (defvar *testpg-path*
-'(:postgreql "localhost.localdomain" "test" "postgres" ""))
+'(:postgresql "localhost.localdomain" "test" "postgres" ""))
 @end lisp
 
 meaning that connections must be allowed to the database test, user ``postgres'',
