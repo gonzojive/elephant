@@ -994,8 +994,8 @@
   )
 
 (defclass Message (managed-object)
-  ((msgid :type list :initform "" :accessor :msgd :initarg :msgid)
-   (value :type (or list string) :initform "" :accessor :vl :initarg :value)))
+  ((msgid :type list :initform "" :accessor msgd :initarg :msgid)
+   (value :type (or list string) :initform "" :accessor vl :initarg :value)))
 
 (deftest unicodepositiontest
     (let* ((bt (make-btree *store-controller*))
