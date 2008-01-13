@@ -801,6 +801,32 @@
       (is (= 101 (pcursor-pkey (cursor-pget-both c 10 101))))
       (is (= 112 (pcursor-pkey (cursor-pget-both-range c 11 111.4))))))
 
+(defun make-mod-index (mod)
+  (lambda (idx k v)
+    (declare (ignore idx v))
+    (values (zerop (mod k mod))
+            k)))
+
+(defvar ff-index)
+
+(deftest (function-form-index :depends-on cur-del2)
+    (finishes
+      (with-transaction ()
+        (setq ff-index (add-index indexed2
+                                  :index-name 'ff-index
+                                  :key-form '(make-mod-index 33)
+                                  :populate t))))
+  t)
+
+(deftest (ff-index-test :depends-on cur-del2)
+         (block nil
+           (map-index (lambda (k v pk)
+                        (unless (zerop (mod k 33))
+                          (return nil)))
+                      ff-index)
+           t)
+         t)
+
 (defvar index-string)
 
 (defun crunch-string (s k v)

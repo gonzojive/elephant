@@ -97,9 +97,13 @@
   (:documentation 
    "Add a secondary index.  The indices are stored in an eq
 hash-table, so the index-name should be a symbol.  key-form
-should be a symbol naming a function, or a list which
-defines a lambda -- actual functions aren't supported.  The
-function should take 3 arguments: the secondary DB, primary
+should be a symbol naming a function, a function call form
+eg \'(create-index 3) or a lambda expression -- 
+actual functions aren't supported.
+Lambda expresssions are converted to functions through compile
+and function call forms are transformed applying
+the first element of the list to the rest of the list.
+The function should take 3 arguments: the secondary DB, primary
 key and value, and return two values: a boolean indicating
 whether to index this key / value, and the secondary key if
 so.  If populate = t it will fill in secondary keys for
@@ -130,13 +134,25 @@ existing primary entries (may be expensive!)"))
   (:metaclass persistent-metaclass)
   (:documentation "Secondary index to an indexed-btree."))
 
+(define-condition invalid-keyform (error)
+  ((key-form :reader key-form-of :initarg :key-form))
+  (:report (lambda (c s)
+             (format s "~S is an invalid key form for an index."
+                     (key-form-of c)))))
+
+(defun function<-keyform (key-form)
+  (cond ((and (symbolp key-form) (fboundp key-form))
+         (fdefinition key-form))
+        ((and (consp key-form) (eql (first key-form) 'lambda)) 
+         (compile nil key-form))
+        ((consp key-form)
+         (apply (first key-form) (rest key-form)))
+        (t (error 'invalid-keyform :key-form key-form))))
+
 (defmethod shared-initialize :after ((instance btree-index) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
-  (let ((key-form (key-form instance)))
-    (if (and (symbolp key-form) (fboundp key-form))
-	(setf (key-fn instance) (fdefinition key-form))
-	(setf (key-fn instance) (compile nil key-form)))))
+  (setf (key-fn instance) (function<-keyform (key-form instance))))
 
 (defgeneric get-primary-key (key bt)
   (:documentation "Get the primary key from a secondary key."))
