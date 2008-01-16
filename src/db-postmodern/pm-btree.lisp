@@ -45,9 +45,10 @@
     (with-connection-for-thread (*sc*)
         ,@body)))
 
-(defmethod initialize-instance :after ((bt pm-btree) &rest initargs)
-  (declare (ignore initargs))
-  (unless (table-of bt)
+(defmethod shared-initialize :after ((bt pm-btree) slot-names
+				     &rest rest)
+  (declare (ignore slot-names rest))
+  (unless (table-of bt) ; unless table is given explicitly (for system btrees)
     (setf (table-of bt) (format nil "tree~a" (oid bt)))
     (with-trans-and-vars (bt)
       (when (postmodern:table-exists-p (table-of bt))
@@ -62,7 +63,7 @@
 (defmethod make-table ((bt pm-btree))
   (with-trans-and-vars (bt)
     (unless (table-of bt)
-      (setf (table-of bt) (format nil "tree~a" (next-tree-number (active-connection) :row-reader 'first-value-row-reader))))
+      (error "btree is not initialized properly"))
     (while-ignoring-warnings 
       (cl-postgres:exec-query (active-connection)
                               (format nil "create table ~a (qi ~a ~a not null, value ~a not null) with oids;"

@@ -216,9 +216,6 @@ $$ LANGUAGE plpgsql;
        (declare (ignore connection)) ;; TODO remove connetion
        (executor-exec-prepared (active-controller) name (list ,@parameters) row-reader))))
 
-(define-prepared-query next-tree-number ()
-  "select nextval('tree_seq');")
-
 (define-prepared-query sp-select-blob-bob-by-bid (bid)
   "select bob from blob where bid=$1")
 
@@ -257,8 +254,7 @@ $$ LANGUAGE plpgsql;
   (sp-ensure-bid (active-connection) bob :row-reader 'first-value-row-reader))
 
 (defun create-base-tables (connection)
-  (dolist (stmt '("create sequence tree_seq;"
-                  "create sequence blob_bid_seq;"
+  (dolist (stmt '("create sequence blob_bid_seq;"
 
                   "create table blob (
 bid bigint primary key not null default nextval('blob_bid_seq'),
