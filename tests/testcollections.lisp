@@ -1005,6 +1005,6 @@
 			   :value   utf16string)))
       (setf (mid mo) (make-instance 'key :id 1000))
       (setf (get-value (mid mo) bt) mo)
-      (values (equal utf16string (:vl (get-value (mid mo) bt)))))
+      (values (equal utf16string (vl (get-value (mid mo) bt)))))
   t
   )
