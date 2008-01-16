@@ -25,19 +25,22 @@
 
 (declaim #-elephant-without-optimize (optimize (speed 3)))
 
-(defmethod initialize-instance :before  ((instance persistent)
-					 &rest initargs
-					 &key from-oid
-					 (sc *store-controller*))
-  "Sets the OID and home controller"
-  (declare (ignore initargs))
+(defun initial-persistent-setup (instance &key from-oid sc)
   (if (or (null sc) (not (subtypep (type-of sc) 'store-controller)))
       (error "Initialize instance for type persistent requires valid store controller argument :sc
               or valid *store-controller*"))
   (if from-oid
       (setf (oid instance) from-oid)
       (setf (oid instance) (next-oid sc)))
-  (setf (dbcn-spc-pst instance) (controller-spec sc))
+  (setf (dbcn-spc-pst instance) (controller-spec sc)))
+
+(defmethod initialize-instance :before  ((instance persistent)
+					 &rest initargs
+					 &key from-oid
+					 (sc *store-controller*))
+  "Sets the OID and home controller"
+  (declare (ignore initargs))
+  (initial-persistent-setup instance :from-oid from-oid :sc sc)
   (cache-instance sc instance))
 
 (defclass persistent-object (persistent) ()
@@ -100,6 +103,25 @@
 ;; ================================================
 ;; PERSISTENT OBJECT MAINTENANCE
 ;; ================================================
+
+;;
+;; RECREATING A PERSISTENT INSTANCE
+;;
+
+(defmethod recreate-instance-using-class ((class standard-class) &rest initargs &key &allow-other-keys)
+  "use normal initialization sequence for ordinary classes."
+  (apply #'make-instance class initargs))
+
+(defmethod recreate-instance-using-class ((class persistent-metaclass) &rest initargs &key &allow-other-keys)
+  "persistent-objects bypass initialize-instance"
+    (let ((instance (allocate-instance class)))
+    (apply #'recreate-instance instance initargs)
+    instance))
+
+(defgeneric recreate-instance (instance &rest initargs &key &allow-other-keys)
+  (:method ((instance persistent-object) &rest args &key from-oid (sc *store-controller*))
+   (initial-persistent-setup instance :from-oid from-oid :sc sc)
+   (shared-initialize instance t :from-oid from-oid)))
 
 ;;
 ;; CLASS INSTANCE INITIALIZATION

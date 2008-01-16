@@ -43,7 +43,8 @@
 		translate-and-intern-symbol
 		valid-persistent-reference-p
 		signal-cross-reference-error
-		elephant-type-deserialization-error))
+		elephant-type-deserialization-error
+                recreate-instance-using-class))
 
 (in-package :elephant-serializer2)
 
@@ -510,7 +511,7 @@
 		      (let ((o 
 			     (or (handler-case
 				   (if (subtypep typedesig 'persistent)
-				       (make-instance typedesig :sc sc)
+				       (recreate-instance-using-class (find-class typedesig) :sc sc)
 				       ;; if the this type doesn't exist in our object
 				       ;; space, we can't reconstitute it, but we don't want 
 				       ;; to abort completely, we will return a special object...
