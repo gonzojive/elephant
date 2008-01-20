@@ -32,7 +32,8 @@
   (if from-oid
       (setf (oid instance) from-oid)
       (setf (oid instance) (next-oid sc)))
-  (setf (dbcn-spc-pst instance) (controller-spec sc)))
+  (setf (dbcn-spc-pst instance) (controller-spec sc))
+  (cache-instance sc instance))
 
 (defmethod initialize-instance :before  ((instance persistent)
 					 &rest initargs
@@ -40,8 +41,7 @@
 					 (sc *store-controller*))
   "Sets the OID and home controller"
   (declare (ignore initargs))
-  (initial-persistent-setup instance :from-oid from-oid :sc sc)
-  (cache-instance sc instance))
+  (initial-persistent-setup instance :from-oid from-oid :sc sc))
 
 (defclass persistent-object (persistent) ()
   (:metaclass persistent-metaclass)
