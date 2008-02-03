@@ -692,7 +692,7 @@ Now we can easily manipulate all the instances of a class.
 (make-instance 'friend :name "Zaid" 
                        :birthday (encode-date '(14 8 1976)))
 
-(get-instances-by-class 'friends)
+(get-instances-by-class 'friend)
 => (#<Carlos> #<Adriana> #<Zaid>)
 
 (mapcar #'print-friend *)
@@ -748,17 +748,17 @@ even different types.  Once a slot is indexed, we can use the index to
 retrieve objects by slot values.
 
 @code{get-instances-by-value} will retrieve all instances that are
-equal to the value argument.
+EQUALP to the value argument.
 
 @lisp
-(get-instances-by-value 'friends 'name "Carlos")
+(get-instances-by-value 'friend 'name "Carlos")
 => (#<Carlos>)
 @end lisp
 
 But more interestingly, we can retrieve objects for a range of values.
 
 @lisp
-(get-instances-by-range 'friends 'name "Adam" "Devin")
+(get-instances-by-range 'friend 'name "Adam" "Devin")
 => (#<Adriana> #<Carlos>)
 
 (get-instances-by-range 'friend 'birthday 
