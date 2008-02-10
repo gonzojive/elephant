@@ -477,7 +477,7 @@ true."))
    controllers yourself.  *store-controller* is a convenience variable for single-store
    applications or single-store per thread apps.  Multi-store apps should either confine
    their *store-controller* to a given dynamic context or wrap each store-specific op in
-   a transaction using with or ensure transaction"
+   a transaction using with or ensure transaction.  Returns the opened store controller."
   (assert (consp spec))
   ;; Ensure that parameters are set
   (initialize-user-parameters)
@@ -490,7 +490,7 @@ true."))
 	(setq *store-controller* controller))))
 
 (defun close-store (&optional sc)
-  "Conveniently close the store controller."
+  "Conveniently close the store controller.  If you pass a custom store controller, you are responsible for setting it to NIL."
   (when (or sc *store-controller*)
     (close-controller (or sc *store-controller*)))
   (unless sc
