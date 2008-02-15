@@ -176,7 +176,7 @@
 	(setf firstdirs (push 
 	 (directory-factory 
 	  (cdr x)
-	  (format nil "GEN-~A-~A" btreeclassname gen-num) (:mtype gdcm) nil)
+	  (format nil "GEN-~A-~A" btreeclassname gen-num) (mtype-of gdcm) nil)
 	 firstdirs))
 	(incf gen-num)
 	))
@@ -185,7 +185,7 @@
 	  (reverse 
 	   (push
 	    (directory-factory 
-	     (final-strategy gdcm) (format nil "GEN-~A-~A" btreeclassname gen-num) (:mtype gdcm) nil)
+	     (final-strategy gdcm) (format nil "GEN-~A-~A" btreeclassname gen-num) (mtype-of gdcm) nil)
 	    firstdirs)))
     gdcm
     ))

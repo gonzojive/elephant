@@ -29,7 +29,7 @@
 
 ;; Test BDB backend
 (setq *default-spec* *testbdb-spec*)
-(do-backend-tests)
+(time (do-backend-tests))
 
 ;; Test SQLite 3
 (setq *default-spec* *testsqlite3-spec*)
@@ -44,6 +44,7 @@
 (asdf:operate 'asdf:load-op :ele-postmodern)
 (setq *default-spec* *testpm-spec*)
 (time (do-backend-tests))
+
 
 ;; Test a Migration of data from BDB to postgres
 (do-migration-tests *testbdb-spec* *testpg-spec*)

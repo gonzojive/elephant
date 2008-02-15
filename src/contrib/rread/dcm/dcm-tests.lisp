@@ -21,7 +21,7 @@
 
 (defclass ExObjectDirector (hash-ele-director)
   ((mtype :initform 'ExObject
-	  :accessor :mtype)))
+	  :accessor mtype-of)))
 
 (defun test-ex-director ()
   (let ((k1 nil)

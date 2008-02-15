@@ -21,7 +21,7 @@
    #:*DEF-STORE-NAME*
    
    #:key
-   #:mtype
+   #:mtype-of
    #:key-equal
    #:dcm-equal
    #:max-key-value

@@ -189,7 +189,7 @@
    (strategy) ;; This object is hard to type, it will vary...
    (mtype
     :type 'type
-    :accessor :mtype
+    :accessor mtype-of
     :initarg :managed-type)
    )
   )
@@ -443,7 +443,7 @@
     (let ((objs '()))
       (map-btree #'(lambda (k x) 
 		     (declare (ignore k))
-		     (if (typep x (:mtype dir))
+		     (if (typep x (mtype-of dir))
 			 (push x objs)))
 		 dcm-btree)
       objs)))
@@ -453,7 +453,7 @@
     (let ((objs '()))
       (map-btree #'(lambda (k x) 
 		     (declare (ignore k))
-		     (if (typep x (:mtype dir))
+		     (if (typep x (mtype-of dir))
 			 (push x objs)))
 		 dcm-btree)
       objs)))
@@ -711,8 +711,8 @@
   (initialize-btree dir btreeclassname))
 
 (defmethod initialize ((dir hash-ele-director) (cname symbol) btreeclassname)
-  (setf (:mtype (:hd dir)) (:mtype dir))
-  (setf (:mtype (:ed dir)) (:mtype dir))
+  (setf (mtype-of (:hd dir)) (mtype-of dir))
+  (setf (mtype-of (:ed dir)) (mtype-of dir))
   (initialize-btree (:ed dir) btreeclassname))
 
 (defmethod initialize ((dir director) (cname symbol) btreeclassname)
