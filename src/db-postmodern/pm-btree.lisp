@@ -119,7 +119,7 @@ BEGIN
     END IF;"
 
 #+ele-global-sync-cache
-(format nil "PERFORM notify_btree_update(~a, the_key);"	(oid bt))
+(format nil "PERFORM notify_btree_update(~a, the_key::text);"	(oid bt))
 
 "END;
 $$ LANGUAGE plpgsql;
@@ -137,7 +137,7 @@ $$ LANGUAGE plpgsql;
   (register-query bt 'insert (format nil "select ins_upd_~a($1,$2)" (table-of bt)))
   (register-query bt 'delete (format nil "delete from ~a where qi=$1" (table-of bt)))
   #+ele-global-sync-cache
-  (register-query bt 'notify-update (format nil "select notify_btree_update(~a, $1)" (oid bt))))
+  (register-query bt 'notify-update (format nil "select notify_btree_update(~a, $1::text)" (oid bt))))
 
 (defmethod btree-exec-prepared ((bt pm-btree) query-identifier params row-reader)
   (executor-exec-prepared bt query-identifier params row-reader))
