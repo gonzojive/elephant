@@ -28,7 +28,7 @@
 				degree-2 read-uncommitted txn-nosync txn-nowait txn-sync)
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
-       for count fixnum from 1 to retries
+       for count fixnum from 0 to retries
        for success of-type boolean = nil
        do
        (let ((txn (db-transaction-begin env
