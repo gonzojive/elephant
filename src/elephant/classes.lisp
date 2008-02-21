@@ -240,7 +240,7 @@ slots."
 (defmethod change-class :around ((previous persistent) (new-class standard-class) &rest initargs)
   (declare (ignorable initargs))
   (unless (subtypep (type-of new-class) 'persistent-metaclass)
-    (error "Persistent instances cannot be changed to non-persistent classes in change-class"))
+    (error "Persistent instances cannot be changed to persistent classes via change-class"))
   ;; Inform user, if warnings are active, that slot values are about to be dropped
   (warn-about-dropped-slots 'change-class (class-of previous) 
 			    (set-difference 

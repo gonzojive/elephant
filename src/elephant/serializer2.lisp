@@ -49,7 +49,7 @@
 (in-package :elephant-serializer2)
 
 (eval-when (:compile-toplevel)
-  (declaim  #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0))
+  (declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0))
 	   (inline serialize deserialize
 		   slots-and-values
 		   deserialize-bignum
@@ -430,7 +430,7 @@
 	     ((= tag +utf8-string+)
 	      #+lispworks
 	      (coerce (deserialize-string :utf8 bs) 'base-string)
-	      #-lispworks
+
 	      (deserialize-string :utf8 bs))
 	     ((= tag +utf16-string+)
 	      #+lispworks

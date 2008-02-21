@@ -17,5 +17,7 @@
 (in-package :cl-user)
 
 (defpackage :db-lisp
-  (:use :cl :elephant :elephant-backend :elephant-memutil :uffi))
+  (:use :cl :elephant :elephant-data-store :elephant-memutil :uffi :elephant-utils))
+
+
 

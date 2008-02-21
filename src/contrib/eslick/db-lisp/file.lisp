@@ -31,4 +31,3 @@
 (defmethod close-file ((bf binary-file))
   (close (binary-file-stream bf)))
 
-
