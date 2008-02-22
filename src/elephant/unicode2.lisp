@@ -112,32 +112,23 @@
 		   (return-from serialize-to-utf16le t)))
 	  (buffer-write-byte +utf16-string+ bstream)
 	  (buffer-write-int32 characters bstream)
-	  (let ((needed (+ size (* characters 2))))
-	  (when (> needed allocated)
-	    (resize-buffer-stream bstream needed))
-	  (etypecase string
-	    (simple-string
-	     (loop for i fixnum from 0 below characters do
-		  (let ((code (char-code (schar string i))))
-		    (when (> code #xFFFF) (fail))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size))
-;;			  (coerce (ldb (byte 8 8) code) '(signed 8)))
-			  (ldb (byte 8 8) code))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size 1))
-;;			  (coerce (ldb (byte 8 0) code) '(signed 8))))))
-			  (ldb (byte 8 0) code)))))
-	    (string
-	     (loop for i fixnum from 0 below characters do 
-		  (let ((code (char-code (schar string i))))
-		    (when (> code #xFFFF) (fail))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size)) 
-;;			  (coerce (ldb (byte 8 8) code) '(signed 8)))
-			  (ldb (byte 8 8) code))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size 1))
-;;			  (coerce (ldb (byte 8 0) code) '(signed 8)))))))
-			  (ldb (byte 8 0) code))))))
-	  (incf size (* characters 2))
-	  (succeed))))))
+	  (let ((needed (+ size (* characters 2)))
+                (char (etypecase string
+                        (simple-string #'schar)
+                        (string #'char))))
+            (when (> needed allocated)
+              (resize-buffer-stream bstream needed))
+            (loop for i fixnum from 0 below characters do
+                  (let ((code (char-code (funcall char string i))))
+                    (when (> code #xFFFF) (fail))
+                    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size))
+                          ;;			  (coerce (ldb (byte 8 8) code) '(signed 8)))
+                          (ldb (byte 8 8) code))
+                    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 2) size 1))
+                          ;;			  (coerce (ldb (byte 8 0) code) '(signed 8))))))
+                          (ldb (byte 8 0) code))))
+            (incf size (* characters 2))
+            (succeed))))))
 
 (defun serialize-to-utf32le (string bstream)
   "Serialize to utf32 compliant format unless contains code pages > 0"
@@ -150,13 +141,14 @@
       (let* ((characters (length string)))
 	  (buffer-write-byte +utf32-string+ bstream)
 	  (buffer-write-int32 characters bstream)
-	  (let ((needed (+ size (* 4 characters))))
+	  (let ((needed (+ size (* 4 characters)))
+                (char (etypecase string
+                        (simple-string #'schar)
+                        (string #'char))))
 	    (when (> needed allocated)
 	      (resize-buffer-stream bstream needed))
-	  (etypecase string
-	    (simple-string
 	     (loop for i fixnum from 0 below characters do
-		  (let ((code (char-code (schar string i))))
+		  (let ((code (char-code (funcall char string i))))
 		    (when (> code #x10FFFF) (error "Invalid unicode code type"))
 		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 0))
 			  (ldb (byte 8 24) code))
@@ -166,20 +158,8 @@
 			  (ldb (byte 8 8) code))
 		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 3))
 			  (ldb (byte 8 0) code)))))
-	    (string
-	     (loop for i fixnum from 0 below characters do 
-		  (let ((code (char-code (schar string i))))
-		    (when (> code #x10FFFF) (error "Invalid unicode code type"))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 0))
-			  (ldb (byte 8 24) code))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 1))
-			  (ldb (byte 8 16) code))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 2))
-			  (ldb (byte 8 8) code))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ (* i 4) size 3))
-			  (ldb (byte 8 0) code))))))
 	  (incf size (* characters 4))
-	  t))))
+	  t)))
 
 ;;
 ;; Deserialization of Strings 
