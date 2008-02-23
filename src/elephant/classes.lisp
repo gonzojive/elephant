@@ -62,8 +62,7 @@
 	 (persistent-object (find-class 'persistent-object))
 	 (not-already-persistent (loop for superclass in direct-superclasses
 				       never (eq (class-of superclass) persistent-metaclass))))
-    (when index
-      (update-indexed-record class nil :class-indexed t))
+    (setf (%indexed-class class) index)
     (if (and (not (eq class persistent-object)) not-already-persistent)
 	(apply #'call-next-method class slot-names
 	       :direct-superclasses (append direct-superclasses (list persistent-object)) args)
@@ -92,7 +91,9 @@
 	      (when class-idx
 		(wipe-class-indexing instance class-idx)))
 	    (setf (%index-cache instance) nil))
-	  (set-db-synch instance :class))
+	  (if *enable-multi-store-indexing*
+	      (set-db-synch instance :class)
+	      (setf (%index-cache instance) nil)))
       #+allegro
       (loop with persistent-slots = (persistent-slots instance)
 	    for slot-def in (class-direct-slots instance)

@@ -96,12 +96,14 @@
 	  :class class))
 
 (defmethod find-class-index ((class persistent-metaclass) &key (sc *store-controller*) (errorp t))
+  (when (null sc)
+    (error "Null store controller, default store-controller is ~A" *store-controller*))
   (ensure-finalized class)
   (if (not (indexed class))
       (when errorp
 	(signal-class-not-indexed class))
       (if (class-index-cached? class sc)
-	  (%index-cache class) ;; we've got a cached reference, just return it
+	  (get-cached-index class sc)
 	  (multiple-value-bind (btree found)
 	      (get-value (class-name class) (controller-class-root sc))
 	    (if found
@@ -113,19 +115,6 @@
     (when *warn-on-manual-class-finalization*
       (warn "Manually finalizing class ~A" (class-name class)))
     (finalize-inheritance class)))
-
-(defun cache-existing-class-index (class btree sc)
-  "If we have a persistent index already, assign, synchronize & return it"
-  (let ((method (determine-synch-method class)))
-    (setf (%index-cache class) btree)
-    (synchronize-class-to-store class :sc sc :method method)
-    btree))
-
-(defun cache-new-class-index (class sc)
-  "If not cached or persistent then this is a new class, make the new index"
-  (if (indexed class)
-      (enable-class-indexing class (indexing-record-slots (indexed-record class)) :sc sc)
-      (signal-class-not-indexed class)))
 
 (defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil))
   (find-inverted-index (find-class class) slot :null-on-fail null-on-fail))
@@ -159,7 +148,7 @@
 		       (declare (ignore index))
 		       (let ((class (find-class class-name nil)))
 			 (when (and class (subtypep class 'persistent-metaclass))
-			   (setf (%index-cache class) nil))))
+			   (uncache-class-index class sc))))
 		     (controller-class-root sc)))
       (t (e) (warn "Unable to clear class index caches ~A" e)))))
       
@@ -177,21 +166,21 @@
    automatically update a changed indexed value in derived slots"
   (let ((slot-name (slot-definition-name slot-def))
 	(oid (oid instance))
-	(con (get-con instance)))
+	(sc (get-con instance)))
     (declare (type fixnum oid))
     (if (no-indexing-needed? class instance slot-def oid)
-	(persistent-slot-writer con new-value instance slot-name)
-	(let ((class-idx (find-class-index class)))
-	  (ensure-transaction (:store-controller con)
+	(persistent-slot-writer sc new-value instance slot-name)
+	(let ((class-idx (find-class-index class :sc sc)))
+	  (ensure-transaction (:store-controller sc)
 	    (when (get-value oid class-idx)
 	      (remove-kv oid class-idx))
-	    (persistent-slot-writer con new-value instance slot-name)
+	    (persistent-slot-writer sc new-value instance slot-name)
 	    (setf (get-value oid class-idx) instance))))))
 
 (defmethod indexed-slot-makunbound ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
-  (let ((class-idx (find-class-index class))
-	(oid (oid instance))
-	(sc (get-con instance)))
+  (let* ((oid (oid instance))
+	 (sc (get-con instance))
+	 (class-idx (find-class-index class :sc sc)))
     (ensure-transaction (:store-controller sc)
       (let ((obj (get-value oid class-idx)))
 	(remove-kv oid class-idx)
@@ -213,21 +202,24 @@
     (multiple-value-bind (btree found)
 	(get-value (class-name class) croot)
       (when found 
-	  (if (indexed class)
-	      (error "Class is already enabled for indexing!  Run disable class indexing to clean up.")
-	      (progn
-		(let ((slots nil))
-		  (map-indices (lambda (k v) (declare (ignore v)) (push k slots)) btree)
-		  (warn "Class has pre-existing database index, enabling indexing for slots: ~A" 
-			(setf indexed-slot-names (union slots indexed-slot-names)))))))
+	(if (indexed class)
+	    (error "Class is already enabled for indexing!  Run disable class indexing to clean up.")
+	    (progn
+	      (let ((slots nil))
+		(map-indices (lambda (k v) (declare (ignore v)) (push k slots)) btree)
+		;; NOTE: Should synchronize?
+		(warn "Class has pre-existing database index, enabling indexing for slots: ~A" 
+		      (setf indexed-slot-names (union slots indexed-slot-names)))))))
+      ;; Update class indexing record if not already indexed
+      (unless (indexed class)
+	(update-indexed-record class indexed-slot-names))
       ;; Put class instance index into the class root & cache it in the class object
-      (update-indexed-record class indexed-slot-names :class-indexed t)
       (ensure-transaction (:store-controller sc)
 	(when (not found)
 	  (let ((class-idx (build-indexed-btree sc)))
 	    (setf (get-value (class-name class) croot) class-idx)
-	    (setf (%index-cache class) class-idx)))
-	;; Add all the indexes
+	    (cache-existing-class-index class class-idx sc)))
+	;; Add all the slot indices 
 	(loop for slot in indexed-slot-names do
 	     (unless (find-inverted-index class slot :null-on-fail t)
 	       (add-class-slot-index class slot :populate nil :sc sc))))
@@ -250,7 +242,7 @@
     (if class-idx 
 	(progn
 	  (wipe-class-indexing class :sc sc)
-	  (update-indexed-record class nil))
+	  (update-indexed-record class nil :drop-index t))
 	(when errorp
 	  (error "No class index exists in persistent store ~A" sc)
 	  (return-from disable-class-indexing nil)))))
@@ -283,7 +275,7 @@
       (with-transaction (:store-controller sc)
 	(remove-kv class-name (controller-class-root sc)))
       (when class
-	(setf (%index-cache class) nil)))))
+	(uncache-class-index class sc)))))
 
 (defmethod add-class-slot-index ((class symbol) slot-name &key (sc *store-controller*))
   (add-class-slot-index (find-class class) slot-name :sc sc))
@@ -321,6 +313,7 @@
 
 (defmethod add-class-derived-index ((class persistent-metaclass) name derived-defun &key 
 				    (populate t) (sc *store-controller*) (update-class t) (hints nil))
+  (declare (ignore hints))
   (let ((class-idx (find-class-index class :sc sc)))
     (if (find-inverted-index class (make-derived-name name) :null-on-fail t)
 	(error "Duplicate derived index requested named ~A on class ~A" name (class-name class))

@@ -25,6 +25,54 @@
 (declaim #-elephant-without-optimize (optimize (speed 3) (safety 1)))
 
 ;;
+;; Caching indices
+;;
+
+
+(defmethod class-index-cached? ((class persistent-metaclass) sc)
+  "Caching is true if %index-cache is bound, contains a cache list and
+   the cache list contains a btree or a list of btrees by store controller"
+  (when (slot-boundp class '%index-cache)
+    (let ((cached-value (%index-cache class)))
+      (if *enable-multi-store-indexing*
+	  (and (not (null cached-value))
+	       (consp cached-value)
+	       (assoc sc cached-value))
+	  (and (subtypep (type-of cached-value) 'btree)
+	       (or (null sc)
+		   (eq sc (get-con cached-value))))))))
+
+(defmethod get-cached-index ((class persistent-metaclass) sc)
+  (if *enable-multi-store-indexing*
+      (cdr (assoc sc (%index-cache class)))
+      (%index-cache class)))
+
+(defun cache-existing-class-index (class btree sc)
+  "If we have a persistent index already, assign, synchronize & return it"
+  (if *enable-multi-store-indexing*
+      (progn
+	(setf (%index-cache class) 
+	      (acons sc btree (when (and (slot-boundp class '%index-cache) (consp (%index-cache class)))
+				(%index-cache class))))
+	(synchronize-class-to-store class :sc sc :method :class))
+      (progn
+	(setf (%index-cache class) btree)
+	(synchronize-class-to-store class :sc sc :method (determine-synch-method class))))
+  btree)
+
+(defun cache-new-class-index (class sc)
+  "If not cached or persistent then this is a new class, make the new index"
+  (if (indexed class)
+      (enable-class-indexing class (indexing-record-slots (indexed-record class)) :sc sc)
+      (signal-class-not-indexed class)))
+
+(defun uncache-class-index (class sc)
+  (if *enable-multi-store-indexing*
+      (setf (%index-cache class) 
+	    (delete sc (%index-cache class) :key #'car))
+      (setf (%index-cache class) nil)))
+
+;;
 ;; Simple utilities for managing synchronization between class
 ;; definitions and database state
 ;;
@@ -43,11 +91,6 @@
       this will be confusing
    c) The key-slot function definitions (if not an anoymous
       lambda) may have changed leading to unexpected indexing")
-
-(defmethod class-index-cached? ((class persistent-metaclass) sc)
-  (and (slot-boundp class '%index-cache)
-       (subtypep (type-of (%index-cache class)) 'btree)
-       (or (null sc) (eq (controller-spec sc) (dbcn-spc-pst (%index-cache class))))))
 
 (defmethod determine-synch-method ((class persistent-metaclass))
   "This method should be called on the class if the %index-cache slot is

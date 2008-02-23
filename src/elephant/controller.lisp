@@ -50,7 +50,7 @@
 (defun lookup-data-store-con-init (name)
   (gethash name *elephant-controller-init*))
 
-(defvar *dbconnection-spec* (make-hash-table :test 'equal))
+(defvar *dbconnection-spec* (make-hash-table :test 'equalp))
 (defvar *dbconnection-lock* (ele-make-lock))
 
 (defgeneric get-con (instance &optional sc)
@@ -96,6 +96,8 @@
     (if (and cached-sc (connection-is-indeed-open cached-sc))
 	cached-sc
 	(build-controller spec))))
+
+
 
 (defun build-controller (spec)
   "Actually construct the controller & load dependencies"
@@ -495,6 +497,11 @@ true."))
     (close-controller (or sc *store-controller*)))
   (unless sc
     (setf *store-controller* nil)))
+
+(defun close-all-stores ()
+  (maphash (lambda (k v)
+	     (close-store v))
+	   *dbconnection-spec*))
 
 (defmacro with-open-store ((spec) &body body)
   "Executes the body with an open controller,

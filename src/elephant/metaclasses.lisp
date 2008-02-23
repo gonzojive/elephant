@@ -38,7 +38,8 @@
 
 (defclass persistent-metaclass (standard-class)
   ((%persistent-slots :accessor %persistent-slots)
-   (%indexed-slots :accessor %indexed-slots)
+   (%indexed-class :accessor %indexed-class)
+   (%indexing-state :accessor %indexing-state)
    (%index-cache :accessor %index-cache))
   (:documentation 
    "Metaclass for persistent classes.  Use this metaclass to
@@ -118,7 +119,8 @@
    (derived :accessor indexing-record-derived :initarg :derived :initform 0)))
 
 (defmethod print-object ((obj indexing-record) stream)
-  (format stream "#INDEXING-RECORD<islt: ~A dslt: ~A>" 
+  (format stream "#INDEXING-RECORD<c: ~A islt: ~A dslt: ~A>" 
+	  (indexing-record-class obj)
 	  (length (indexing-record-slots obj))
 	  (length (indexing-record-derived obj))))
 
@@ -126,25 +128,28 @@
   nil)
 
 (defmethod indexed-record ((class persistent-metaclass))
-  (when (slot-boundp class '%indexed-slots)
-    (car (%indexed-slots class))))
+  (when (slot-boundp class '%indexing-state)
+    (car (%indexing-state class))))
 
 (defmethod old-indexed-record ((class persistent-metaclass))
-  (when (slot-boundp class '%indexed-slots)
-    (cdr (%indexed-slots class))))
+  (when (slot-boundp class '%indexing-state)
+    (cdr (%indexing-state class))))
 
-(defmethod update-indexed-record ((class persistent-metaclass) new-slot-list &key class-indexed)
-  (let ((oldrec (if (slot-boundp class '%indexed-slots)
+(defmethod update-indexed-record ((class persistent-metaclass) new-slot-list &key drop-index)
+  (let ((oldrec (if (slot-boundp class '%indexing-state)
 		    (indexed-record class)
-		    nil)))
-    (setf (%indexed-slots class) 
-	  (cons (make-new-indexed-record new-slot-list oldrec (or new-slot-list class-indexed))
+		    nil))
+	(index-class (and (not drop-index)
+			  (or (%indexed-class class)
+			      (and new-slot-list t)))))
+    (setf (%indexed-class class) nil)
+    (setf (%indexing-state class) 
+	  (cons (make-new-indexed-record new-slot-list oldrec index-class)
 		(if oldrec oldrec nil)))))
 
 (defmethod make-new-indexed-record (new-slot-list oldrec class-indexed)
   (make-instance 'indexing-record 
-		 :class (or class-indexed
-			    (when oldrec (indexing-record-class oldrec)))
+		 :class class-indexed
 		 :slots new-slot-list
 		 :derived (when oldrec (indexing-record-derived oldrec))))
 
@@ -204,20 +209,20 @@
     (setf (indexing-record-derived record) (remove name (indexing-record-derived record)))))
 
 (defmethod indexed ((class persistent-metaclass))
-  (and (slot-boundp class '%indexed-slots)
-       (not (null (%indexed-slots class)))
-       (or (indexing-record-class (indexed-record class))
-	   (indexing-record-slots (indexed-record class))
-	   (indexing-record-derived (indexed-record class)))))
+  (and (slot-boundp class '%indexing-state)
+       (not (null (%indexing-state class)))
+       (indexing-record-class (indexed-record class))))
+;;	   (indexing-record-slots (indexed-record class))
+;;	   (indexing-record-derived (indexed-record class)))))
 
 (defmethod previously-indexed ((class persistent-metaclass))
-  (and (slot-boundp class '%indexed-slots)
-       (not (null (%indexed-slots class)))
+  (and (slot-boundp class '%indexing-state)
+       (not (null (%indexing-state class)))
        (let ((old (old-indexed-record class)))
 	 (when (not (null old))
-	   (or (indexing-record-class old)
-	       (indexing-record-slots old)
-	       (indexing-record-derived old))))))
+	   (indexing-record-class old)))))
+;;	       (indexing-record-slots old)
+;;	       (indexing-record-derived old))))))
 
 (defmethod indexed ((slot standard-slot-definition)) nil)
 (defmethod indexed ((class standard-class)) nil)

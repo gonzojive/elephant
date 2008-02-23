@@ -39,11 +39,21 @@
    error")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; System-wide configuration options
+
+(defvar *enable-multi-store-indexing* nil
+  "Allow indexed class instances to reside in more than one
+   data store.  Inhibits various checks and errors and allows
+   the class to cache multiple index controllers.  Set by
+   a user configurable parameter.")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; General support for user configurable parameters
 
 (defvar *user-configurable-parameters*
   '((:berkeley-db-map-degree2 *map-using-degree2*)
-    (:berkeley-db-cachesize *berkeley-db-cachesize*)))
+    (:berkeley-db-cachesize *berkeley-db-cachesize*)
+    (:enable-multi-store-indexing *enable-multi-store-indexing*)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Optimization parameters

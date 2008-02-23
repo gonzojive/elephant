@@ -200,7 +200,7 @@
   (:export 
    #:*store-controller* 
    #:store-controller #:controller-root #:controller-class-root 
-   #:open-store #:close-store #:with-open-store
+   #:open-store #:close-store #:with-open-store #:close-all-stores
    #:add-to-root #:get-from-root #:remove-from-root #:root-existsp #:map-root
    #:flush-instance-cache
    #:optimize-layout 
