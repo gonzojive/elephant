@@ -112,7 +112,7 @@ et cetera."))
     (db-env-set-timeout env 100000 :set-lock-timeout t)
     (db-env-open env (namestring (second (controller-spec sc)))
 		 :create t :init-rep nil :init-mpool t :thread thread
-		 :init-lock t :init-log t :init-txn t 
+		 :init-lock t :init-log t :init-txn t :register t
 		 :recover recover :recover-fatal recover-fatal)
     (let ((metadata (db-create env))
 	  (db (db-create env))

@@ -70,7 +70,8 @@
     (:report
      (lambda (condition stream)
        (declare (type bdb-db-error condition) (type stream stream))
-       (format stream "Berkeley DB error: ~A"
+       (format stream "Berkeley DB error #~A: ~A"
+	       (db-error-errno condition)
 	       (db-strerror (db-error-errno condition)))))
     (:documentation "Berkeley DB errors."))
 
@@ -309,7 +310,7 @@
 		(t (error 'bdb-db-error :errno ,errno)))))))))
 
 (defmacro flags (&key auto-commit joinenv init-cdb init-lock init-log
-		 init-mpool init-rep init-txn recover recover-fatal lockdown
+		 init-mpool init-rep init-txn recover register recover-fatal lockdown
 		 private system-mem thread force create excl nommap 
 		 degree-2 read-committed dirty-read read-uncommitted
 		 rdonly truncate txn-nosync txn-nowait txn-sync lock-nowait
@@ -331,6 +332,7 @@
       ,@(when init-rep `((when ,init-rep (setq ,flags (logior ,flags DB_INIT_REP)))))
       ,@(when init-txn `((when ,init-txn (setq ,flags (logior ,flags DB_INIT_TXN)))))
       ,@(when recover `((when ,recover (setq ,flags (logior ,flags DB_RECOVER)))))
+      ,@(when register `((when ,recover (setq ,flags (logior ,flags DB_REGISTER)))))
       ,@(when recover-fatal `((when ,recover-fatal (setq ,flags (logior ,flags DB_RECOVER_FATAL)))))
       ,@(when lockdown `((when ,lockdown (setq ,flags (logior ,flags DB_LOCKDOWN)))))
       ,@(when private `((when ,private (setq ,flags (logior ,flags DB_PRIVATE)))))
@@ -414,8 +416,8 @@
 
 (wrap-errno db-env-open (dbenvp home flags mode)
 	    :flags (auto-commit init-cdb init-lock init-log 
-		    init-mpool init-rep init-txn
-		    recover recover-fatal create
+		    init-mpool init-rep init-txn 
+		    recover register recover-fatal create
 		    lockdown private system-mem thread
 		    )
 	    :keys ((mode #o640))
