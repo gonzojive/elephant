@@ -39,6 +39,15 @@
    error")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; General support for user configurable parameters
+
+(defvar *user-configurable-parameters*
+  '((:berkeley-db-map-degree2 *map-using-degree2*)
+    (:berkeley-db-cachesize *berkeley-db-cachesize*)
+    (:berkeley-db-version *bdb-version*)
+    (:enable-multi-store-indexing *enable-multi-store-indexing*)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; System-wide configuration options
 
 (defvar *enable-multi-store-indexing* nil
@@ -48,15 +57,16 @@
    a user configurable parameter.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;; General support for user configurable parameters
+;;;; Backend-specific configuration options
 
-(defvar *user-configurable-parameters*
-  '((:berkeley-db-map-degree2 *map-using-degree2*)
-    (:berkeley-db-cachesize *berkeley-db-cachesize*)
-    (:enable-multi-store-indexing *enable-multi-store-indexing*)))
+(defvar *bdb-version* "4.5"
+  "Tells the db-bdb backend which version of the constants to load to
+   match the header files of the specific BDB version.  It's a hack vs.
+   using CFFI to do this automatically, but it gives us configurability
+   without much pain, maintenance or external dependencies")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;; Optimization parameters
+;;;; Optimization parameters 
 
 (defvar *circularity-initial-hash-size* 50
   "This is the default size of the circularity cache used in the serializer")

@@ -99,6 +99,7 @@ e.g. \"C:\\dir\\\" -> \"/cygdrive/C/dir/\" "
 		      :components
 		      ((:file "package")
 		       (:bdb-c-source "libberkeley-db")
+		       (:file "berkeley-constants")
 		       (:file "berkeley-db")
 		       (:file "bdb-controller")
 		       (:file "bdb-slots")
