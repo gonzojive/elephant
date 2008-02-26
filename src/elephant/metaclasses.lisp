@@ -140,7 +140,7 @@
 		    (indexed-record class)
 		    nil))
 	(index-class (and (not drop-index)
-			  (or (%indexed-class class)
+			  (or (and (slot-boundp class '%indexed-class) (%indexed-class class))
 			      (and new-slot-list t)))))
     (setf (%indexed-class class) nil)
     (setf (%indexing-state class) 
