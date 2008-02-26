@@ -56,11 +56,13 @@
 ;;
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (let ((const-pkg (find-package 
-		    (cond ((equal elephant::*bdb-version* "4.5")
-			   :db-bdb-c45)
-			  ((equal elephant::*bdb-version* "4.6")
-			   :db-bdb-c46)))))
+  (let* ((bdb-version (get-user-configuration-parameter :berkeley-db-version))
+	 (const-pkg (find-package 
+		     (cond ((equal bdb-version "4.5")
+			    :db-bdb-c45)
+			   ((equal bdb-version "4.6")
+			    :db-bdb-c46)
+			   (t (error "A valid Berkeley DB version must be defined in my-config.sexp, got ~A.  Valid values are \"4.5\" and \"4.6\"" bdb-version))))))
     (import-all-symbols const-pkg (find-package :db-bdb))))
 
 ;;

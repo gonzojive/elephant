@@ -63,6 +63,13 @@
 ;;
 ;; Additional supported parameters include:
 ;;
+;; :berkeley-db-version 
+;;          Tells the db-bdb backend which version of the 
+;;          constants to load to match the header files of 
+;;          the specific BDB version.  It's a hack vs. using 
+;;          CFFI to do this automatically, but it gives us 
+;;          configurability without much pain, maintenance 
+;;          or external dependencies
 ;;
 ;; :berkeley-db-cachesize
 ;;          An integer indicating the number of bytes
