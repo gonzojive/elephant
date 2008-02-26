@@ -818,7 +818,7 @@
                                   :populate t))))
   t)
 
-(deftest (ff-index-test :depends-on cur-del2)
+(deftest (ff-index-test :depends-on function-form-index)
          (block nil
            (map-index (lambda (k v pk)
                         (unless (zerop (mod k 33))
