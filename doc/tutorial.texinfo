@@ -748,7 +748,8 @@ even different types.  Once a slot is indexed, we can use the index to
 retrieve objects by slot values.
 
 @code{get-instances-by-value} will retrieve all instances that are
-EQUALP to the value argument.
+equal to the value argument, with the equality relation defined by
+the database backend.
 
 @lisp
 (get-instances-by-value 'friend 'name "Carlos")
