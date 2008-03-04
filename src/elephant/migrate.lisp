@@ -187,7 +187,7 @@
     (unless (object-was-copied-p src)
       (typecase src
 	(store-controller (assert (not (equal dst-spec (controller-spec src)))))
-	(persistent (assert (not (equal dst-spec (dbcn-spc-pst src)))))))))
+	(persistent (assert (not (equal dst-spec (db-spec src)))))))))
 
 (defmethod migrate :before ((dst store-controller) (src store-controller))
   "This method ensures that we reset duplicate object detection over the store-controller"
@@ -237,7 +237,7 @@
   (or *inhibit-slot-copy*
       (and (indexed class)
 	   (not (equal (controller-spec sc)
-		       (dbcn-spc-pst (%index-cache class)))))))
+		       (db-spec (%index-cache class)))))))
 
 (defun copy-persistent-slots (dstsc dst class src)
   "Copy only persistent slots from src to dst"
@@ -396,7 +396,7 @@
 
 (defun register-copied-object (src dst)
   "When copying a source object, store it in the oid map"
-  (assert (not (equal (dbcn-spc-pst src) (dbcn-spc-pst dst))))
+  (assert (not (equal (db-spec src) (db-spec dst))))
   (when (or *oid-btree* *oid-hash*)
     (if *oid-btree*
 	(setf (get-value (oid src) *oid-btree*)
@@ -431,7 +431,7 @@
 		 (let* ((dst-obj (retrieve-copied-object dst src-obj))
 			(dst-oid (when dst-obj (oid dst-obj))))
 		   (when dst-obj
-		     (setf (dbcn-spc-pst src-obj) (dbcn-spc-pst dst-obj))
+		     (setf (db-spec src-obj) (db-spec dst-obj))
 		     (setf (oid src-obj) dst-oid)
 		     (uncache-instance src src-oid) ;; removes old reference
 		     (cache-instance dst src-obj))))) ;; wipes out original reference

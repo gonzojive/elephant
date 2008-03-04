@@ -216,7 +216,7 @@
       ,@(when init-rep `((when ,init-rep (setq ,flags (logior ,flags DB_INIT_REP)))))
       ,@(when init-txn `((when ,init-txn (setq ,flags (logior ,flags DB_INIT_TXN)))))
       ,@(when recover `((when ,recover (setq ,flags (logior ,flags DB_RECOVER)))))
-      ,@(when register `((when ,recover (setq ,flags (logior ,flags DB_REGISTER)))))
+      ,@(when register `((when ,register (setq ,flags (logior ,flags DB_REGISTER)))))
       ,@(when recover-fatal `((when ,recover-fatal (setq ,flags (logior ,flags DB_RECOVER_FATAL)))))
       ,@(when lockdown `((when ,lockdown (setq ,flags (logior ,flags DB_LOCKDOWN)))))
       ,@(when private `((when ,private (setq ,flags (logior ,flags DB_PRIVATE)))))

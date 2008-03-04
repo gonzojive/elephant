@@ -30,11 +30,13 @@
    (metadata :type (or null pointer-void) :accessor controller-metadata)
    (db :type (or null pointer-void) :accessor controller-db :initform '())
    (btrees :type (or null pointer-void) :accessor controller-btrees)
+   (dup-btrees :type (or null pointer-void) :accessor controller-dup-btrees)
    (indices :type (or null pointer-void) :accessor controller-indices)
    (indices-assoc :type (or null pointer-void)
 		  :accessor controller-indices-assoc)
    (oid-db :type (or null pointer-void) :accessor controller-oid-db)
    (oid-seq :type (or null pointer-void) :accessor controller-oid-seq)
+   (cid-seq :type (or null pointer-void) :accessor controller-cid-seq)
    (deadlock-pid :accessor controller-deadlock-pid :initform nil)
    (deadlock-input :accessor controller-deadlock-input :initform nil))
   (:documentation "Class of objects responsible for the
@@ -112,18 +114,19 @@ et cetera."))
     (db-env-set-timeout env 100000 :set-lock-timeout t)
     (db-env-open env (namestring (second (controller-spec sc)))
 		 :create t :init-rep nil :init-mpool t :thread thread
-		 :init-lock t :init-log t :init-txn t :register t
+		 :init-lock t :init-log t :init-txn t :register nil
 		 :recover recover :recover-fatal recover-fatal)
     (let ((metadata (db-create env))
 	  (db (db-create env))
 	  (btrees (db-create env))
+	  (dup-btrees (db-create env))
 	  (indices (db-create env))
 	  (indices-assoc (db-create env)))
 
       ;; Open metadata database
       (setf (controller-metadata sc) metadata)
       (db-open metadata :file "%ELEPHANT" :database "%METADATA" 
-	       :auto-commit t :type DB-BTREE :create t :thread t)
+	       :auto-commit t :type DB-BTREE :create t :thread thread)
 
       ;; Establish database version if new
       (when new-p (set-database-version sc))
@@ -132,26 +135,28 @@ et cetera."))
       ;; based on serializer type
       (initialize-serializer sc)
 
-      ;; Open main class, slot-value and index databases
+      ;; Open slot-value data store
       (setf (controller-db sc) db)
       (db-open db :file "%ELEPHANT" :database "%ELEPHANTDB" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
 	       :read-uncommitted t)
 
+      ;; Standard btrees
       (setf (controller-btrees sc) btrees)
       (db-bdb::db-set-lisp-compare btrees (controller-serializer-version sc))
       (db-open btrees :file "%ELEPHANT" :database "%ELEPHANTBTREES" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
 	       :read-uncommitted t)
 
+      ;; Indexed btrees
       (setf (controller-indices sc) indices)
       (db-bdb::db-set-lisp-compare indices (controller-serializer-version sc))
       (db-bdb::db-set-lisp-dup-compare indices (controller-serializer-version sc))
       (db-set-flags indices :dup-sort t)
       (db-open indices :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
-	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t)
-
+ 	       :auto-commit t :type DB-BTREE :create t :thread thread
+ 	       :read-uncommitted t)
+      
       (setf (controller-indices-assoc sc) indices-assoc)
       (db-bdb::db-set-lisp-compare indices-assoc (controller-serializer-version sc))
       (db-bdb::db-set-lisp-dup-compare indices-assoc (controller-serializer-version sc))
@@ -161,6 +166,17 @@ et cetera."))
 	       :read-uncommitted t)
       (db-bdb::db-fake-associate btrees indices-assoc :auto-commit t)
       
+
+      ;; Duplicated btrees
+      (setf (controller-dup-btrees sc) dup-btrees)
+      (db-bdb::db-set-lisp-compare dup-btrees (controller-serializer-version sc))
+      (db-bdb::db-set-lisp-dup-compare dup-btrees (controller-serializer-version sc))
+      (db-set-flags dup-btrees :dup-sort t)
+      (db-open dup-btrees :file "%ELEPHANT" :database "%ELEPHANTDUPS"
+	       :auto-commit t :type DB-BTREE :create t :thread thread
+	       :read-uncommitted t)
+     
+      ;; OIDs
       (let ((db (db-create env)))
 	(setf (controller-oid-db sc) db)
 	(db-open db :file "%ELEPHANTOID" :database "%ELEPHANTOID" 
@@ -171,28 +187,49 @@ et cetera."))
 	  (db-sequence-set-range oid-seq 0 most-positive-fixnum)
 	  (db-sequence-initial-value oid-seq 0)
 	  (db-sequence-open oid-seq "%ELEPHANTOID" :create t :thread t)
-	  (setf (controller-oid-seq sc) oid-seq)))
+	  (setf (controller-oid-seq sc) oid-seq))
 
-      (setf (slot-value sc 'root)
-	    (make-instance 'bdb-btree :from-oid -1 :sc sc))
+	(let ((cid-seq (db-sequence-create db)))
+	  (db-sequence-set-cachesize cid-seq 100)
+	  (db-sequence-set-flags cid-seq :seq-inc t :seq-wrap t)
+	  (db-sequence-set-range cid-seq 0 most-positive-fixnum)
+	  (db-sequence-initial-value cid-seq 5)
+	  (db-sequence-open cid-seq "%ELEPHANTOID" :create t :thread t)
+	  (setf (controller-cid-seq sc) cid-seq)))
+     
+      ;; Connect to root tables
+      (with-transaction (:store-controller sc)
+	(setf (slot-value sc 'root)
+	      (make-instance 'bdb-btree :from-oid -1 :sc sc))
 
-      (setf (slot-value sc 'class-root)
-	    (make-instance 'bdb-btree :from-oid -2 :sc sc))
+	(setf (slot-value sc 'instance-table)
+	      (make-instance 'bdb-indexed-btree :from-oid -2 :sc sc))
+      
+	(setf (slot-value sc 'index-table)
+	      (make-instance 'bdb-btree :from-oid -3 :sc sc))
+	
+	(setf (slot-value sc 'schema-table)
+	      (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc
+			     :indices (make-hash-table))))
 
       (when deadlock-detect
 	(start-deadlock-detector sc))
-
+	
       sc)))
 
 (defmethod close-controller ((sc bdb-store-controller))
   (when (slot-value sc 'root)
     (stop-deadlock-detector sc)
     ;; no root
-    (setf (slot-value sc 'class-root) nil)
+    (setf (slot-value sc 'index-table) nil)
+    (setf (slot-value sc 'schema-table) nil)
+    (setf (slot-value sc 'instance-table) nil)
     (setf (slot-value sc 'root) nil)
     ;; clean instance cache
     (flush-instance-cache sc)
     ;; close handles / environment
+    (db-sequence-close (controller-cid-seq sc))
+    (setf (controller-cid-seq sc) nil)
     (db-sequence-close (controller-oid-seq sc))
     (setf (controller-oid-seq sc) nil)
     (db-close (controller-oid-db sc))
@@ -201,6 +238,8 @@ et cetera."))
     (setf (controller-indices-assoc sc) nil)
     (db-close (controller-indices sc))
     (setf (controller-indices sc) nil)
+    (db-close (controller-dup-btrees sc))
+    (setf (controller-dup-btrees sc) nil)
     (db-close (controller-btrees sc))
     (setf (controller-btrees sc) nil)
     (db-close (controller-db sc))
@@ -216,6 +255,27 @@ et cetera."))
   (declare (type bdb-store-controller sc))
   (db-sequence-get-fixnum (controller-oid-seq sc) 1 :transaction +NULL-VOID+
 			  :txn-nosync t))
+
+(defmethod next-cid ((sc bdb-store-controller))
+  "Get the next class id"
+  (declare (type bdb-store-controller sc))
+  (db-sequence-get-fixnum (controller-cid-seq sc) 1 :transaction +NULL-VOID+
+			  :txn-nosync t))
+
+(defmethod default-class-id (base-type (sc bdb-store-controller))
+  (case base-type
+    ('btree 1)
+    ('dup-btree 2)
+    ('indexed-btree 3)
+    ('btree-index 4)))
+
+(defmethod default-class-id-type (cid (sc bdb-store-controller))
+  (case cid
+    (1 'bdb-btree)
+    (2 'bdb-dup-btree)
+    (3 'bdb-indexed-btree)
+    (4 'bdb-btree-index)))
+	 
 
 ;;
 ;; Store the database version

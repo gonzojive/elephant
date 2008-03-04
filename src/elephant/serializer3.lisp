@@ -96,7 +96,7 @@
 ;; 				 writers
 ;; 				 fixed-index?
 	       (persistent (byte +persistent+)
-			   (int (oid obj)))))
+			   (uint (oid obj)))))
 	   ;; Compound objects that need circularity cache detection
 	   (%serialize-cached (obj)
 	     (etypecase (obj)

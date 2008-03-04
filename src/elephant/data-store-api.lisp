@@ -56,11 +56,23 @@
    #:controller-serializer-version
    #:controller-serialize
    #:controller-deserialize
-   #:root #:spec #:class-root
+   #:schema-table 
+   #:instance-table 
+   #:index-table
+   #:schema-name-index 
+   #:root #:spec 
    #:temp-spec
    #:copy-spec
    #:delete-spec
 
+   ;; Class Schemas
+   #:next-cid
+   #:schema-classname
+   #:schema-classname-keyform
+   #:default-class-id 
+   #:default-class-id-type
+
+   ;; Instance caching
    #:get-cached-instance
    #:cache-instance
    #:uncache-instance
@@ -68,7 +80,9 @@
 
    ;; Collections
    #:build-btree
+   #:build-dup-btree
    #:build-indexed-btree
+   #:ensure-index
 
    ;; Serializer tools/api's
    #:serialize #:deserialize
@@ -88,6 +102,7 @@
 
    ;; Transactions
    #:*current-transaction*
+   #:with-transaction
    #:make-transaction-record
    #:transaction-store
    #:transaction-object

@@ -36,6 +36,10 @@
 		slots-and-values
 		struct-slots-and-values
 		oid
+		make-oid-pair
+		oid-pair
+		oid-pair-left
+		oid-pair-right
 		int-byte-spec
 		array-type-from-byte
 	        byte-from-array-type
@@ -44,6 +48,7 @@
 		valid-persistent-reference-p
 		signal-cross-reference-error
 		elephant-type-deserialization-error
+		controller-recreate-instance
                 recreate-instance-using-class))
 
 (in-package :elephant-serializer2)
@@ -77,10 +82,9 @@
 (defconstant +pathname+             12)
 (defconstant +symbol+               13)
 
-;; Cached symbol references 
-;; (defconstant +reserved+            14)
-
-;; stored by id+classname
+;; Stored by ID (requires instance table)
+(defconstant +persistent-ref+       14)
+;; Stored by id+classname
 (defconstant +persistent+           15)
 
 ;; Composite objects
@@ -91,6 +95,7 @@
 (defconstant +struct+               20)
 (defconstant +class+                21)
 (defconstant +complex+              22)
+(defconstant +oid-pair+             23)
 
 ;; Lispworks support
 (defconstant +short-float+          30)
@@ -130,6 +135,8 @@
 ;;
 ;; Circularity Hash for Deserializer
 ;;
+;; NOTE: this strategy may create GC problems as it maintains references to
+;; potentially large objects
 
 (defparameter *circularity-vector-queue* (make-array 20 :fill-pointer 0 :adjustable t)
   "A list of vectors used for linear deserialization.
@@ -205,19 +212,8 @@
 	     (persistent
 	      (unless (valid-persistent-reference-p frob sc)
 		(signal-cross-reference-error frob sc))
-	      (buffer-write-byte +persistent+ bs)
-	      (buffer-write-int32 (oid frob) bs)
-	      ;; This circumlocution is necessitated by 
-	      ;; an apparent bug in SBCL 9.9 --- type-of sometimes
-	      ;; does NOT return the "proper name" of the class as the
-	      ;; CLHS says it should, but gives the class object itself,
-	      ;; which cannot be directly serialized....
-	      (let ((tp (type-of frob)))
-		#+(or sbcl allegro)
-		(if (not (symbolp tp))
-		    (setf tp (class-name (class-of frob))))
-		(%serialize tp))
-	      )
+	      (buffer-write-byte +persistent-ref+ bs)
+	      (buffer-write-int32 (oid frob) bs))
 	     #+lispworks
 	     (short-float
 	      (buffer-write-byte +short-float+ bs)
@@ -229,6 +225,7 @@
 	      (buffer-write-byte +double-float+ bs)
 	      (buffer-write-double frob bs))
 	     (standard-object
+	      ;; NOTE: Add support for schema validation
 	      (buffer-write-byte +object+ bs)
 	      (let ((idp (gethash frob circularity-hash)))
 		(if idp (buffer-write-int32 idp bs)
@@ -251,6 +248,10 @@
 	      (buffer-write-byte +char+ bs)
 	      ;; might be wide!
 	      (buffer-write-uint32 (char-code frob) bs))
+	     (oid-pair
+	      (buffer-write-byte +oid-pair+ bs)
+	      (buffer-write-int32 (oid-pair-left frob) bs)
+	      (buffer-write-int32 (oid-pair-right frob) bs))
 	     (cons
 	      (buffer-write-byte +cons+ bs)
 	      (let ((idp (gethash frob circularity-hash)))
@@ -375,7 +376,9 @@
     (,+utf32-string+ . "UTF32le string")
     (,+symbol+ . "symbol")
     (,+pathname+ . "pathname")
-    (,+persistent+ . "persistent object")
+    (,+persistent+ . "persistent object (old)")
+    (,+persistent-ref+ . "persistent object reference (new)")
+    (,+oid-pair+ . "oid pair for associations")
     (,+cons+ . "cons cell")
     (,+hash-table+ . "hash table")
     (,+object+ . "standard object")
@@ -403,7 +406,7 @@
   (when *trace-deserializer*
     (format t "Returned: ~A~%" value)))
 
-(defun deserialize (buf-str sc)
+(defun deserialize (buf-str sc &optional oid-only)
   "Deserialize a lisp value from a buffer-stream."
   (declare (type (or null buffer-stream) buf-str))
   (let ((circularity-vector (get-circularity-vector)))
@@ -447,9 +450,14 @@
 		    (package (%deserialize bs)))
 		(translate-and-intern-symbol name package (database-version sc))))
 	     ((= tag +persistent+)
-	      (get-cached-instance sc
-				   (buffer-read-fixnum32 bs)
-				   (%deserialize bs)))
+	      (let ((oid (buffer-read-fixnum32 bs))
+		    (cname (%deserialize bs)))
+		(if oid-only oid
+		    (controller-recreate-instance sc oid cname))))
+	     ((= tag +persistent-ref+)
+	      (let ((oid (buffer-read-fixnum32 bs)))
+		(if oid-only oid
+		    (controller-recreate-instance sc oid))))
 	     #+lispworks
 	     ((= tag +short-float+)
 	      (coerce (buffer-read-float bs) 'short-float))
@@ -468,6 +476,10 @@
 	     ((= tag +rational+) 
 	      (/ (the integer (%deserialize bs)) 
 		 (the integer (%deserialize bs))))
+	     ((= tag +oid-pair+)
+	      (let ((pair (make-oid-pair)))
+		(setf (oid-pair-left pair) (buffer-read-fixnum32 bs))
+		(setf (oid-pair-right pair) (buffer-read-fixnum32 bs))))
 	     ((= tag +cons+)
 	      (let* ((id (buffer-read-fixnum bs))
 		     (maybe-cons (lookup-id id)))
@@ -486,6 +498,7 @@
 	      (let* ((id (buffer-read-fixnum bs))
 		     (maybe-hash (lookup-id id)))
 		(declare (type fixnum id))
+		(format t "~A ~A~%" maybe-hash id)
 		(if maybe-hash maybe-hash
 		    (let* ((test (%deserialize bs))
 			   (rehash-size (%deserialize bs))
@@ -574,7 +587,7 @@
 				     (setf (slot-value o name) value)))
 			      o)))))))
 	     (t (error 'elephant-type-deserialization-error :tag tag)))))
-;;	     (print-post-deserialize-tag value)
+;;	     (print-post-deserialize-value value)
 	     value))))
       (etypecase buf-str 
 	(null (return-from deserialize nil))

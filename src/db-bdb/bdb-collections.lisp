@@ -86,10 +86,11 @@
 		    :freelist-only freelist-only
 		    :free-space free-space))
 
+
 ;; Secondary indices
 
 (defclass bdb-indexed-btree (indexed-btree bdb-btree)
-  ((indices :accessor indices :initform (make-hash-table))
+  ((indices :accessor indices :initarg :indices :initform (make-hash-table))
    (indices-cache :accessor indices-cache :initform (make-hash-table)
 	       :transient t))
   (:metaclass persistent-metaclass)
@@ -498,7 +499,7 @@
   (when (cursor-initialized-p cursor)
     (with-buffer-streams (key-buf pkey-buf value-buf)
       (multiple-value-bind (key pkey val)
-	  (db-cursor-pmove-buffered (cursor-handle cursor) 
+	  (db-cursor-pmove-buffered (cursor-handle cursor)
 				    key-buf pkey-buf value-buf
 				    :current t)
 	(if (and key (= (buffer-read-oid key) (cursor-oid cursor)))
@@ -739,4 +740,69 @@
 			     (deserialize pkey (get-con (cursor-btree cursor)))))
 	      (setf (cursor-initialized-p cursor) nil))))
       (cursor-plast cursor)))
+
+
+;; Duplicated btrees
+
+(defclass bdb-dup-btree (dup-btree bdb-btree) ()
+  (:metaclass persistent-metaclass)
+  (:documentation "A Berkeley Implementation of the duplicate btree"))
+
+(defmethod build-dup-btree ((sc bdb-store-controller))
+  (make-instance 'bdb-dup-btree :sc sc))
+
+(defmethod get-value (key (bt bdb-dup-btree))
+  (let ((sc (get-con bt)))
+    (with-buffer-streams (key-buf value-buf)
+      (buffer-write-oid (oid bt) key-buf)
+      (serialize key key-buf sc)
+      (let ((buf (db-get-key-buffered (controller-dup-btrees sc)
+				      key-buf value-buf
+				      :transaction (my-current-transaction sc))))
+	(if buf (values (deserialize buf sc) T)
+	    (values nil nil))))))
+
+(defmethod existsp (key (bt bdb-dup-btree))
+  (let ((sc (get-con bt)))
+    (with-buffer-streams (key-buf value-buf)
+      (buffer-write-oid (oid bt) key-buf)
+      (serialize key key-buf sc)
+      (let ((buf (db-get-key-buffered 
+		  (controller-dup-btrees sc)
+		  key-buf value-buf
+		  :transaction (my-current-transaction sc))))
+	(if buf t
+	    nil)))))
+
+
+(defmethod (setf get-value) (value key (bt bdb-dup-btree))
+    (let ((sc (get-con bt)))
+      (with-buffer-streams (key-buf value-buf)
+	(buffer-write-oid (oid bt) key-buf)
+	(serialize key key-buf sc)
+	(serialize value value-buf sc)
+	(db-put-buffered (controller-dup-btrees sc)
+			 key-buf value-buf
+			 :transaction (my-current-transaction sc))))
+    value)
+
+(defmethod remove-kv (key (bt bdb-dup-btree))
+  (let ((sc (get-con bt)) )
+    (with-buffer-streams (key-buf)
+      (buffer-write-oid (oid bt) key-buf)
+      (serialize key key-buf sc)
+      (db-delete-buffered (controller-dup-btrees sc) key-buf 
+			  :transaction (my-current-transaction sc)))))
+
+(defclass bdb-dup-cursor (bdb-cursor) ()
+  (:documentation "Cursor for traversing bdb secondary indices."))
+
+(defmethod make-cursor ((bt bdb-dup-btree))
+  "Make a secondary-cursor from a secondary index."
+  (let ((sc (get-con bt)))
+    (make-instance 'bdb-dup-cursor
+		   :btree bt
+		   :handle (db-cursor (controller-dup-btrees sc)
+				      :transaction (my-current-transaction sc))
+		   :oid (oid bt))))
 

@@ -119,6 +119,10 @@ existing primary entries (may be expensive!)"))
   (:documentation "Calls a two input function with the name and 
    btree-index object of all secondary indices in the btree"))
 
+(defmethod ensure-index ((ibt indexed-btree) idxname &key key-form populate)
+  (unless (get-index ibt 'classname)
+    (add-index ibt :index-name idxname :key-form key-form :populate populate)))
+
 ;;
 ;; Secondary Indices
 ;;
@@ -157,7 +161,6 @@ existing primary entries (may be expensive!)"))
 (defgeneric get-primary-key (key bt)
   (:documentation "Get the primary key from a secondary key."))
 
-
 ;;
 ;; Some generic defaults for secondary indices 
 ;; (shouldn't implement in backend)
@@ -175,6 +178,19 @@ the primary."
 lookup, updating ALL other secondary indices."
   (remove-kv (get-primary-key key bt) (primary bt)))
 
+;;
+;; Duplicate btrees
+;;
+
+(defclass dup-btree (btree) ())
+
+(defgeneric build-dup-btree (sc)
+  (:documentation 
+   "Construct a btree of the appropriate type corresponding to this store-controller."))
+
+(defun make-dup-btree (&optional (sc *store-controller*))
+  (build-dup-btree sc))
+  
 
 ;;
 ;; Cursors for all btree types
@@ -568,7 +584,6 @@ not), evaluates the forms, then closes the cursor."
    each call of fn in a fresh list and return that list in the 
    same order the calls were made (first to last)"))
 
-
 (defun validate-map-index-call (start end)
   (unless (or (null start) (null end) (lisp-compare<= start end))
     (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
@@ -624,6 +639,15 @@ not), evaluates the forms, then closes the cursor."
 		  (funcall fn skey val pkey)
 		  (return (nreverse results)))))))))
 
+(defun pset-range-for-descending (cur end)
+  (if (cursor-pset cur end)
+      (progn
+	(cursor-next-nodup cur)
+	(cursor-pprev cur))
+      (progn
+	(cursor-pset-range cur end)
+	(cursor-pprev cur))))
+
 (defmethod map-index (fn (index btree-index) &rest args
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
@@ -657,99 +681,65 @@ not), evaluates the forms, then closes the cursor."
      :continue (or (null start) (lisp-compare>= key start))
      :step (cursor-pprev cur))))
 
-(defmethod old-map-index (fn (index btree-index) &rest args 
-		      &key start end (value nil value-set-p) from-end collect 
-		      &allow-other-keys)
-  (declare (optimize (speed 3) (safety 2) (debug 1))
-	   (dynamic-extent args))
-  (unless (or (null start) (null end) (lisp-compare<= start end))
-    (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
-	   start end))
-  (let ((sc (get-con index))
-	(end (or value end))
-	(from-end (and from-end (not value-set-p)))
-	(results nil))
-    (flet ((collector (k v pk)
-	     (push (funcall fn k v pk) results)))
-      (declare (dynamic-extent (function collector))
-	       (special *current-cursor*))
-      (let ((fn (if collect #'collector fn)))
-      (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
-	(with-btree-cursor (cur index)
-	  (let ((*current-cursor* cur))
-	  (labels ((continue-p (key)
-		     ;; Do we go to the next value?
-		     (or (if from-end (null start) (null end))
-			 (if from-end 
-			     (or (not (lisp-compare<= key start))
-				 (lisp-compare-equal key start))
-			     (lisp-compare<= key end))))
-		   (value-increment () 
-		     ;; Step to the next key value;
-		     ;; from-end duplicate cursor is already there
-		     (if from-end 
-			 (cursor-pcurrent cur)
-			 (cursor-pnext-nodup cur)))
-		   (map-values () 
-		     ;; Handle the next key value
-		     (multiple-value-bind (exists? skey val pkey)
-			 (value-increment)
-		       (if (and exists? (continue-p skey))
-			   (progn
-			     (funcall fn skey val pkey)
-			     (map-duplicates skey))
-			   (nreverse results))))
-		   (next-duplicate (key)
-		     (if from-end
-			 (pprev-dup-hack cur key)
-			 (cursor-pnext-dup cur)))
-		   (map-duplicates (key) 
-		     ;; Map all duplicates for key value
-		     (multiple-value-bind (exists? skey val pkey) 
-			 (next-duplicate key)
-		       (if exists?
-			   (progn
-			     (funcall fn skey val pkey)
-			     (map-duplicates key))
-			   (progn
-			     (unless from-end
-			       (cursor-pset cur key))
-			     (map-values))))))
-	    (declare (dynamic-extent (function map-values) (function next-duplicate) 
-				     (function continue-p) (function map-duplicates)))
-	    (multiple-value-bind (exists? skey val pkey)
-		(cond (value-set-p
-		       (cursor-pset cur value))
-		      ((and (not from-end) (null start))
-		       (cursor-pfirst cur))
-		      ((and from-end (null end))
-		       (cursor-plast cur))
-		      (t (if from-end 
-			     (pset-range-for-descending cur end)
-			     (cursor-pset-range cur start))))
-	      (if (and exists? (continue-p skey))
-		  (progn
-		    (funcall fn skey val pkey)
-		    (map-duplicates skey))
-		  nil))))))))))
+;;
+;; Map duplicate btrees
+;;
 
-(defun pset-range-for-descending (cur end)
-  (if (cursor-pset cur end)
+(defun set-range-for-descending (cur end)
+  (if (cursor-set cur end)
       (progn
 	(cursor-next-nodup cur)
-	(cursor-pprev cur))
+	(cursor-prev cur))
       (progn
-	(cursor-pset-range cur end)
-	(cursor-pprev cur))))
+	(cursor-set-range cur end)
+	(cursor-prev cur))))
 
-(defun pprev-dup-hack (cur key)
-  "Go back one step in a duplicate set, returns nil 
-   if previous element is a different key.  More efficient than
-   the current default implementation of cursor-pprev-dup"
-  (multiple-value-bind (exists? skey value pkey)
-      (cursor-pprev cur)
-    (when (lisp-compare-equal key skey)
-      (values exists? key value pkey))))
+(defgeneric map-dup-btree (fn index &rest args &key start end value from-end collect &allow-other-keys)
+  (:documentation "Map-dup-btree is like map-index but for simple 
+   duplicate btrees.  It takes a function of two arguments: key and value.  
+   As with map-index the keyword arguments start and end determine 
+   the starting element and ending element, inclusive.  Also, start = nil 
+   implies the first element, end = nil implies the last element in 
+   the index.  If you want to traverse only a set of identical key 
+   values, for example all nil values, then use the value keyword 
+   which will override any values of start and end.  The collect 
+   keyword will accumulate the results from each call of fn in a fresh 
+   list and return that list in the same order the calls were made 
+   (first to last)"))
+
+(defmethod map-dup-btree (fn (index dup-btree) &rest args
+			  &key start end (value nil value-set-p) from-end collect 
+			  &allow-other-keys)
+  (validate-map-index-call start end)
+  (cond (value-set-p (map-dup-values fn index value collect))
+	(from-end (map-dup-from-end fn index start end collect))
+	(t (map-dup-from-start fn index start end collect))))
+
+(defmethod map-dup-values (fn index value collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+	:start (cursor-set cur value)
+	:continue t
+	:step (cursor-next-dup cur))))
+
+(defmethod map-dup-from-start (fn index start end collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+      :start (if start 
+		 (cursor-set-range cur start) 
+		 (cursor-first cur))
+      :continue (or (null end) (lisp-compare<= key end))
+      :step (cursor-next cur))))
+
+(defmethod map-dup-from-end (fn index start end collect)
+  (with-map-index-wrapper (fn index collect cur)
+    (iterate-map-index
+     :start (if end 
+		(set-range-for-descending cur end) 
+		(cursor-last cur))
+     :continue (or (null start) (lisp-compare>= key start))
+     :step (cursor-prev cur))))
+
 
 
 ;; ===============================

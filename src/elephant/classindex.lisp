@@ -24,91 +24,28 @@
 
 (declaim #-elephant-without-optimize (optimize (speed 3) (safety 1)))
 
-;; =================================
-;;    LOW-LEVEL API SPECIFICATION
-;; =================================
-
-;;
-;; Operates against the current *store-controller* but many 
-;; accept a :sc keyword to change the controller.  The specific 
-;; indices created can be specialized on the controller type.  
-;; See the internal implementor protocol below
-;;
-
-(defgeneric find-class-index (persistent-metaclass &rest rest)
-  (:documentation "This method is the way to access the class index via
-    the class object.  We can always fetch it or we can cache it in
-    the class itself.  It returns an indexed-btree."))
-
-(defgeneric find-inverted-index (persistent-metaclass index-name &key null-on-fail)
-  (:documentation "This method finds an inverted index defined on
-   the class described by an instance of persistent-metaclass."))
-
-(defgeneric enable-class-indexing (persistent-metaclass slot-names &rest rest)
-  (:documentation "Enable a class instance index for this object.  It's
-    an expensive thing to support on writes so know that you need it 
-    before you do it."))
-
-(defgeneric disable-class-indexing (persistent-metaclass &rest rest)
-  (:documentation "Delete and remove class instance indexing and any
-    secondary indices defined against it"))
-
-(defgeneric add-class-slot-index (persistent-metaclass slot-name &rest rest)
-  (:documentation "Add a per-slot class index option to the class
-    index based on the class accessor method"))
-
-(defgeneric remove-class-slot-index (persistent-metaclass slot-name &key sc)
-  (:documentation "Remove the per-slot index from the db"))
-
-(defgeneric add-class-derived-index (persistent-metaclass name derived-defun &rest rest)
-  (:documentation "Add a simple secondary index to this class based on
-    a function that computes a derived parameter.  WARNING: derived
-    parameters are only valid on persistent slots.  An arbitrary function
-    here will fail to provide consistency on transient slots or global
-    data that is not stored in the persistent store.  Derived indexes are
-    deleted and rebuilt when a class is redefined"))
-
-(defgeneric remove-class-derived-index (persistent-metaclass name &rest rest)
-  (:documentation "Remove a derived index by providing the derived name
-   used to name the derived index"))
-
 ;; ==================================
-;;    LOW-LEVEL CLASS INDEXING API
+;;       ACCESS TO INDICES
 ;; ==================================
 
-(defmethod find-class-index ((class-name symbol) &key (sc *store-controller*) (errorp t))
-  (find-class-index (find-class class-name) :sc sc :errorp errorp))
+(defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil))
+  (find-inverted-index (find-class class) slot :null-on-fail null-on-fail))
 
-(defmethod class-indexedp-by-name ((class-name symbol) &key (sc *store-controller*))
-  (declare (ignore sc))
-  (let ((class (find-class class-name nil)))
-    (when class (indexed class))))
-
-(define-condition persistent-class-not-indexed ()
-  ((class-obj :initarg :class :initarg nil :reader unindexed-class-obj))
-  (:report (lambda (condition stream)
-	     (format stream "Class ~A is not enabled for indexing"
-		     (class-name (unindexed-class-obj condition))))))
-		    
-(defun signal-class-not-indexed (class)
-  (cerror "Ignore and continue?"
-          'persistent-class-not-indexed 
-	  :class class))
-
-(defmethod find-class-index ((class persistent-metaclass) &key (sc *store-controller*) (errorp t))
-  (when (null sc)
-    (error "Null store controller, default store-controller is ~A" *store-controller*))
+(defmethod find-inverted-index ((class persistent-metaclass) slot &key (null-on-fail nil) (sc *store-controller*))
   (ensure-finalized class)
-  (if (not (indexed class))
-      (when errorp
-	(signal-class-not-indexed class))
-      (if (class-index-cached? class sc)
-	  (get-cached-index class sc)
-	  (multiple-value-bind (btree found)
-	      (get-value (class-name class) (controller-class-root sc))
-	    (if found
-		(cache-existing-class-index class btree sc)
-		(cache-new-class-index class sc))))))
+  (flet ((assert-error ()
+	   (when null-on-fail (return-from find-inverted-index nil))
+	   (cerror "Return null and continue?"
+		   "Inverted slot index ~A not found for class ~A with indexed slots: ~A" 
+		   slot (class-name class) (indexed-slot-names class))))
+    (let ((slot-def (find-slot-def-by-name class slot)))
+      (when (or (not slot-def) 
+		(not (eq (type-of slot-def) 'indexed-effective-slot-definition)))
+	(assert-error))
+      (let ((idx (get-slot-def-index slot-def sc)))
+	(unless idx
+	  (setf idx (initialize-slot-def-index slot-def sc)))
+	idx))))
 
 (defun ensure-finalized (class)
   (when (not (class-finalized-p class))
@@ -116,229 +53,6 @@
       (warn "Manually finalizing class ~A" (class-name class)))
     (finalize-inheritance class)))
 
-(defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil))
-  (find-inverted-index (find-class class) slot :null-on-fail null-on-fail))
-
-(defmethod find-inverted-index ((class persistent-metaclass) slot &key (null-on-fail nil))
-  (let* ((cidx (find-class-index class :errorp (not null-on-fail)))
-	 (idx (or (get-index cidx slot)
-		  (get-index cidx (make-derived-name slot)))))
-    (if idx 
-	idx 
-	(if null-on-fail
-	    nil
-	    (cerror "Ignore and continue?"
-		    "Inverted index ~A not found for class ~A with persistent slots: ~A" 
-		    slot (class-name class) (car (%persistent-slots class)))))))
-
-(defmethod find-inverted-index-names ((class persistent-metaclass))
-  (let ((names nil))
-    (map-indices (lambda (name idx) 
-		   (declare (ignore idx)) 
-		   (push name names))
-		 (find-class-index class))
-    names))
-
-(defmethod close-controller :before ((sc store-controller))
-  "Ensure the classes don't have stale references to closed stores!"
-  (when (controller-class-root sc)
-    (handler-case 
-	(with-transaction (:store-controller sc :txn-sync t :retries 2)
-	  (map-btree (lambda (class-name index)
-		       (declare (ignore index))
-		       (let ((class (find-class class-name nil)))
-			 (when (and class (subtypep class 'persistent-metaclass))
-			   (uncache-class-index class sc))))
-		     (controller-class-root sc)))
-      (t (e) (warn "Unable to clear class index caches ~A" e)))))
-      
-
-;; ============================
-;;   METACLASS PROTOCOL HOOKS
-;; ============================
-
-(defmethod indexed-slot-writer ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition) new-value)
-  "Anything that side effects a persistent-object slot should call this to keep
-   the dependant indices in synch.  Only classes with derived indices need to
-   update on writes to non-indexed slots.  This is a side effect of user-managed
-   indices in Elephant - a necessity because we allow arbitrary lisp expressions to
-   determine index value so without bi-directional pointers, the indices cannot 
-   automatically update a changed indexed value in derived slots"
-  (let ((slot-name (slot-definition-name slot-def))
-	(oid (oid instance))
-	(sc (get-con instance)))
-    (declare (type fixnum oid))
-    (if (no-indexing-needed? class instance slot-def oid)
-	(persistent-slot-writer sc new-value instance slot-name)
-	(let ((class-idx (find-class-index class :sc sc)))
-	  (ensure-transaction (:store-controller sc)
-	    (when (get-value oid class-idx)
-	      (remove-kv oid class-idx))
-	    (persistent-slot-writer sc new-value instance slot-name)
-	    (setf (get-value oid class-idx) instance))))))
-
-(defmethod indexed-slot-makunbound ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
-  (let* ((oid (oid instance))
-	 (sc (get-con instance))
-	 (class-idx (find-class-index class :sc sc)))
-    (ensure-transaction (:store-controller sc)
-      (let ((obj (get-value oid class-idx)))
-	(remove-kv oid class-idx)
-	(persistent-slot-makunbound sc instance (slot-definition-name slot-def))
-	(setf (get-value oid class-idx) obj)))))
-
-(defun no-indexing-needed? (class instance slot-def oid)
-  (declare (ignore instance))
-  (or (and (not (indexed slot-def)) ;; not indexed
-	   (not (indexing-record-derived (indexed-record class)))) ;; no derived indexes
-      (member oid *inhibit-indexing-list*))) ;; currently inhibited
-
-;; ============================
-;;   EXPLICIT INDEX MGMT API
-;; ============================
-
-(defmethod enable-class-indexing ((class persistent-metaclass) indexed-slot-names &key (sc *store-controller*))
-  (let ((croot (controller-class-root sc)))
-    (multiple-value-bind (btree found)
-	(get-value (class-name class) croot)
-      (when found 
-	(if (indexed class)
-	    (error "Class is already enabled for indexing!  Run disable class indexing to clean up.")
-	    (progn
-	      (let ((slots nil))
-		(map-indices (lambda (k v) (declare (ignore v)) (push k slots)) btree)
-		;; NOTE: Should synchronize?
-		(warn "Class has pre-existing database index, enabling indexing for slots: ~A" 
-		      (setf indexed-slot-names (union slots indexed-slot-names)))))))
-      ;; Update class indexing record if not already indexed
-      (unless (indexed class)
-	(update-indexed-record class indexed-slot-names))
-      ;; Put class instance index into the class root & cache it in the class object
-      (ensure-transaction (:store-controller sc)
-	(when (not found)
-	  (let ((class-idx (build-indexed-btree sc)))
-	    (setf (get-value (class-name class) croot) class-idx)
-	    (cache-existing-class-index class class-idx sc)))
-	;; Add all the slot indices 
-	(loop for slot in indexed-slot-names do
-	     (unless (find-inverted-index class slot :null-on-fail t)
-	       (add-class-slot-index class slot :populate nil :sc sc))))
-	;; Sanity check
-      (let ((record (indexed-record class)))
-	(declare (ignorable record))
-	(assert (indexed class)))
-      (find-class-index class :sc sc :errorp t))))
-  
-(defmethod disable-class-indexing ((class-name symbol) &key (errorp t) (sc *store-controller*))
-  (let ((class (find-class class-name errorp)))
-    (when class
-      (disable-class-indexing class :sc sc))))
-  
-(defmethod disable-class-indexing ((class persistent-metaclass) &key (sc *store-controller*) (errorp nil))
-  "Disable any class indices from the database, even if the current class object is not
-   officially indexed.  This ensures there is no persistent trace of a class index.  Storage
-   is reclaimed also"
-  (let ((class-idx (find-class-index class :sc sc :errorp errorp)))
-    (if class-idx 
-	(progn
-	  (wipe-class-indexing class :sc sc)
-	  (update-indexed-record class nil :drop-index t))
-	(when errorp
-	  (error "No class index exists in persistent store ~A" sc)
-	  (return-from disable-class-indexing nil)))))
-
-(defmethod wipe-class-indexing ((class persistent-metaclass) &key (sc *store-controller*))
-  (wipe-class-indexing (class-name class) :sc sc))
-
-(defmethod wipe-class-indexing ((class-name symbol) &key (sc *store-controller*))
-  (let ((cindex (get-value class-name (controller-class-root sc)))
-	(class (find-class class-name nil)))
-    (when cindex
-      ;; Delete all the values
-      (with-transaction (:store-controller sc)
-	(with-btree-cursor (cur cindex)
-	  (loop while (cursor-next cur) do
-	       (cursor-delete cur))))
-      ;; Get the names of all indices & remove them 
-      (let ((names nil))
-	(map-indices (lambda (name secondary-index)
-		       (declare (ignore secondary-index))
-		       (push name names))
-		     cindex)
-	(dolist (name names)
-	  (when (member name (class-slots class))
-	    (if class 
-		(remove-class-slot-index class name)
-		(with-transaction (:store-controller sc)
-		  (remove-index cindex name))))))
-      ;; Drop the class instance index from the class root
-      (with-transaction (:store-controller sc)
-	(remove-kv class-name (controller-class-root sc)))
-      (when class
-	(uncache-class-index class sc)))))
-
-(defmethod add-class-slot-index ((class symbol) slot-name &key (sc *store-controller*))
-  (add-class-slot-index (find-class class) slot-name :sc sc))
-
-(defmethod add-class-slot-index ((class persistent-metaclass) slot-name &key (sc *store-controller*) (populate t) (update-class t))
-  (if (find-inverted-index class slot-name :null-on-fail t)
-      (warn "Duplicate slot index named ~A requested for class ~A.  Ignoring." 
-	    slot-name (class-name class))
-      (progn
-	(when update-class (register-indexed-slot class slot-name))
-;;	(with-transaction (:store-controller sc)
-	  (add-index (find-class-index class :sc sc)
-		     :index-name slot-name 
-		     :key-form (make-slot-key-form class slot-name)
-		     :populate populate)
-	  t)))
-
-(defmethod remove-class-slot-index ((class symbol) slot-name &key (sc *store-controller*))
-  (remove-class-slot-index (find-class class) slot-name :sc sc))
-	     
-(defmethod remove-class-slot-index ((class persistent-metaclass) slot-name &key 
-				    (sc *store-controller*) (update-class t))
-  (if (find-inverted-index class slot-name :null-on-fail t)
-      (progn
-	(when update-class (unregister-indexed-slot class slot-name))
-	(with-transaction (:store-controller sc)
-	  (remove-index (find-class-index class :sc sc) slot-name))
-	t)
-      (progn
-	(warn "Slot index ~A not found for class ~A" slot-name (class-name class))
-	nil)))
-
-(defmethod add-class-derived-index ((class symbol) name derived-defun &key (sc *store-controller*) (populate t) (hints nil))
-  (add-class-derived-index (find-class class) name derived-defun :sc sc :populate populate :hints hints))
-
-(defmethod add-class-derived-index ((class persistent-metaclass) name derived-defun &key 
-				    (populate t) (sc *store-controller*) (update-class t) (hints nil))
-  (declare (ignore hints))
-  (let ((class-idx (find-class-index class :sc sc)))
-    (if (find-inverted-index class (make-derived-name name) :null-on-fail t)
-	(error "Duplicate derived index requested named ~A on class ~A" name (class-name class))
-	(progn
-	  (when update-class (register-derived-index class name))
-	  (add-index class-idx
-		     :index-name (make-derived-name name)
-		     :key-form (make-derived-key-form derived-defun)
-		     :populate populate)))))
-
-(defmethod remove-class-derived-index ((class symbol) name &key (sc *store-controller*))
-  (remove-class-derived-index (find-class class) name :sc sc))
-	     
-(defmethod remove-class-derived-index ((class persistent-metaclass) name &key 
-				       (sc *store-controller*) (update-class t))
-  (if (find-inverted-index class (make-derived-name name) :null-on-fail t)
-      (progn
-	(when update-class (unregister-derived-index class name))
-	(with-transaction (:store-controller sc)
-	  (remove-index (find-class-index class :sc sc) (make-derived-name name)))
-	t)
-      (progn
-	(warn "Derived index ~A does not exist in ~A" name (class-name class))
-	nil)))
-    
 ;; ===================
 ;;   USER CURSOR API
 ;; ===================
@@ -381,18 +95,15 @@
 ;;    USER MAPPING API 
 ;; ======================
 
-(defun map-class (fn class &key collect)
+(defun map-class (fn class &key collect (sc *store-controller*))
   "Perform a map operation over all instances of class.  Takes a
    function of one argument, a class instance"
-  (let* ((class (if (symbolp class)
-		    (find-class class)
-		    class))
-	 (class-idx (find-class-index class)))
-    (flet ((map-fn (k v)
-	     (declare (ignore k))
-	     (funcall fn v)))
-      (declare (dynamic-extent map-fn))
-      (map-btree #'map-fn class-idx :collect collect))))
+  (flet ((map-fn (cidx oid pcidx)
+	   (declare (ignore cidx pcidx))
+	   (controller-recreate-instance sc oid)))
+    (map-index #'map-fn (controller-instance-class-index sc)
+	       :value (schema-id (get-controller-schema class sc))
+	       :collect collect)))
 
 (defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect)
   "map-inverted-index maps a function of two variables, taking key
@@ -419,15 +130,9 @@
   (let* ((index (if (symbolp index)
 		    (find-inverted-index class index)
 		    index)))
-    (flet ((wrapper (key value pkey)
-	     (declare (ignore pkey))
-	     (funcall fn key value)))
-      (declare (dynamic-extent wrapper))
-      (if value-p
-	  (map-index #'wrapper index :value value :collect collect)
-	  (map-index #'wrapper index :start start :end end :from-end from-end :collect collect)))))
-		    
-
+    (if value-p
+	(map-dup-btree fn index :value value :collect collect)
+	(map-dup-btree fn index :start start :end end :from-end from-end :collect collect))))
 
 ;; =================
 ;;   USER SET API 

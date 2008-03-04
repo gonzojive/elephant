@@ -22,6 +22,8 @@
 
 (in-package "ELEPHANT")
 
+(defstruct oid-pair left right)
+
 ;;
 ;; TRACKING OBJECT STORES
 ;;
@@ -67,17 +69,17 @@
   (cerror "Open a new instance and continue?"
 	  'controller-lost-error
 	  :format-control "Store controller for specification ~A for object ~A cannot be found."
-	  :format-arguments (list object (dbcn-spc-pst object))
+	  :format-arguments (list object (db-spec object))
 	  :object object
-	  :spec (dbcn-spc-pst object)))
+	  :spec (db-spec object)))
 
 (defmethod get-con ((instance persistent) &optional (sc *store-controller*))
   (declare (ignore sc))
-  (let ((con (gethash (dbcn-spc-pst instance) *dbconnection-spec*)))
+  (let ((con (gethash (db-spec instance) *dbconnection-spec*)))
     (cond ((not con)
 	   (progn (signal-controller-lost-error instance)
 		  (open-controller 
-		   (get-controller (dbcn-spc-pst instance)))))
+		   (get-controller (db-spec instance)))))
 	  ;; If it's valid and open
 	  ((and con (connection-is-indeed-open con))
 	   con)
@@ -159,20 +161,37 @@
 	 persistent btree.  It should have an OID that is fixed in
 	 the code and does not change between sessions.  Usually
 	 it this is something like 0, 1 or -1")
-   (class-root :reader controller-class-root
-	       :documentation 
-	       "This is another root for class indexing that is
-	       also a data store specific persistent btree instance
-	       with a unique OID that persists between sessions.")
-   (instance-cache :accessor instance-cache :initform (make-cache-table :test 'eql)
+   ;; Schema storage and caching
+   (schema-table :reader controller-schema-table
+		 :documentation "Schema id to schema database table")
+   (schema-name-index :reader controller-schema-name-index
+		      :documentation "Schema name to schema database table")
+   (schema-cache :accessor controller-schema-cache :initform (make-cache-table :test 'eq)
+		 :documentation "This is a cache of class schemas stored in the database indexed by classid")
+   (schema-cache-lock :accessor controller-schema-cache-lock :initform (ele-make-fast-lock)
+			:documentation "Protection for updates to the cache from multiple threads.  
+                                        Do not override.")
+   ;; Instance storage
+   (instance-table :reader controller-instance-table
+		  :documentation "Contains btree of oid to class ids")
+   (instance-class-index :reader controller-instance-class-index
+			 :documentation "A reverse map of class id to oid")
+   (instance-cache :accessor controller-instance-cache :initform (make-cache-table :test 'eql)
 		   :documentation 
 		   "This is an instance cache and part of the
                     metaclass protocol.  Data stores should not
                     override the default behavior.")
-   (instance-cache-lock :accessor instance-cache-lock :initform (ele-make-fast-lock)
+   (instance-cache-lock :accessor controller-instance-cache-lock :initform (ele-make-fast-lock)
 			:documentation "Protection for updates to
 			the cache from multiple threads.  Do not
 			override.")
+   ;; Root table for all indices
+   (index-table :reader controller-index-table
+	       :documentation 
+	       "This is another root for class indexing that is
+	       also a data store specific persistent btree instance
+	       with a unique OID that persists between sessions.
+               No cache is needed because we cache in the class slots.")
    ;; Upgradable serializer strategy
    (serializer-version :accessor controller-serializer-version :initform nil
 		       :documentation "Governs the default
@@ -196,8 +215,106 @@
     the superclass and subclasses.  See slot documentation for
     details."))
 
+(defun schema-classname-keyform (idx schema-id schema)
+  (declare (ignore idx schema-id))
+  (values t (schema-classname schema)))
+
+(defun instance-cidx-keyform (idx oid cidx)
+  (declare (ignore idx oid))
+  (values t cidx))
+
 (defmethod print-object ((sc store-controller) stream)
   (format stream "#<~A ~A>" (type-of sc) (second (controller-spec sc))))
+
+;;
+;; Controller instance creation 
+;;
+
+
+(defmethod controller-recreate-instance ((sc store-controller) oid &optional classname)
+  "Called by the deserializer to return an instance"
+  (awhen (get-cached-instance sc oid)
+    (return-from controller-recreate-instance it))
+  ;; Should get cached since make-instance calls cache-instance
+  (recreate-instance-using-class (get-class-from-sc oid classname sc)
+				 :from-oid oid :sc sc))
+
+;;
+;; Looking up the class
+;;
+
+(defun get-class-from-sc (oid classname sc)
+  "Get the class object using the oid or using the provided classname"
+  (if (null classname)
+      (oid->class oid sc)
+      (find-class classname))) ;; legacy support (for migration)
+
+(defmethod oid->class (oid (sc store-controller))
+  "Use the oid map to extract a class object via the 
+    cached schema table"
+  (let ((cid (oid->schema-id oid sc)))
+    (aif (default-class-id-type cid sc)
+	 (find-class it)
+	 (find-class (schema-classname (lookup-schema cid sc))))))
+
+(defmethod oid->schema-id (oid (sc store-controller))
+  (get-value oid (controller-instance-table sc)))
+
+(defmethod lookup-schema ((schema-id integer) (sc store-controller))
+  "Find the db class schema by schema id"
+  (ifret (get-cache schema-id (controller-schema-cache sc))
+	 (let* ((schema (get-value schema-id (controller-schema-table sc)))
+		(class (find-class (schema-classname schema))))
+	   (ele-with-fast-lock ((controller-schema-cache-lock sc))
+	     (setf (get-cache schema-id (controller-schema-cache sc)) schema))
+	   (add-class-controller-schema class sc schema)
+	   schema)))
+
+;;
+;; Maintain persistent instance table
+;;
+
+(defmethod register-instance (instance class (sc store-controller))
+  "When creating an instance for the first time, write it to the persistent
+   instance table"
+  (setf (get-value (oid instance) (controller-instance-table sc))
+	(if (subtypep (type-of instance) 'btree)
+	    (default-class-id (type-of instance) sc)
+	    (schema-id (get-controller-schema class sc)))))
+
+;;
+;; Maintain schema table
+;;
+
+(defgeneric default-class-id (base-type sc)
+  (:documentation "A method implemented by the store controller for providing
+   fixed class ids for basic btree derivative types"))
+
+(defgeneric default-class-id-type (id sc)
+  (:documentation "A method implemented by the store controller which provides
+   the type associated with a default id or nil if the id does not match"))
+
+(defmethod get-controller-schema (class (sc store-controller))
+  "Get the db-schema managed by the controller"
+  ;; Lookup class cached version
+  (aif (get-class-controller-schema class sc) it
+       ;; Lookup persistent version
+       (aif (get-value (class-name class) (controller-schema-name-index sc)) it
+	    (register-controller-schema class sc))))
+
+(defmethod register-controller-schema (class (sc store-controller))
+  "We don't have a cached version, so create a new one"
+  (let ((db-schema (make-db-schema (next-cid sc) (%class-schema class))))
+    ;; Add to database
+    (setf (get-value (schema-id db-schema) (controller-schema-table sc))
+	  db-schema)
+    ;; Add to controller cache for fast cid lookup
+    (ele-with-fast-lock ((controller-schema-cache-lock sc))
+      (setf (get-cache (schema-id db-schema) (controller-schema-cache sc))
+	    db-schema))
+    ;; Add to class for fast instance serialization
+    (add-class-controller-schema class sc db-schema)
+    db-schema))
 
 ;;
 ;; Per-controller instance caching
@@ -206,30 +323,26 @@
 (defmethod cache-instance ((sc store-controller) obj)
   "Cache a persistent object with the controller."
   (declare (type store-controller sc))
-  (ele-with-fast-lock ((instance-cache-lock sc))
-    (setf (get-cache (oid obj) (instance-cache sc)) obj)))
+  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+    (setf (get-cache (oid obj) (controller-instance-cache sc)) obj)))
 
-(defmethod get-cached-instance ((sc store-controller) oid class-name)
+(defmethod get-cached-instance ((sc store-controller) oid)
   "Get a cached instance, or instantiate!"
   (declare (type store-controller sc)
 	   (type fixnum oid))
-  (let ((obj 
-	 (ele-with-fast-lock ((instance-cache-lock sc))
-	   (get-cache oid (instance-cache sc)))))
-    (if obj obj
-	;; Should get cached since make-instance calls cache-instance
-	(recreate-instance-using-class (find-class class-name) :from-oid oid :sc sc))))
+  (awhen (get-cache oid (controller-instance-cache sc))
+    it))
 
 (defmethod uncache-instance ((sc store-controller) oid)
-  (ele-with-fast-lock ((instance-cache-lock sc))
-    (remcache oid (instance-cache sc))))
+  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+    (remcache oid (controller-instance-cache sc))))
 
 (defmethod flush-instance-cache ((sc store-controller))
   "Reset the instance cache (flush object lookups).  Useful 
    for testing.  Does not reclaim existing objects so there
    will be duplicate instances with identical functionality"
-  (ele-with-fast-lock ((instance-cache-lock sc))
-    (setf (instance-cache sc)
+  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+    (setf (controller-instance-cache sc)
 	  (make-cache-table :test 'eql))))
 
 
@@ -422,10 +535,21 @@ true."))
    state in the db.  Also, the object could be used by
    open-controller to reopen the database"))
 
-(defmethod close-controller :after ((sc store-controller))
-  "Delete connection spec so store-controller operations on cached 
-   controller information fail"
-  (remhash (controller-spec sc) *dbconnection-spec*))
+(defmethod open-controller :after ((sc store-controller) &rest args)
+  ;; Initialize classname -> cidx
+  (setf (slot-value sc 'schema-name-index)
+	(ensure-index (slot-value sc 'schema-table) 'by-name
+		      :key-form 'schema-classname-keyform))
+
+  ;; Initialize class idx -> oid index
+  (setf (slot-value sc 'instance-class-index)
+	(ensure-index (slot-value sc 'instance-table) 'by-name
+		      :key-form 'instance-cidx-keyform)))
+
+(defmethod close-controller :before ((sc store-controller))
+  (remhash (controller-spec sc) *dbconnection-spec*)
+  (setf (slot-value sc 'schema-name-index) nil)
+  (setf (slot-value sc 'instance-class-index) nil))
 
 (defgeneric connection-is-indeed-open (controller)
   (:documentation "Validate the controller and the db that it is connected to")
@@ -434,6 +558,10 @@ true."))
 (defgeneric next-oid (sc)
   (:documentation
    "Provides a persistent source of unique id's"))
+
+(defgeneric next-cid (sc)
+  (:documentation
+   "Provides a unique class schema id's"))
 
 (defgeneric optimize-layout (sc &key &allow-other-keys)
   (:documentation "If supported, speed up the index and allocation by freeing up
@@ -500,6 +628,7 @@ true."))
 
 (defun close-all-stores ()
   (maphash (lambda (k v)
+	     (declare (ignore k))
 	     (close-store v))
 	   *dbconnection-spec*))
 
@@ -567,7 +696,7 @@ true."))
    behavior for indexed classes"))
 
 (defmethod drop-pobject ((inst persistent-object))
-  (let ((pslots (persistent-slots (class-of inst))))
+  (let ((pslots (persistent-slot-names (class-of inst))))
     (dolist (slot pslots)
       (slot-makunbound inst slot))))
 ;;      (slot-makunbound-using-class (class-of inst)
@@ -600,7 +729,3 @@ true."))
 				     :store-controller sc))))
     (when entry
       (cdr entry))))
-
-   
-      
-

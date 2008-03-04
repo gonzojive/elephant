@@ -24,28 +24,50 @@
 (declaim #-elephant-without-optimize (optimize (speed 3) (safety 1)))
 
 (defclass persistent ()
-  ((%oid :accessor oid :initarg :from-oid
+  ((oid :accessor oid :initarg :from-oid
 	 :documentation "All persistent objects have an oid")
-   (dbconnection-spec-pst :type (or list string) :accessor dbcn-spc-pst :initarg :dbconnection-spec-pst
-			  :documentation "Persistent objects use a spec pointer to identify which store
-                                          they are connected to"))
+   (spec :type (or list string) :accessor db-spec :initarg :db-spec
+	 :documentation "Persistent objects use a spec pointer to identify which store
+                         they are connected to"))
   (:documentation "Abstract superclass for all persistent classes (common
     to both user-defined classes and Elephant-defined objects such as collections.)"))
 
 (defmethod print-object ((obj persistent) stream)
   "This is useful for debugging and being clear about what is persistent and what is not"
-  (format stream "#<~A oid:~A>" (type-of obj) (when (slot-boundp obj '%oid) (oid obj))))
+  (format stream "#<~A oid:~A>" (type-of obj) (when (slot-boundp obj 'oid) (oid obj))))
 
 (defclass persistent-metaclass (standard-class)
-  ((%persistent-slots :accessor %persistent-slots)
-   (%indexed-class :accessor %indexed-class)
-   (%indexing-state :accessor %indexing-state)
-   (%index-cache :accessor %index-cache))
+  ((%class-schema :accessor %class-schema :initarg :schemas :initform nil
+		   :documentation "The code master schema")
+   (%store-schemas :accessor %store-schemas :initarg :store-schemas :initform nil))
   (:documentation 
    "Metaclass for persistent classes.  Use this metaclass to
     define persistent classes.  All slots are persistent by
     default; use the :transient flag otherwise.  Slots can also
     be indexed for by-value retrieval."))
+
+(defmethod has-class-schema-p ((class persistent-metaclass))
+  (and (%class-schema class)
+       (eq (class-name (class-of (%class-schema class)))
+	   'persistent-schema)))
+
+(defmethod has-class-controller-schema-p ((class persistent-metaclass) sc)
+  (and (get-class-controller-schema class sc) t))
+
+(defmethod get-class-controller-schema ((class persistent-metaclass) sc)
+  (awhen (assoc (controller-spec sc) (%store-schemas class))
+    (cdr it)))
+
+(defmethod add-class-controller-schema ((class persistent-metaclass) sc schema)
+  (remove-class-controller-schema class sc)
+  ;; NOTE: Needs to be lock protected
+  (setf (%store-schemas class)
+	(acons (controller-spec sc) schema (%store-schemas class))))
+
+(defmethod remove-class-controller-schema ((class persistent-metaclass) sc)
+  ;; NOTE: Needs to be lock protected
+  (setf (%store-schemas class)
+	(delete (controller-spec sc) (%store-schemas class) :key #'car)))
 
 ;;
 ;; Top level defclass form - hide metaclass option
@@ -67,26 +89,8 @@
 ;; Persistent slot maintenance
 ;;
 
-(defmethod persistent-slots ((class standard-class))
-  nil)
-
-(defmethod persistent-slots ((class persistent-metaclass))
-  (if (slot-boundp class '%persistent-slots)
-      (car (%persistent-slots class))
-      nil))
-
-(defmethod old-persistent-slots ((class persistent-metaclass))
-  (cdr (%persistent-slots class)))
-
-(defmethod update-persistent-slots ((class persistent-metaclass) new-slot-list)
-  (setf (%persistent-slots class) 
-	(cons new-slot-list 
-	      (if (slot-boundp class '%persistent-slots)
-		  (car (%persistent-slots class))
-		  nil))))
-
 (defclass persistent-slot-definition (standard-slot-definition)
-  ((indexed :accessor indexed :initarg :index :initform nil :allocation :instance)))
+  ())
 
 (defclass persistent-direct-slot-definition (standard-direct-slot-definition persistent-slot-definition)
   ())
@@ -94,6 +98,20 @@
 (defclass persistent-effective-slot-definition (standard-effective-slot-definition persistent-slot-definition)
   ())
 
+(defgeneric persistent-p (class)
+  (:method ((class t)) nil)
+  (:method ((class persistent-metaclass)) t)
+  (:method ((class persistent-slot-definition)) t))
+
+(defun persistent-slot-defs (class)
+  (find-slot-defs-by-type class 'persistent-effective-slot-definition nil))
+
+(defun persistent-slot-names (class)
+  (find-slot-def-names-by-type class 'persistent-effective-slot-definition nil))
+
+;;
+;; Standard/transient slots
+;;
 
 (defclass transient-slot-definition (standard-slot-definition)
   ((transient :initform t :initarg :transient :allocation :class)))
@@ -108,174 +126,92 @@
   (:method ((slot standard-direct-slot-definition)) t)
   (:method ((slot persistent-direct-slot-definition)) nil))
 
-;;
-;; Indexed slots maintenance
-;;
+(defun ensure-transient-chain (slot-definitions initargs)
+  (declare (ignore initargs))
+  (loop for slot-definition in slot-definitions
+     always (transient slot-definition)))
 
-;; This just encapsulates record keeping a bit
-(defclass indexing-record ()
-  ((class :accessor indexing-record-class :initarg :class :initform nil)
-   (slots :accessor indexing-record-slots :initarg :slots :initform nil)
-   (derived :accessor indexing-record-derived :initarg :derived :initform 0)))
-
-(defmethod print-object ((obj indexing-record) stream)
-  (format stream "#INDEXING-RECORD<c: ~A islt: ~A dslt: ~A>" 
-	  (indexing-record-class obj)
-	  (length (indexing-record-slots obj))
-	  (length (indexing-record-derived obj))))
-
-(defmethod indexed-record ((class standard-class)) 
-  nil)
-
-(defmethod indexed-record ((class persistent-metaclass))
-  (when (slot-boundp class '%indexing-state)
-    (car (%indexing-state class))))
-
-(defmethod old-indexed-record ((class persistent-metaclass))
-  (when (slot-boundp class '%indexing-state)
-    (cdr (%indexing-state class))))
-
-(defmethod update-indexed-record ((class persistent-metaclass) new-slot-list &key drop-index)
-  (let ((oldrec (if (slot-boundp class '%indexing-state)
-		    (indexed-record class)
-		    nil))
-	(index-class (and (not drop-index)
-			  (or (and (slot-boundp class '%indexed-class) (%indexed-class class))
-			      (and new-slot-list t)))))
-    (setf (%indexed-class class) nil)
-    (setf (%indexing-state class) 
-	  (cons (make-new-indexed-record new-slot-list oldrec index-class)
-		(if oldrec oldrec nil)))))
-
-(defmethod make-new-indexed-record (new-slot-list oldrec class-indexed)
-  (make-instance 'indexing-record 
-		 :class class-indexed
-		 :slots new-slot-list
-		 :derived (when oldrec (indexing-record-derived oldrec))))
-
-(defmethod removed-indexing? ((class persistent-metaclass))
-  (and (not (indexed class))
-       (previously-indexed class)))
-
-(defun indexed-slot-names-from-defs (class)
+(defun transient-slot-defs (class)
   (let ((slot-definitions (class-slots class)))
-    (loop for slot-definition in slot-definitions
-       when (and (subtypep (type-of slot-definition) 'persistent-slot-definition)
-		 (indexed slot-definition))
-       collect (slot-definition-name slot-definition))))
+    (loop for slot-def in slot-definitions
+       unless (persistent-p slot-def)
+       collect slot-def)))
 
-(defmethod register-indexed-slot ((class persistent-metaclass) slot)
-  "This method allows for post-definition update of indexed status of
-   class slots.  It changes the effective method so we can rely on 
-   generic function dispatch for differentated behavior"
-  ;; update record
-  (let ((record (indexed-record class)))
-    (unless (member slot (car (%persistent-slots class)))
-      (error "Tried to register slot ~A as index which isn't a persistent slot" slot))
-    (unless (member slot (indexing-record-slots record))
-;;      This is a normal startup case, but during other cases we'd like
-;;      the duplicate warning
-;;      (warn "Tried to index slot ~A which is already indexed" slot))
-      (push slot (indexing-record-slots record))))
-  ;; change effective slot def
-  (let ((slot-def (find-slot-def-by-name class slot)))
-    (unless slot-def
-      (error "Slot definition for slot ~A not found, inconsistent state in
-              class ~A" slot (class-name class)))
-    (setf (slot-value slot-def 'indexed) t)))
-
-(defmethod unregister-indexed-slot (class slot)
-  "Revert an indexed slot to it's original state"
-  ;; update record
-  (let ((record (indexed-record class)))
-    (unless (member slot (indexing-record-slots record))
-      (error "Tried to unregister slot ~A which is not indexed" slot))
-    (setf (indexing-record-slots record) (remove slot (indexing-record-slots record))))
-  ;; change effective slot def status
-  (let ((slot-def (find-slot-def-by-name class slot)))
-    (unless slot-def
-      (error "Slot definition for slot ~A not found, inconsistent state in
-              class ~A" slot (class-name class)))
-    (setf (slot-value slot-def 'indexed) nil)))
-
-(defmethod register-derived-index (class name)
-  "Tell the class that it has derived indices defined against it
-   and keep a reference count"
-  (let ((record (indexed-record class)))
-    (push name (indexing-record-derived record))))
-
-(defmethod unregister-derived-index (class name)
-  (let ((record (indexed-record class)))
-    (setf (indexing-record-derived record) (remove name (indexing-record-derived record)))))
-
-(defmethod indexed ((class persistent-metaclass))
-  (and (slot-boundp class '%indexing-state)
-       (not (null (%indexing-state class)))
-       (indexing-record-class (indexed-record class))))
-;;	   (indexing-record-slots (indexed-record class))
-;;	   (indexing-record-derived (indexed-record class)))))
-
-(defmethod previously-indexed ((class persistent-metaclass))
-  (and (slot-boundp class '%indexing-state)
-       (not (null (%indexing-state class)))
-       (let ((old (old-indexed-record class)))
-	 (when (not (null old))
-	   (indexing-record-class old)))))
-;;	       (indexing-record-slots old)
-;;	       (indexing-record-derived old))))))
-
-(defmethod indexed ((slot standard-slot-definition)) nil)
-(defmethod indexed ((class standard-class)) nil)
-
-(defvar *inhibit-indexing-list* nil
-  "Use this to avoid updating an index inside
-   low-level functions that update groups of
-   slots at once.  We may need to rethink this
-   if we go to a cheaper form of update that
-   doesn't batch update all indices")
-
-(defun inhibit-indexing (uid)
-  (pushnew uid *inhibit-indexing-list*))
-
-(defun uninhibit-indexing (uid)
-  (setf *inhibit-indexing-list*
-	(delete uid *inhibit-indexing-list*)))
+(defun transient-slot-names (class)
+  (mapcar #'slot-definition-name (transient-slot-defs class)))
 
 ;;
-;; Original support for persistent slot protocol
+;; Indexed slots
 ;;
 
-#+allegro
-(defmethod excl::valid-slot-allocation-list ((class persistent-metaclass))
-  '(:instance :class :database))
+(defclass indexed-slot-definition (persistent-slot-definition)
+  ((indexed :accessor indexed-p :initarg :index :initform nil :allocation :instance)))
 
-(defmethod slot-definition-allocation ((slot-definition persistent-slot-definition))
-  :database)
+(defclass indexed-direct-slot-definition (persistent-direct-slot-definition indexed-slot-definition)
+  ())
 
-#+lispworks
-(defmethod (setf slot-definition-allocation) (allocation (slot-def persistent-slot-definition))
-  (unless (eq allocation :database)
-    (error "Invalid allocation type ~A for slot-definition-allocation" allocation))
-  allocation)
+(defclass indexed-effective-slot-definition (persistent-effective-slot-definition indexed-slot-definition)
+  ((indices :accessor indexed-slot-indices :initform nil 
+	    :documentation "Alist of actual indices by store")
+   (base-class :accessor indexed-slot-base :initarg :base-class 
+	       :documentation "The base class to use as an index")))
 
-(defmethod direct-slot-definition-class ((class persistent-metaclass) &rest initargs)
-  "Checks for the transient tag (and the allocation type)
-   and chooses persistent or transient slot definitions."
-  (let ((allocation-key (getf initargs :allocation))
-	(transient-p (getf initargs :transient))
-	(indexed-p (getf initargs :index)))
-    (when (consp transient-p) (setq transient-p (car transient-p)))
-    (when (consp indexed-p) (setq indexed-p (car indexed-p)))
-    (cond ((and (eq allocation-key :class) transient-p)
-	   (find-class 'transient-direct-slot-definition))
-	  ((and (eq allocation-key :class) (not transient-p))
-	   (error "Persistent class slots are not supported, try :transient t."))
-	  ((and indexed-p transient-p)
-	   (error "Cannot declare slots to be both transient and indexed"))
-	  (transient-p
-	   (find-class 'transient-direct-slot-definition))
-	  (t
-	   (find-class 'persistent-direct-slot-definition)))))
+(defmethod get-slot-def-index ((def indexed-effective-slot-definition) sc)
+  (awhen (assoc sc (indexed-slot-indices def))
+    (cdr it)))
+
+(defmethod add-slot-def-index (idx (def indexed-effective-slot-definition) sc)
+  (setf (indexed-slot-indices def)
+	(acons sc idx (indexed-slot-indices def))))
+
+(defun indexed-slot-defs (class)
+  (find-slot-defs-by-type class 'indexed-effective-slot-definition nil))
+
+(defun indexed-slot-names (class)
+  (find-slot-def-names-by-type class 'indexed-effective-slot-definition nil))
+
+;;
+;; Set-valued slots
+;;
+
+(defclass set-valued-slot-definition (persistent-slot-definition) 
+  ((set-valued-p :accessor set-valued-p :initarg :set-valued :allocation :instance)))
+
+(defclass set-valued-direct-slot-definition (persistent-direct-slot-definition set-valued-slot-definition) 
+  ())
+
+(defclass set-valued-effective-slot-definition (persistent-effective-slot-definition set-valued-slot-definition) 
+  ())
+
+(defun set-valued-slot-defs (class)
+  (find-slot-defs-by-type class 'set-valued-effective-slot-definition nil))
+
+(defun set-valued-slot-names (class)
+  (find-slot-def-names-by-type class 'set-valued-effective-slot-definition nil))
+
+;;
+;; Association slots
+;;
+
+(defclass association-slot-definition (persistent-slot-definition)
+  ((assoc :accessor association :initarg :associate :allocation :instance)))
+
+(defclass association-direct-slot-definition (persistent-direct-slot-definition association-slot-definition) 
+  ())
+
+(defclass association-effective-slot-definition (persistent-effective-slot-definition association-slot-definition) 
+  ((tables :accessor association-table :initarg :table :allocation :instance :initform nil)))
+
+(defun association-slot-defs (class)
+  (find-slot-defs-by-type class 'association-effective-slot-definition nil))
+
+(defun association-slot-names (class)
+  (find-slot-def-names-by-type class 'association-effective-slot-definition nil))
+
+;;
+;; Class MOP support:
+;;
+
 
 (defmethod validate-superclass ((class persistent-metaclass) (super standard-class))
   "Persistent classes may inherit from ordinary classes."
@@ -285,24 +221,141 @@
   "Ordinary classes may NOT inherit from persistent classes."
   nil)
 
-(defgeneric persistent-p (class)
+(defgeneric database-allocation-p (class)
   (:method ((class t)) nil)
   (:method ((class persistent-metaclass)) t)
   (:method ((class persistent-slot-definition)) t))
 
+;;
+;; Slot MOP support: compute slot definition types
+;;
+
+(defmethod slot-definition-allocation ((slot-definition persistent-slot-definition))
+  :database)
+
+(defmacro bind-standard-init-arguments ((initargs) &body body)
+  `(let ((allocation-key (getf ,initargs :allocation))
+	 (transient-p (getf ,initargs :transient))
+	 (indexed-p (getf ,initargs :index))
+	 (set-valued-p (getf ,initargs :set-valued))
+	 (associate-p (getf ,initargs :associate)))
+     (declare (ignorable allocation-key))
+     (when (consp transient-p) (setq transient-p (car transient-p)))
+     (when (consp indexed-p) (setq indexed-p (car indexed-p)))
+     (when (consp set-valued-p) (setq set-valued-p (car set-valued-p)))
+     (when (consp associate-p) (setq associate-p (car associate-p)))
+     ,@body))
+
+(defmethod direct-slot-definition-class ((class persistent-metaclass) &rest initargs)
+  "Checks for the transient tag (and the allocation type)
+   and chooses persistent or transient slot definitions."
+  (bind-standard-init-arguments (initargs)
+    (cond ((and (eq allocation-key :class) (not transient-p))
+	   (error "Persistent class slots are not supported, try :transient t."))
+	  ((> (count-true indexed-p transient-p set-valued-p associate-p) 1)
+	   (error "Cannot declare a slot to be more than one of transient, indexed, 
+                   set-valued and associated"))
+	  (indexed-p 
+	   (find-class 'indexed-direct-slot-definition))
+	  (set-valued-p
+	   (find-class 'set-valued-direct-slot-definition))
+	  (associate-p
+	   (find-class 'association-direct-slot-definition))
+  	  (transient-p
+	   (find-class 'transient-direct-slot-definition))
+	  (t
+	   (find-class 'persistent-direct-slot-definition)))))
+
 (defmethod effective-slot-definition-class ((class persistent-metaclass) &rest initargs)
   "Chooses the persistent or transient effective slot
 definition class depending on the keyword."
-  (let ((transient-p (getf initargs :transient))
-	(indexed-p (getf initargs :index)))
-    (when (consp transient-p) (setq transient-p (car transient-p)))
-    (when (consp indexed-p) (setq indexed-p (car indexed-p)))
-    (cond ((and indexed-p transient-p)
-	   (error "Cannot declare a slot to be both indexed and transient"))
+  (bind-standard-init-arguments (initargs)
+    (cond ((> (count-true indexed-p transient-p set-valued-p associate-p) 1)
+	   (error "Cannot declare a slot to be more than one of transient, indexed, 
+                   set-valued and associated"))
+	  (indexed-p 
+	   (find-class 'indexed-effective-slot-definition))
+	  (set-valued-p
+	   (find-class 'set-valued-effective-slot-definition))
+	  (associate-p
+	   (find-class 'association-effective-slot-definition))
 	  (transient-p
 	   (find-class 'transient-effective-slot-definition))
 	  (t
 	   (find-class 'persistent-effective-slot-definition)))))
+
+(defmethod compute-effective-slot-definition-initargs ((class persistent-metaclass) #+lispworks slot-name slot-definitions)
+  #+lispworks (declare (ignore slot-name))
+  (let ((initargs (call-next-method))
+	(parent-direct-slot (first slot-definitions)))
+    (if (ensure-transient-chain slot-definitions initargs)
+	(setf initargs (append initargs '(:transient t)))
+	(setf (getf initargs :allocation) :database))
+    (when (eq (type-of parent-direct-slot) 'set-valued-direct-slot-definition)
+      (setf (getf initargs :set-valued) t))
+    (when (eq (type-of parent-direct-slot) 'association-direct-slot-definition)
+      (setf (getf initargs :associate) t))
+    (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
+      (setf (getf initargs :index) t)
+      (setf (getf initargs :base-class)
+	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
+    initargs))
+
+(defun find-class-for-direct-slot (class name)
+  (let ((list (compute-class-precedence-list class)))
+    (labels ((rec (super)
+	       (if (null super)
+		   nil
+		   (aif (find-direct-slot-def-by-name super name)
+			(class-name super)
+			(rec (pop list))))))
+      (rec class))))
+
+;;
+;; General tools for accessing and manipulating slot definitions
+;;
+
+(defun find-direct-slot-def-by-name (class slot-name)
+  (loop for slot-def in (class-direct-slots class)
+	when (eq (slot-definition-name slot-def) slot-name)
+	do (return slot-def)))
+
+(defun find-slot-def-by-name (class slot-name)
+  (loop for slot-def in (class-slots class)
+	when (eq (slot-definition-name slot-def) slot-name)
+	do (return slot-def)))
+
+(defmethod find-slot-defs-by-type ((class persistent-metaclass) type &optional (by-subtype t))
+  (let ((slot-defs (class-slots class)))
+    (loop for slot-def in slot-defs
+	 when (if by-subtype
+		  (subtypep (type-of slot-def) type)
+		  (eq (type-of slot-def) type))
+	 collect slot-def)))
+
+(defmethod find-slot-def-names-by-type ((class persistent-metaclass) type &optional (by-subtype t))
+  (mapcar #'slot-definition-name 
+	  (find-slot-defs-by-type class type by-subtype)))
+
+(defun count-true (&rest args)
+  (count t args :key #'(lambda (x) (not (null x)))))
+
+;;
+;; Special support for different MOP implementations
+;;
+;; To be superceded by Closer-to-MOP?  Doesn't seem to solve all these issues on
+;; last check (ISE)
+;;
+
+#+allegro
+(defmethod excl::valid-slot-allocation-list ((class persistent-metaclass))
+  '(:instance :class :database))
+
+#+lispworks
+(defmethod (setf slot-definition-allocation) (allocation (slot-def persistent-slot-definition))
+  (unless (eq allocation :database)
+    (error "Invalid allocation type ~A for slot-definition-allocation" allocation))
+  allocation)
 
 #+openmcl
 (defmethod compute-effective-slot-definition ((class persistent-metaclass) slot-name direct-slot-definitions)
@@ -341,46 +394,7 @@ definition class depending on the keyword."
      :initform (if initer (%slot-definition-initform initer))
      :type (or (%slot-definition-type first) t))))
 
-(defun ensure-transient-chain (slot-definitions initargs)
-  (declare (ignore initargs))
-  (loop for slot-definition in slot-definitions
-     always (transient slot-definition)))
 
-(defmethod compute-effective-slot-definition-initargs ((class persistent-metaclass) #+lispworks slot-name slot-definitions)
-  #+lispworks (declare (ignore slot-name))
-  (let ((initargs (call-next-method)))
-    (if (ensure-transient-chain slot-definitions initargs)
-	(setf initargs (append initargs '(:transient t)))
-	(setf (getf initargs :allocation) :database))
-    ;; Effective slots are indexed only if the most recent slot definition
-    ;; is indexed.  NOTE: Need to think more about inherited indexed slots
-    (if (indexed (first slot-definitions))
-	(append initargs '(:index t))
-	initargs)))
-
-(defun find-slot-def-by-name (class slot-name)
-  (loop for slot-def in (class-slots class)
-	when (eq (slot-definition-name slot-def) slot-name)
-	do (return slot-def)))
-
-
-(defun persistent-slot-defs (class)
-  (let ((slot-definitions (class-slots class)))
-    (loop for slot-def in slot-definitions
-	 when (subtypep (type-of slot-def) 'persistent-effective-slot-definition)
-	 collect slot-def)))
-
-(defun transient-slot-defs (class)
-  (let ((slot-definitions (class-slots class)))
-    (loop for slot-def in slot-definitions
-       unless (persistent-p slot-def)
-       collect slot-def)))
-
-(defun persistent-slot-names (class)
-  (mapcar #'slot-definition-name (persistent-slot-defs class)))
-
-(defun transient-slot-names (class)
-  (mapcar #'slot-definition-name (transient-slot-defs class)))
 
 
 
