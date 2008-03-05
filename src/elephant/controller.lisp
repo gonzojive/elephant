@@ -294,7 +294,7 @@
   (:documentation "A method implemented by the store controller which provides
    the type associated with a default id or nil if the id does not match"))
 
-(defmethod get-controller-schema (class (sc store-controller))
+(defmethod get-controller-schema ((class persistent-metaclass) (sc store-controller))
   "Get the db-schema managed by the controller"
   ;; Lookup class cached version
   (aif (get-class-controller-schema class sc) it

@@ -203,7 +203,8 @@ et cetera."))
 	      (make-instance 'bdb-btree :from-oid -1 :sc sc))
 
 	(setf (slot-value sc 'instance-table)
-	      (make-instance 'bdb-indexed-btree :from-oid -2 :sc sc))
+	      (make-instance 'bdb-indexed-btree :from-oid -2 :sc sc
+			     :indices (make-hash-table)))
       
 	(setf (slot-value sc 'index-table)
 	      (make-instance 'bdb-btree :from-oid -3 :sc sc))

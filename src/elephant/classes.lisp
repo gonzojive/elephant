@@ -144,13 +144,16 @@ class is fully initialized.  Calls the next method for the transient
 slots."
   (let* ((class (class-of instance))
 	 (transient-slots (get-init-slotnames class #'transient-slot-names slot-names))
+	 (set-slots (union (association-slot-names class) 
+			   (set-valued-slot-names class)))
 	 (indexed-slots (get-init-slotnames class #'indexed-slot-names slot-names))
 	 (persistent-initializable-slots 
 	  (union (get-init-slotnames class #'persistent-slot-names slot-names)
 		 indexed-slots :test #'equal)))
+    (when (not from-oid)
+      (initialize-set-slots class instance set-slots))
     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)
     (apply #'call-next-method instance transient-slots initargs)))
-
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (ensure-transaction (:store-controller (get-con instance))
@@ -163,6 +166,13 @@ slots."
 	  (awhen (slot-definition-initfunction slot-def)
 	    (setf (slot-value-using-class class instance slot-def)
 		  (funcall it))))))))
+
+(defun initialize-set-slots (class instance set-slots)
+  (ensure-transaction (:store-controller (get-con instance))
+    (dolist (slotname set-slots)
+      (setf (slot-value-using-class class instance
+				    (find-slot-def-by-name class slotname))
+	    nil))))
 
 (defun initialize-from-initarg (class instance slot-def slot-initargs initargs)
   (loop for slot-initarg in slot-initargs
@@ -359,3 +369,125 @@ slots."
 	  :foreign-ctrl sc))
 
 
+;; ======================================================
+;; Lisp-specific overrides of normal slot operation
+;; ======================================================
+
+;;
+;; ALLEGRO 
+;;
+
+#+allegro
+(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-name symbol))
+  (loop for slot in (class-slots class)
+     until (eq (slot-definition-name slot) slot-name)
+     finally (return (if (typep slot 'persistent-slot-definition)
+;;			 (if (indexed-p class)
+;;			     (indexed-slot-makunbound class instance slot)
+			 (slot-makunbound-using-class class instance slot)
+			 (call-next-method)))))
+
+
+#+allegro
+(defun make-persistent-reader (name slot-definition class class-name)
+  (eval `(defmethod ,name ((instance ,class-name))
+	  (slot-value-using-class ,class instance ,slot-definition))))
+
+#+allegro
+(defun make-persistent-writer (name slot-definition class class-name)
+  (let ((name (if (and (consp name)
+		       (eq (car name) 'setf))
+		  name
+		  `(setf ,name))))
+    (eval `(defmethod ,name ((instance ,class-name) value)
+	     (setf (slot-value-using-class ,class instance ,slot-definition)
+		   value)))))
+
+#+allegro
+(defmethod initialize-accessors ((slot-definition persistent-slot-definition) class)
+  (let ((readers (slot-definition-readers slot-definition))
+	(writers (slot-definition-writers slot-definition))
+	(class-name (class-name class)))
+    (loop for reader in readers
+	  do (make-persistent-reader reader slot-definition class class-name))
+    (loop for writer in writers
+	  do (make-persistent-writer writer slot-definition class class-name))))
+
+;;
+;; CMU / SBCL
+;;
+
+#+(or cmu sbcl)
+(defun make-persistent-reader (name)
+  (lambda (instance)
+    (declare (type persistent-object instance))
+    (persistent-slot-reader (get-con instance) instance name)))
+
+#+(or cmu sbcl)
+(defun make-persistent-writer (name)
+  (lambda (new-value instance)
+    (declare (optimize (speed 3))
+	     (type persistent-object instance))
+    (persistent-slot-writer (get-con instance) new-value instance name)))
+
+#+(or cmu sbcl)
+(defun make-persistent-slot-boundp (name)
+  (lambda (instance)
+    (declare (type persistent-object instance))
+    (persistent-slot-boundp (get-con instance) instance name)))
+
+#+sbcl ;; CMU also?  Old code follows...
+(defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))
+  (let ((name (slot-definition-name slot-def)))
+    (setf (slot-definition-reader-function slot-def)
+	  (make-persistent-reader name))
+    (setf (slot-definition-writer-function slot-def)
+	  (make-persistent-writer name))
+    (setf (slot-definition-boundp-function slot-def)
+	  (make-persistent-slot-boundp name)))
+  (call-next-method)) ;;  slot-def)
+
+#+cmu
+(defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))
+  (let ((name (slot-definition-name slot-def)))
+    (setf (slot-definition-reader-function slot-def)
+	  (make-persistent-reader name))
+    (setf (slot-definition-writer-function slot-def)
+	  (make-persistent-writer name))
+    (setf (slot-definition-boundp-function slot-def)
+	  (make-persistent-slot-boundp name)))
+  slot-def)
+
+;;
+;; LISPWORKS
+;;
+
+#+lispworks
+(defmethod slot-value-using-class ((class persistent-metaclass) (instance persistent-object) slot)
+  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
+		      (find slot (class-slots class)))))
+    (if (typep slot-def 'persistent-slot-definition)
+	(persistent-slot-reader (get-con instance) instance (slot-definition-name slot-def))
+	(call-next-method class instance (slot-definition-name slot-def)))))
+
+#+lispworks
+(defmethod (setf slot-value-using-class) (new-value (class persistent-metaclass) (instance persistent-object) slot)
+  "Set the slot value in the database."
+  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
+		      (find slot (class-slots class)))))
+    (if (typep slot-def 'persistent-slot-definition)
+	(if (indexed class)
+	    (indexed-slot-writer class instance slot-def new-value)
+	    (persistent-slot-writer (get-con instance) new-value instance (slot-definition-name slot-def)))
+	(call-next-method new-value class instance (slot-definition-name slot-def)))))
+
+#+lispworks
+(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) slot)
+  "Removes the slot value from the database."
+  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
+		      (find slot (class-slots class)))))
+    (if (typep slot-def 'persistent-slot-definition)
+	(if (indexed class)
+	    (indexed-slot-makunbound class instance slot-def)
+	    (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def)))
+	(call-next-method class instance (slot-definition-name slot-def)))))

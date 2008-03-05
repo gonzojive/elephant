@@ -235,11 +235,12 @@
 
 (defmacro bind-standard-init-arguments ((initargs) &body body)
   `(let ((allocation-key (getf ,initargs :allocation))
+	 (has-initarg-p (getf ,initargs :initargs))
 	 (transient-p (getf ,initargs :transient))
 	 (indexed-p (getf ,initargs :index))
 	 (set-valued-p (getf ,initargs :set-valued))
 	 (associate-p (getf ,initargs :associate)))
-     (declare (ignorable allocation-key))
+     (declare (ignorable allocation-key has-initarg-p))
      (when (consp transient-p) (setq transient-p (car transient-p)))
      (when (consp indexed-p) (setq indexed-p (car indexed-p)))
      (when (consp set-valued-p) (setq set-valued-p (car set-valued-p)))
@@ -255,6 +256,10 @@
 	  ((> (count-true indexed-p transient-p set-valued-p associate-p) 1)
 	   (error "Cannot declare a slot to be more than one of transient, indexed, 
                    set-valued and associated"))
+	  ((and set-valued-p has-initarg-p)
+	   (error "Cannot specify initargs for set-valued slots"))
+	  ((and associate-p has-initarg-p)
+	   (error "Cannot specify initargs for association slots"))
 	  (indexed-p 
 	   (find-class 'indexed-direct-slot-definition))
 	  (set-valued-p
@@ -270,10 +275,7 @@
   "Chooses the persistent or transient effective slot
 definition class depending on the keyword."
   (bind-standard-init-arguments (initargs)
-    (cond ((> (count-true indexed-p transient-p set-valued-p associate-p) 1)
-	   (error "Cannot declare a slot to be more than one of transient, indexed, 
-                   set-valued and associated"))
-	  (indexed-p 
+    (cond (indexed-p 
 	   (find-class 'indexed-effective-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-effective-slot-definition))

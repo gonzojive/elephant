@@ -1,5 +1,9 @@
 (in-package :elephant)
 
+
+
+
+
 ;;
 ;; Association Objects
 ;;
@@ -54,7 +58,7 @@
 ;; Generic association implementation
 ;;
 
-(defstruct oid-pair (left right)
+(defstruct oid-pair left right)
 
 (defpclass default-association (default-pset association)
   ((next-id :accessor next-id :initarg :start-id :initform 1)
@@ -67,8 +71,8 @@
 
 (defmethod build-association (type sc)
   (let ((table (make-indexed-btree sc)))
-    (add-index table :index-name :primary
-  (make-instance 'default-association 
+    (add-index table :index-name :primary)
+    (make-instance 'default-association)))
 
 
 
@@ -114,5 +118,5 @@
 ;; Small utilities
 ;;
 
-(defun safe-find-class 
+;;(defun safe-find-class 
 

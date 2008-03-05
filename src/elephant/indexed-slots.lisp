@@ -73,130 +73,184 @@
 		     (cursor-delete cur)
 		     (return value))))))))))
 
-;; ======================================================
-;; Set-valued Slot Accesses
-;; ======================================================
 
-;; ======================================================
-;; Lisp-specific overrides of normal slot operation
-;; ======================================================
+;; =================================
+;;   INTERNAL ACCESS TO INDICES
+;; =================================
 
-;;
-;; ALLEGRO 
-;;
+(defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil))
+  (find-inverted-index (find-class class) slot :null-on-fail null-on-fail))
 
-#+allegro
-(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-name symbol))
-  (loop for slot in (class-slots class)
-     until (eq (slot-definition-name slot) slot-name)
-     finally (return (if (typep slot 'persistent-slot-definition)
-;;			 (if (indexed-p class)
-;;			     (indexed-slot-makunbound class instance slot)
-			 (slot-makunbound-using-class class instance slot)
-			 (call-next-method)))))
+(defmethod find-inverted-index ((class persistent-metaclass) slot &key (null-on-fail nil) (sc *store-controller*))
+  (ensure-finalized class)
+  (flet ((assert-error ()
+	   (when null-on-fail (return-from find-inverted-index nil))
+	   (cerror "Return null and continue?"
+		   "Inverted slot index ~A not found for class ~A with indexed slots: ~A" 
+		   slot (class-name class) (indexed-slot-names class))))
+    (let ((slot-def (find-slot-def-by-name class slot)))
+      (when (or (not slot-def) 
+		(not (eq (type-of slot-def) 'indexed-effective-slot-definition)))
+	(assert-error))
+      (let ((idx (get-slot-def-index slot-def sc)))
+	(unless idx
+	  (setf idx (initialize-slot-def-index slot-def sc)))
+	idx))))
+
+(defun ensure-finalized (class)
+  (when (not (class-finalized-p class))
+    (when *warn-on-manual-class-finalization*
+      (warn "Manually finalizing class ~A" (class-name class)))
+    (finalize-inheritance class)))
+
+;; =================
+;;   USER SET API 
+;; =================
+
+(defgeneric get-instances-by-class (persistent-metaclass)
+  (:documentation "Retrieve all instances from the class index as a list of objects"))
+
+(defgeneric get-instance-by-value (persistent-metaclass slot-name value)
+  (:documentation "Retrieve instances from a slot index by value.  Will return only the first
+                  instance if there are duplicates."))
+
+(defgeneric get-instances-by-value (persistent-metaclass slot-name value)
+  (:documentation "Returns a list of all instances where the slot value is equal to value."))
+
+(defgeneric get-instances-by-range (persistent-metaclass slot-name start end)
+  (:documentation "Returns a list of all instances that match
+                   values between start and end.  An argument of
+                   nil to start or end indicates, respectively,
+                   the lowest or highest value in the index"))
 
 
-#+allegro
-(defun make-persistent-reader (name slot-definition class class-name)
-  (eval `(defmethod ,name ((instance ,class-name))
-	  (slot-value-using-class ,class instance ,slot-definition))))
+(defun identity2 (k v)
+  (declare (ignore k))
+  v)
 
-#+allegro
-(defun make-persistent-writer (name slot-definition class class-name)
-  (let ((name (if (and (consp name)
-		       (eq (car name) 'setf))
-		  name
-		  `(setf ,name))))
-    (eval `(defmethod ,name ((instance ,class-name) value)
-	     (setf (slot-value-using-class ,class instance ,slot-definition)
-		   value)))))
+(defun identity3 (k v pk)
+  (declare (ignore k pk))
+  v)
 
-#+allegro
-(defmethod initialize-accessors ((slot-definition persistent-slot-definition) class)
-  (let ((readers (slot-definition-readers slot-definition))
-	(writers (slot-definition-writers slot-definition))
-	(class-name (class-name class)))
-    (loop for reader in readers
-	  do (make-persistent-reader reader slot-definition class class-name))
-    (loop for writer in writers
-	  do (make-persistent-writer writer slot-definition class class-name))))
+(defmethod get-instances-by-class ((class symbol))
+  (get-instances-by-class (find-class class)))
 
-;;
-;; CMU / SBCL
-;;
+(defmethod get-instances-by-class ((class persistent-metaclass))
+  (map-class #'identity class :collect t))
 
-#+(or cmu sbcl)
-(defun make-persistent-reader (name)
-  (lambda (instance)
-    (declare (type persistent-object instance))
-    (persistent-slot-reader (get-con instance) instance name)))
+(defmethod get-instances-by-value ((class symbol) slot-name value)
+  (get-instances-by-value (find-class class) slot-name value))
 
-#+(or cmu sbcl)
-(defun make-persistent-writer (name)
-  (lambda (new-value instance)
-    (declare (optimize (speed 3))
-	     (type persistent-object instance))
-    (persistent-slot-writer (get-con instance) new-value instance name)))
+(defmethod get-instances-by-value ((class persistent-metaclass) slot-name value)
+  (declare (type (or string symbol) slot-name))
+  (map-inverted-index #'identity2 class slot-name :value value :collect t))
 
-#+(or cmu sbcl)
-(defun make-persistent-slot-boundp (name)
-  (lambda (instance)
-    (declare (type persistent-object instance))
-    (persistent-slot-boundp (get-con instance) instance name)))
+(defmethod get-instance-by-value ((class persistent-metaclass) slot-name value)
+  (awhen (find-inverted-index class slot-name)
+    (get-value value it)))
 
-#+sbcl ;; CMU also?  Old code follows...
-(defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))
-  (let ((name (slot-definition-name slot-def)))
-    (setf (slot-definition-reader-function slot-def)
-	  (make-persistent-reader name))
-    (setf (slot-definition-writer-function slot-def)
-	  (make-persistent-writer name))
-    (setf (slot-definition-boundp-function slot-def)
-	  (make-persistent-slot-boundp name)))
-  (call-next-method)) ;;  slot-def)
+(defmethod get-instance-by-value ((class symbol) slot-name value)
+ (get-instance-by-value (find-class class) slot-name value))
 
-#+cmu
-(defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))
-  (let ((name (slot-definition-name slot-def)))
-    (setf (slot-definition-reader-function slot-def)
-	  (make-persistent-reader name))
-    (setf (slot-definition-writer-function slot-def)
-	  (make-persistent-writer name))
-    (setf (slot-definition-boundp-function slot-def)
-	  (make-persistent-slot-boundp name)))
-  slot-def)
+(defmethod get-instances-by-range ((class symbol) slot-name start end)
+  (get-instances-by-range (find-class class) slot-name start end))
 
-;;
-;; LISPWORKS
-;;
+(defmethod get-instances-by-range ((class persistent-metaclass) idx-name start end)
+  (declare (type (or number symbol string null) start end)
+	   (type symbol idx-name))
+  (map-inverted-index #'identity2 class idx-name :start start :end end :collect t))
 
-#+lispworks
-(defmethod slot-value-using-class ((class persistent-metaclass) (instance persistent-object) slot)
-  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
-		      (find slot (class-slots class)))))
-    (if (typep slot-def 'persistent-slot-definition)
-	(persistent-slot-reader (get-con instance) instance (slot-definition-name slot-def))
-	(call-next-method class instance (slot-definition-name slot-def)))))
+(defun drop-instances (instances &key (sc *store-controller*))
+  "Removes a list of persistent objects from all class indices
+   and unbinds any slot values"
+  (when instances
+    (assert (consp instances))
+    (do-subsets (subset 500 instances)
+      (ensure-transaction (:store-controller sc)
+	(mapc (lambda (instance)
+		(drop-pobject instance)
+		(remove-kv (oid instance) (find-class-index (class-of instance))))
+	      subset)))))
 
-#+lispworks
-(defmethod (setf slot-value-using-class) (new-value (class persistent-metaclass) (instance persistent-object) slot)
-  "Set the slot value in the database."
-  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
-		      (find slot (class-slots class)))))
-    (if (typep slot-def 'persistent-slot-definition)
-	(if (indexed class)
-	    (indexed-slot-writer class instance slot-def new-value)
-	    (persistent-slot-writer (get-con instance) new-value instance (slot-definition-name slot-def)))
-	(call-next-method new-value class instance (slot-definition-name slot-def)))))
+;; ======================
+;;    USER MAPPING API 
+;; ======================
 
-#+lispworks
-(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) slot)
-  "Removes the slot value from the database."
-  (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
-		      (find slot (class-slots class)))))
-    (if (typep slot-def 'persistent-slot-definition)
-	(if (indexed class)
-	    (indexed-slot-makunbound class instance slot-def)
-	    (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def)))
-	(call-next-method class instance (slot-definition-name slot-def)))))
+(defun map-class (fn class &key collect (sc *store-controller*))
+  "Perform a map operation over all instances of class.  Takes a
+   function of one argument, a class instance"
+  (flet ((map-fn (cidx pcidx oid)
+	   (declare (ignore cidx pcidx))
+	   (funcall fn (controller-recreate-instance sc oid))))
+    (map-index #'map-fn (controller-instance-class-index sc)
+	       :value (schema-id (get-controller-schema (if (symbolp class) (find-class class) class) sc))
+	       :collect collect)))
+
+(defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect)
+  "map-inverted-index maps a function of two variables, taking key
+   and instance, over a subset of class instances in the order
+   defined by the index.  Specify the class and index by quoted
+   name.  The index may be a slot index or a derived index.
+
+   To map only a subset of key-value pairs, specify the range
+   using the :start and :end keywords; all elements greater than
+   or equal to :start and less than or equal to :end will be
+   traversed regardless of whether the start or end value is in
+   the index.  
+
+   Use nil in the place of start or end to specify the first
+   element or last element, respectively.  
+
+   To map a single value, iff it exists, use the :value keyword.
+   This is the only way to travers all nil values.
+
+   To map from :end to :start in descending order, set :from-end
+   to true.  If :value is used, :from-end is ignored"
+  (declare (dynamic-extent args)
+	   (ignorable args))
+  (let* ((index (if (symbolp index)
+		    (find-inverted-index class index)
+		    index)))
+    (if value-p
+	(map-dup-btree fn index :value value :collect collect)
+	(map-dup-btree fn index :start start :end end :from-end from-end :collect collect))))
+
+;; ===================
+;;   USER CURSOR API
+;; ===================
+
+(defgeneric make-inverted-cursor (class name)
+  (:documentation "Define a cursor on the inverted (slot or derived) index"))
+
+(defgeneric make-class-cursor (class)
+  (:documentation "Define a cursor over all class instances"))
+
+
+(defmethod make-inverted-cursor ((class persistent-metaclass) name)
+  (make-cursor (find-inverted-index class name)))
+
+(defmethod make-inverted-cursor ((class symbol) name)
+  (make-cursor (find-inverted-index class name)))
+
+(defmacro with-inverted-cursor ((var class name) &body body)
+  "Bind the var argument to an inverted cursor on the index
+   specified the provided class and index name"
+  `(let ((,var (make-inverted-cursor ,class ,name)))
+     (unwind-protect (progn ,@body)
+       (cursor-close ,var))))
+
+(defmethod make-class-cursor ((class persistent-metaclass))
+  (make-cursor (find-class-index class)))
+
+(defmethod make-class-cursor ((class symbol))
+  (make-cursor (find-class-index class)))
+
+(defmacro with-class-cursor ((var class) &body body)
+  "Bind the var argument in the body to a class cursor on the
+   index specified the provided class or class name"
+  `(let ((,var (make-class-cursor ,class)))
+     (unwind-protect (progn ,@body)
+       (cursor-close ,var))))
+
+
 

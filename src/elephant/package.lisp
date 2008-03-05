@@ -210,6 +210,8 @@
 
    #:pset #:make-pset #:insert-item #:remove-item #:map-pset #:find-item #:pset-list #:drop-pset
 
+   #:slot-set #:make-slot-set #:map-slot-set #:slot-set-list #:drop-slot-set
+
    #:btree #:make-btree
    #:dup-btree #:make-dup-btree
    #:get-value #:remove-kv #:existsp
