@@ -1,5 +1,11 @@
 (in-package :db-postmodern)
 
+(define-condition dbpm-error (error)
+    ((errno :reader errno :initarg :errno))
+      (:report (lambda (cond s)
+                 (format s "DB error ~S"
+                         (errno cond)))))
+
 ;; One postgresql limitation is that indexes can not be created on
 ;; columns longer than about 2,000 characters.
 ;; 
@@ -146,6 +152,14 @@ $$ LANGUAGE plpgsql;
              (queries-of ex)
              :key #'car)))
 
+(defun set-savepoint (con savepoint)
+  (ignore-errors
+    (cl-postgres:exec-query con (concatenate 'string "SAVEPOINT " savepoint))))
+
+(defun rollback-to-savepoint (con savepoint)
+  (ignore-errors
+    (cl-postgres:exec-query con (concatenate 'string "ROLLBACK TO " savepoint))))
+
 (defmethod executor-exec-prepared ((ex pm-executor) query-identifier params row-reader)
   (labels ((lookup-query (query-identifier)
              (cdr (assoc query-identifier (queries-of ex))))
@@ -164,6 +178,8 @@ $$ LANGUAGE plpgsql;
                      (cond
                        ((string= (cl-postgres:database-error-code e)
                                  "42P05")
+                        (warn "42P05: prepared statement already exists!")
+                        'ignoring-this-error)
                    ;; TODO note 20070810: Ugly but I sometimes get:
                    ;;Database error 42P05: prepared statement "TREE140CURSOR-SET-HELPER" already exists
                    ;; Despite the attempts above trying to check if it is already prepared.
@@ -171,7 +187,6 @@ $$ LANGUAGE plpgsql;
                    ;; But this should be investigated
                    ;;
                    ;; Update: Maybe it has to do with connection pooling within postmodern?
-                         'ignoring-this-error)
                        (t (error e)))))
                  (setf (gethash name-symbol meta) t))))
            (exec-prepared (name-string)
@@ -183,20 +198,39 @@ $$ LANGUAGE plpgsql;
         (ensure-registered-on-class query-identifier)
       (ensure-prepared-on-connection name-symbol name-string sql)
       (with-performance-stat-collector (stat-identifier)
-        (handler-case
-            (exec-prepared name-string)
-          (cl-postgres:database-error (e)
-            ;; Sometimes the prepared statement might hold references to old oids,
-            ;; which might be have been dropped after a rollback. For safety, try
-            ;; to remove the prepared statement and prepare it again
-            (cond
-              ((string= (cl-postgres:database-error-code e)
-                        "42P01")
-               ;; It seems that this error automatically drops the transaction! Postgresql bug?
-               (cl-postgres:exec-query (active-connection) (concatenate 'string "DEALLOCATE " name-string))
-               (cl-postgres:prepare-query (active-connection) name-string sql)
-               (exec-prepared name-string))
-              (t (error e)))))))))
+        (let ((savepoint (princ-to-string (gensym))))
+          ;(set-savepoint (active-connection) savepoint)
+          (handler-case
+              (progn
+                ;(format t "Executing prepared query ~A~%" name-string)
+                (exec-prepared name-string))
+            (cl-postgres:database-error (e)
+              ;; Sometimes the prepared statement might hold references to old oids,
+              ;; which might be have been dropped after a rollback. For safety, try
+              ;; to remove the prepared statement and prepare it again
+              (warn "Error while executing prepared statement ~S (params: ~A).~%"
+                    name-string params)
+              (cond
+                ((string= (cl-postgres:database-error-code e)
+                          "42P01")
+                 ;; It seems that this error automatically drops the transaction! Postgresql bug?
+                 (warn "42P01: Prepared statement already exists; trying to remove it.") 
+                 ;(rollback-to-savepoint (active-connection) savepoint)
+                 (cl-postgres:exec-query (active-connection) (concatenate 'string "DEALLOCATE " name-string))
+                 (cl-postgres:prepare-query (active-connection) name-string sql)
+                 (exec-prepared name-string))
+
+                ((string= (cl-postgres:database-error-code e)
+                          "40P01") ; deadlock, defer to txn handler
+                 (error 'dbpm-error :errno "40P01"))
+
+                ((string= (cl-postgres:database-error-code e)
+                          "25P02")
+                 (warn "25P02: Transaction aborted; something wasn't handled correctly!")
+                 'ignoring-this-error)
+
+                (t (error e))))))))))
+
 
 ;;---------------- Global queries -----------
 
