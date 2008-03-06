@@ -22,8 +22,6 @@
 
 (in-package "ELEPHANT")
 
-(defstruct oid-pair left right)
-
 ;;
 ;; TRACKING OBJECT STORES
 ;;
@@ -243,6 +241,18 @@
 ;; Looking up the class
 ;;
 
+(define-condition missing-persistent-instance ()
+   ((oid :initarg :oid :accessor missing-persistent-instance-oid)
+    (spec :initarg :spec :accessor missing-persistent-instance-spec)))
+
+(defun signal-missing-instance (oid spec)
+  (cerror "Return a proxy object"
+	  'missing-persistent-instance
+	  :format-control "Instance with OID ~A is not present in ~A"
+	  :format-arguments (list oid spec)
+	  :oid oid
+	  :spec spec))
+
 (defun get-class-from-sc (oid classname sc)
   "Get the class object using the oid or using the provided classname"
   (if (null classname)
@@ -253,6 +263,9 @@
   "Use the oid map to extract a class object via the 
     cached schema table"
   (let ((cid (oid->schema-id oid sc)))
+    (unless cid
+      (signal-missing-instance oid (controller-spec sc))
+      (return-from oid->class (find-class 'persistent-object)))
     (aif (default-class-id-type cid sc)
 	 (find-class it)
 	 (find-class (schema-classname (lookup-schema cid sc))))))
@@ -691,18 +704,15 @@ true."))
    where an object should be unreachable, but a reference still
    exists elsewhere in the DB.  On access, the unbound slots
    should flag an error in the application program.  IMPORTANT:
-   this function does not clear the cached object instance or any
-   serialized references still in the db.  Need a migration or GC
-   for that!  drop-instances is preferred as it implements the proper
-   behavior for indexed classes"))
+   this function does not clear any serialized references still in the db.  
+   Need a migration or GC for that!  drop-instances is the user-facing call 
+   as it implements the proper behavior for indexed classes"))
 
 (defmethod drop-pobject ((inst persistent-object))
-  (let ((pslots (persistent-slot-names (class-of inst))))
+  (let ((pslots (all-persistent-slot-names (class-of inst))))
     (dolist (slot pslots)
-      (slot-makunbound inst slot))))
-;;      (slot-makunbound-using-class (class-of inst)
-;;				   inst
-;;				   (find-effective-slot-def (class-of inst) slot)))))
+      (slot-makunbound inst slot)))
+  (remcache (oid inst) (controller-instance-cache (get-con inst))))
 
 ;;
 ;; DATABASE PROPERTY INTERFACE (Not used by system as of 0.6.1, but supported)

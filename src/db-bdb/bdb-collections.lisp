@@ -811,4 +811,3 @@
       (progn (db-cursor-delete (cursor-handle cursor))
 	     (setf (cursor-initialized-p cursor) nil))
       (error "Can't delete with uninitialized cursor!")))
-

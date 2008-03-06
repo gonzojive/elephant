@@ -277,12 +277,12 @@ et cetera."))
 	(-4 3))
       (call-next-method)))
 
-(defmethod default-class-id (base-type (sc bdb-store-controller))
-  (case base-type
-    ('btree 1)
-    ('dup-btree 2)
-    ('indexed-btree 3)
-    ('btree-index 4)))
+(defmethod default-class-id (type (sc bdb-store-controller))
+  (ecase type
+    ('bdb-btree 1)
+    ('bdb-dup-btree 2)
+    ('bdb-indexed-btree 3)
+    ('bdb-btree-index 4)))
 
 (defmethod default-class-id-type (cid (sc bdb-store-controller))
   (case cid

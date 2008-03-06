@@ -40,7 +40,20 @@
 	(setf (get-value new-value idx) oid))
       (call-next-method))))
 
-    
+(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
+  "Removes the slot value from the database."
+  (let ((sc (get-con instance))
+	(oid (oid instance)))
+    (ensure-transaction (:store-controller sc)
+      (let ((idx (get-slot-def-index slot-def sc))
+	    (old-value (when (slot-boundp-using-class class instance slot-def)
+			 (slot-value-using-class class instance slot-def))))
+	(unless idx
+	  (setf idx (initialize-slot-def-index slot-def sc)))
+	(when old-value 
+	  (remove-kv-pair old-value oid idx)))
+      (call-next-method))))
+
 (defun initialize-slot-def-index (slot-def sc)
   (let* ((master (controller-index-table sc))
 	 (idx-ref (cons (indexed-slot-base slot-def) (slot-definition-name slot-def)) ))
@@ -146,7 +159,7 @@
       (ensure-transaction (:store-controller sc)
 	(mapc (lambda (instance)
 		(drop-pobject instance)
-		(remove-kv (oid instance) (find-class-index (class-of instance))))
+		(remove-kv (oid instance) (controller-instance-table sc)))
 	      subset)))))
 
 ;; ======================
@@ -163,7 +176,7 @@
 	       :value (schema-id (get-controller-schema (if (symbolp class) (find-class class) class) sc))
 	       :collect collect)))
 
-(defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect)
+(defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect oids)
   "map-inverted-index maps a function of two variables, taking key
    and instance, over a subset of class instances in the order
    defined by the index.  Specify the class and index by quoted
@@ -187,10 +200,13 @@
 	   (ignorable args))
   (let* ((index (if (symbolp index)
 		    (find-inverted-index class index)
-		    index)))
-    (if value-p
-	(map-dup-btree fn index :value value :collect collect)
-	(map-dup-btree fn index :start start :end end :from-end from-end :collect collect))))
+		    index))
+	 (sc (get-con index)))
+    (flet ((map-obj (value oid)
+	     (funcall fn value (controller-recreate-instance sc oid))))
+      (if value-p
+	  (map-btree (if oids fn #'map-obj) index :value value :collect collect)
+	  (map-btree (if oids fn #'map-obj) index :start start :end end :from-end from-end :collect collect)))))
 
 ;; ===================
 ;;   USER CURSOR API

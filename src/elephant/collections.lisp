@@ -120,8 +120,8 @@ existing primary entries (may be expensive!)"))
    btree-index object of all secondary indices in the btree"))
 
 (defmethod ensure-index ((ibt indexed-btree) idxname &key key-form populate)
-  (unless (get-index ibt idxname)
-    (add-index ibt :index-name idxname :key-form key-form :populate populate)))
+  (ifret (get-index ibt idxname)
+	 (add-index ibt :index-name idxname :key-form key-form :populate populate)))
 
 ;;
 ;; Secondary Indices
@@ -691,67 +691,6 @@ not), evaluates the forms, then closes the cursor."
 		(cursor-plast cur))
      :continue (or (null start) (lisp-compare>= key start))
      :step (cursor-pprev cur))))
-
-;;
-;; Map duplicate btrees
-;;
-
-(defun set-range-for-descending (cur end)
-  (if (cursor-set cur end)
-      (progn
-	(cursor-next-nodup cur)
-	(cursor-prev cur))
-      (progn
-	(cursor-set-range cur end)
-	(cursor-prev cur))))
-
-(defgeneric map-dup-btree (fn index &rest args &key start end value from-end collect &allow-other-keys)
-  (:documentation "Map-dup-btree is like map-index but for simple 
-   duplicate btrees.  It takes a function of two arguments: key and value.  
-   As with map-index the keyword arguments start and end determine 
-   the starting element and ending element, inclusive.  Also, start = nil 
-   implies the first element, end = nil implies the last element in 
-   the index.  If you want to traverse only a set of identical key 
-   values, for example all nil values, then use the value keyword 
-   which will override any values of start and end.  The collect 
-   keyword will accumulate the results from each call of fn in a fresh 
-   list and return that list in the same order the calls were made 
-   (first to last)"))
-
-(defmethod map-dup-btree (fn (index dup-btree) &rest args
-			  &key start end (value nil value-set-p) from-end collect 
-			  &allow-other-keys)
-  (validate-map-index-call start end)
-  (cond (value-set-p (map-dup-values fn index value collect))
-	(from-end (map-dup-from-end fn index start end collect))
-	(t (map-dup-from-start fn index start end collect))))
-
-(defmethod map-dup-values (fn index value collect)
-  (with-map-index-wrapper (fn index collect cur)
-    (iterate-map-index
-	:start (cursor-set cur value)
-	:continue t
-	:step (cursor-next-dup cur))))
-
-(defmethod map-dup-from-start (fn index start end collect)
-  (with-map-index-wrapper (fn index collect cur)
-    (iterate-map-index
-      :start (if start 
-		 (cursor-set-range cur start) 
-		 (cursor-first cur))
-      :continue (or (null end) (lisp-compare<= key end))
-      :step (cursor-next cur))))
-
-(defmethod map-dup-from-end (fn index start end collect)
-  (with-map-index-wrapper (fn index collect cur)
-    (iterate-map-index
-     :start (if end 
-		(set-range-for-descending cur end) 
-		(cursor-last cur))
-     :continue (or (null start) (lisp-compare>= key start))
-     :step (cursor-prev cur))))
-
-
 
 ;; ===============================
 ;; Some generic utility functions
