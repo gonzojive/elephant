@@ -71,8 +71,8 @@
 
 (defun reap-orphaned-connections (sc)
   (let ((n-reaped 0))
-    #+sbcl(maphash (lambda (thread bookkeeper)
-               (let ((alive-p (sb-thread:thread-alive-p thread)))
+    (maphash (lambda (thread bookkeeper)
+               (let ((alive-p (thread-alive-p thread)))
                  (unless alive-p
                    (cl-postgres:close-database (car bookkeeper))
                    (incf n-reaped)

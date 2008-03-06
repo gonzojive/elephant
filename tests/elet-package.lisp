@@ -19,9 +19,9 @@
 (defpackage elephant-tests
   (:nicknames :ele-tests)
   #+use-fiveam
-  (:use :common-lisp :elephant :5am)
+  (:use :common-lisp :elephant :5am :bordeaux-threads)
   #-use-fiveam
-  (:use :common-lisp :elephant :regression-test)
+  (:use :common-lisp :elephant :regression-test :bordeaux-threads)
   (:import-from :elephant
 		with-buffer-streams
 		serialize

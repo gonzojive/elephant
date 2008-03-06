@@ -5,7 +5,7 @@
 (defpackage db-postmodern
   (:use :common-lisp
 	:elephant :elephant-memutil :elephant-utils :elephant-data-store
-	#+sbcl :sb-thread)
+	:bordeaux-threads)
   (:export #:*cache-mode*
 	   #:disable-sync-cache-trigger))
 
