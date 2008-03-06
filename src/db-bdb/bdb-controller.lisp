@@ -151,7 +151,7 @@ et cetera."))
       ;; Indexed btrees
       (setf (controller-indices sc) indices)
       (db-bdb::db-set-lisp-compare indices (controller-serializer-version sc))
-      (db-bdb::db-set-lisp-dup-compare indices (controller-serializer-version sc))
+      (db-bdb::db-set-lisp-dup-key-compare indices (controller-serializer-version sc))
       (db-set-flags indices :dup-sort t)
       (db-open indices :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
  	       :auto-commit t :type DB-BTREE :create t :thread thread
@@ -159,7 +159,7 @@ et cetera."))
       
       (setf (controller-indices-assoc sc) indices-assoc)
       (db-bdb::db-set-lisp-compare indices-assoc (controller-serializer-version sc))
-      (db-bdb::db-set-lisp-dup-compare indices-assoc (controller-serializer-version sc))
+      (db-bdb::db-set-lisp-dup-key-compare indices-assoc (controller-serializer-version sc))
       (db-set-flags indices-assoc :dup-sort t)
       (db-open indices-assoc :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
 	       :auto-commit t :type DB-UNKNOWN :thread thread

@@ -1013,49 +1013,39 @@ double read_num(unsigned char *buf) {
 #define type_numeric2(c) (((c)<9) || ((c)==22))
 
 /******
-  Serialized BTree keys have the form:
+  BTree keys have the form:
   BTree OID + tag(s) + [values]
 
-  Slot values have the form:
+  Index slot values have the form:
   SVal OID + tag(s) + [values]
+
+  Dup BTree values have the form:
+  tag + [values]
  
 *****/  
 
 double read_num2(unsigned char *buf);
 
-/* New serializer */
-int lisp_compare2(DB *dbp, const DBT *a, const DBT *b) {
+/* The new base serializer comparison fn */
+int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsigned char *bd) {
   int difference;
   int offset;
   double ddifference;
-  unsigned char *ad, *bd, at, bt;
-  ad = (unsigned char *)a->data;
-  bd = (unsigned char *)b->data;
-
-  /* Compare OIDs: OIDs are limited by native integer width */
-  difference = read_int(ad, 0) - read_int(bd, 0);
-  if (difference) return difference;
+  unsigned char at, bt;
   
-  /* Have a type tag? */
-  if (a->size == 4)
-    if (b->size == 4)
-      return 0;
-    else
-      return -1;
-  else if (b->size == 4) 
-    return 1;
-
   /* Get the 8-bit tag */
-  at = ad[4]; bt = bd[4];
+  at = ad[0]; bt = bd[0];
 
-  /******
-  printf("Tag1: %d Tag2: %d\n", bd[4], bd[4]);
-  printf("Tag1b: %d Tag2b: %d\n", bd[5], bd[5]);
-  *******/
+  /*****
+  printf("Type tag: %d Type tag 2: %d\n", at, bt);
+  *****/
 
   /* Compare numerics. */
   if ((type_numeric2(at)) && (type_numeric2(bt))) {
-    ddifference = read_num2(ad+4) - read_num2(bd+4);
+    /*****
+    printf("Num1: %f  Num2: %f\n", read_num2(ad), read_num2(bd));
+    *****/    
+    ddifference = read_num2(ad) - read_num2(bd);
     if (ddifference > 0) return 1;
     else if (ddifference < 0) return -1;
     return 0;
@@ -1071,31 +1061,90 @@ int lisp_compare2(DB *dbp, const DBT *a, const DBT *b) {
   switch(at) {
   case S2_SYMBOL:
   case S2_PATHNAME:
-    /* Make sure the strings are both of the same radix */
-    difference = ad[5] - bd[5];
+    /* Make sure the strings are both of the same type */
+    difference = ad[1] - bd[1];
     if (difference) return difference;
+    at = ad[1];
     offset = 1;
+    break;
   default:
     offset = 0;
   }
 
-    
+  /*****
+  printf("Prefix type: %d  offset: %d\n", ad[1], offset);
+  *****/    
+
   /* Same type*/
   switch (at) {
   case S2_NIL: /* nil */
     return 0;
   case S_RESERVED:
-    return ad[5] < bd[5]; /* different tags */
+    return ad[1] < bd[1]; /* different tags */
   case S2_UTF8_STRING: /* 8-bit string */
-    return case_cmp(ad+9+offset, read_int32(ad+offset, 5), bd+9+offset, read_int32(bd+offset, 5));
+    /*****
+    printf("Doing an 8-bit compare\n");
+    *****/
+    return case_cmp(ad+5+offset, read_int32(ad+offset, 1), bd+5+offset, read_int32(bd+offset, 1));
   case S2_UTF16_STRING: /* 16-bit string */
-    return utf16_cmp(ad+9+offset, read_int32(ad+offset, 5), bd+9+offset, read_int32(bd+offset, 5));
+    /*****
+    printf("Doing a 16-bit compare\n");
+    *****/    
+    return utf16_cmp(ad+5+offset, read_int32(ad+offset, 1), bd+5+offset, read_int32(bd+offset, 1));
   case S2_UTF32_STRING:
-    return wcs_cmp((wchar_t*)ad+9+offset, read_int32(ad+offset, 5), (wchar_t*)bd+9+offset, read_int32(bd+offset, 5)); 
+    /*****
+    printf("Doing a 32-bit compare\n");
+    *****/
+    return wcs_cmp((wchar_t*)ad+5+offset, read_int32(ad+offset, 1), (wchar_t*)bd+5+offset, read_int32(bd+offset, 1)); 
   default:
-    return lex_cmp(ad+5+offset, (a->size)-5, bd+5+offset, (b->size)-5);
+    /*****
+    printf("Doing a lex compare\n");
+    *****/
+    return lex_cmp(ad+1+offset, (a->size)-1, bd+1+offset, (b->size)-1);
   }
 }
+
+int lisp_compare_value2(DB *dbp, const DBT *a, const DBT *b) {
+  unsigned char *ad, *bd;
+  ad = (unsigned char *)a->data;
+  bd = (unsigned char *)b->data;
+
+  /*****
+  printf("Compare values: \n");
+  *****/
+  return lisp_compare2(dbp, a, ad, b, bd);
+}
+  
+/* New key form serializer comparison */
+int lisp_compare_key2(DB *dbp, const DBT *a, const DBT *b) {
+  int difference;
+  unsigned char *ad, *bd;
+  ad = (unsigned char *)a->data;
+  bd = (unsigned char *)b->data;
+
+  /*****
+  printf("Compare keys: \n");
+  printf("OIDs: %d %d\n", read_int(ad, 0), read_int(bd, 0));
+  printf("sizes: %d %d\n", a->size, b->size);
+  *****/
+
+  /* Compare OIDs: OIDs are limited by native integer width */
+  difference = read_int(ad, 0) - read_int(bd, 0);
+  if (difference) 
+    return difference;
+
+  /* Have a type tag? */
+  if (a->size == 4)
+    if (b->size == 4)
+      return 0;
+    else
+      return -1;
+  else if (b->size == 4) 
+    return 1;
+
+  return lisp_compare2(dbp, a, &ad[4], b, &bd[4]);
+}
+
 
 /* Support for multiple serializers.  Versions are integers starting at 1 */
 
@@ -1104,7 +1153,7 @@ int db_set_lisp_compare(DB *db, int version) {
   case 1: 
     return db->set_bt_compare(db, &lisp_compare1);
   default:
-    return db->set_bt_compare(db, &lisp_compare2);
+    return db->set_bt_compare(db, &lisp_compare_key2);
   }
 }
 
@@ -1113,7 +1162,16 @@ int db_set_lisp_dup_compare(DB *db, int version) {
   case 1: 
     return db->set_dup_compare(db, &lisp_compare1);
   default:
-    return db->set_dup_compare(db, &lisp_compare2);
+    return db->set_dup_compare(db, &lisp_compare_value2);
+  }
+}
+
+int db_set_lisp_dup_key_compare(DB *db, int version) {
+  switch (version) {
+  case 1: 
+    return db->set_dup_compare(db, &lisp_compare1);
+  default:
+    return db->set_dup_compare(db, &lisp_compare_key2);
   }
 }
 

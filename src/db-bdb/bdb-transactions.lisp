@@ -26,6 +26,7 @@
 				transaction parent environment
 				(retries 100) 
 				degree-2 read-uncommitted txn-nosync txn-nowait txn-sync)
+  (declare (ignorable transaction))
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
        for count fixnum from 0 to retries

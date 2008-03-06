@@ -1526,6 +1526,15 @@ function for Elephant to compare lisp values.")
 "Sets the duplicate comparision function to a hand-cooked
 function for Elephant to compare lisp values.")
 
+(def-function ("db_set_lisp_dup_key_compare" %db-set-lisp-dup-key-compare)
+    ((db :pointer-void)
+     (version :int))
+  :returning :int)
+
+(wrap-errno db-set-lisp-dup-key-compare (db version) :documentation 
+"Sets the duplicate comparision function to a hand-cooked
+function for Elephant to compare lisp values that are also btree keys.")
+
 ;; Sequences
 
 (def-function ("db_sequence_create2" %db-sequence-create)
