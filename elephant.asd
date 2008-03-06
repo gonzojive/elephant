@@ -213,6 +213,7 @@ directory to my-config.sexp and edit it appropriately."))
    #+(and X86-64 linux) "-march=x86-64"
    "-fPIC"
    "-Wall"
+   "-g"
    "-O2"
    "-g"
    input-file

@@ -56,7 +56,10 @@
    #:controller-serializer-version
    #:controller-serialize
    #:controller-deserialize
+   #:controller-instance-table
+   #:controller-schema-table
    #:schema-table 
+   #:oid->schema-id
    #:instance-table 
    #:index-table
    #:schema-name-index 

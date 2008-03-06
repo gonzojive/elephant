@@ -68,6 +68,7 @@
 
 (defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses index)
   "Ensures we inherit from persistent-object prior to initializing."
+  (declare (ignorable index))
   (let* ((persistent-object (find-class 'persistent-object))
 	 (has-persistent-object (superclass-member-p direct-superclasses persistent-object)))
     (if (not (or (eq class persistent-object)
@@ -150,7 +151,7 @@ slots."
 	 (persistent-initializable-slots 
 	  (union (get-init-slotnames class #'persistent-slot-names slot-names)
 		 indexed-slots :test #'equal)))
-    (when (not from-oid)
+    (unless from-oid
       (initialize-set-slots class instance set-slots))
     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)
     (apply #'call-next-method instance transient-slots initargs)))

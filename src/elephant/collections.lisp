@@ -120,7 +120,7 @@ existing primary entries (may be expensive!)"))
    btree-index object of all secondary indices in the btree"))
 
 (defmethod ensure-index ((ibt indexed-btree) idxname &key key-form populate)
-  (unless (get-index ibt 'classname)
+  (unless (get-index ibt idxname)
     (add-index ibt :index-name idxname :key-form key-form :populate populate)))
 
 ;;

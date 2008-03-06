@@ -91,8 +91,7 @@
 
 (defclass bdb-indexed-btree (indexed-btree bdb-btree)
   ((indices :accessor indices :initarg :indices :initform (make-hash-table))
-   (indices-cache :accessor indices-cache :initform (make-hash-table)
-	       :transient t))
+   (indices-cache :accessor indices-cache :transient t))
   (:metaclass persistent-metaclass)
   (:documentation "A BDB-based BTree supports secondary indices."))
 

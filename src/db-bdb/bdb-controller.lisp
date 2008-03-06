@@ -105,7 +105,7 @@ et cetera."))
 			    (recover-fatal nil) (thread t) 
 			    (deadlock-detect nil))
   (let ((env (db-env-create))
-	(new-p (not (probe-file (make-pathname :defaults (second (controller-spec sc))
+	(new-p (not (probe-file (make-pathname :directory (second (controller-spec sc))
 					       :name "%ELEPHANT")))))
     (setf (controller-environment sc) env)
     (db-env-set-flags env 0 :auto-commit t)
@@ -197,19 +197,18 @@ et cetera."))
 	  (db-sequence-open cid-seq "%ELEPHANTOID" :create t :thread t)
 	  (setf (controller-cid-seq sc) cid-seq)))
 
-      ;; Connect to root tables
       (with-transaction (:store-controller sc)
 	(setf (slot-value sc 'root)
 	      (make-instance 'bdb-btree :from-oid -1 :sc sc))
 
 	(setf (slot-value sc 'index-table)
 	      (make-instance 'bdb-btree :from-oid -2 :sc sc))
-	
+
 	(setf (slot-value sc 'instance-table)
 	      (if new-p
 		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc :indices (make-hash-table))
 		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc)))
-      
+
 	(setf (slot-value sc 'schema-table)
 	      (if new-p
 		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc :indices (make-hash-table))
@@ -264,6 +263,19 @@ et cetera."))
   (declare (type bdb-store-controller sc))
   (db-sequence-get-fixnum (controller-cid-seq sc) 1 :transaction +NULL-VOID+
 			  :txn-nosync t))
+
+(defmethod oid->schema-id (oid (sc bdb-store-controller))
+  "For default data structures, provide a fixed mapping to class IDs based
+   on the known startup order.  It's ugly, it's sad, but it works."
+  (if (< oid 3)
+      (case oid
+	(0 4)
+	(1 4)
+	(-1 1)
+	(-2 1)
+	(-3 3)
+	(-4 3))
+      (call-next-method)))
 
 (defmethod default-class-id (base-type (sc bdb-store-controller))
   (case base-type
