@@ -536,15 +536,16 @@ true."))
    open-controller to reopen the database"))
 
 (defmethod open-controller :after ((sc store-controller) &rest args)
-  ;; Initialize classname -> cidx
-  (setf (slot-value sc 'schema-name-index)
-	(ensure-index (slot-value sc 'schema-table) 'by-name
-		      :key-form 'schema-classname-keyform))
+  (with-transaction (:store-controller sc)
+    ;; Initialize classname -> cidx
+    (setf (slot-value sc 'schema-name-index)
+	  (ensure-index (slot-value sc 'schema-table) 'by-name
+			:key-form 'schema-classname-keyform))
 
-  ;; Initialize class idx -> oid index
-  (setf (slot-value sc 'instance-class-index)
-	(ensure-index (slot-value sc 'instance-table) 'by-name
-		      :key-form 'instance-cidx-keyform)))
+    ;; Initialize class idx -> oid index
+    (setf (slot-value sc 'instance-class-index)
+	  (ensure-index (slot-value sc 'instance-table) 'by-name
+			:key-form 'instance-cidx-keyform))))
 
 (defmethod close-controller :before ((sc store-controller))
   (remhash (controller-spec sc) *dbconnection-spec*)

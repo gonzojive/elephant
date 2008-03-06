@@ -660,7 +660,7 @@ is found, NIL is returned."
 
 (defun db-put-buffered (db key-buffer-stream value-buffer-stream
 			&key (transaction (txn-default *current-transaction*))
-			exists-error-p)
+			exists-error-p no-dup)
   "Put a key / value pair into a DB.  The pair are encoded
 in buffer-streams.  T on success, or nil if the key already
 exists and EXISTS-ERROR-P is NIL."
@@ -673,7 +673,7 @@ exists and EXISTS-ERROR-P is NIL."
 			   (buffer-stream-size key-buffer-stream)
 			   (buffer-stream-buffer value-buffer-stream)
 			   (buffer-stream-size value-buffer-stream)
-			   0)))
+			   (if no-dup DB_NODUPDATA 0))))
     (declare (type fixnum errno))
     (cond ((= errno 0) t)
 	  ((and (= errno DB_KEYEXIST) (not exists-error-p))

@@ -101,7 +101,7 @@ et cetera."))
 ;; Open/close     
 ;;
 
-(defmethod open-controller ((sc bdb-store-controller) &key (recover nil)
+(defmethod open-controller ((sc bdb-store-controller) &key (recover t)
 			    (recover-fatal nil) (thread t) 
 			    (deadlock-detect nil))
   (let ((env (db-env-create))
@@ -172,7 +172,7 @@ et cetera."))
       (db-bdb::db-set-lisp-compare dup-btrees (controller-serializer-version sc))
       (db-bdb::db-set-lisp-dup-compare dup-btrees (controller-serializer-version sc))
       (db-set-flags dup-btrees :dup-sort t)
-      (db-open dup-btrees :file "%ELEPHANT" :database "%ELEPHANTDUPS"
+      (db-open dup-btrees :file "%ELEPHANTDUP" :database "%ELEPHANTDUPS"
 	       :auto-commit t :type DB-BTREE :create t :thread thread
 	       :read-uncommitted t)
      
@@ -196,22 +196,24 @@ et cetera."))
 	  (db-sequence-initial-value cid-seq 5)
 	  (db-sequence-open cid-seq "%ELEPHANTOID" :create t :thread t)
 	  (setf (controller-cid-seq sc) cid-seq)))
-     
+
       ;; Connect to root tables
       (with-transaction (:store-controller sc)
 	(setf (slot-value sc 'root)
 	      (make-instance 'bdb-btree :from-oid -1 :sc sc))
 
-	(setf (slot-value sc 'instance-table)
-	      (make-instance 'bdb-indexed-btree :from-oid -2 :sc sc
-			     :indices (make-hash-table)))
-      
 	(setf (slot-value sc 'index-table)
-	      (make-instance 'bdb-btree :from-oid -3 :sc sc))
+	      (make-instance 'bdb-btree :from-oid -2 :sc sc))
 	
+	(setf (slot-value sc 'instance-table)
+	      (if new-p
+		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc :indices (make-hash-table))
+		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc)))
+      
 	(setf (slot-value sc 'schema-table)
-	      (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc
-			     :indices (make-hash-table))))
+	      (if new-p
+		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc :indices (make-hash-table))
+		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc))))
 
       (when deadlock-detect
 	(start-deadlock-detector sc))

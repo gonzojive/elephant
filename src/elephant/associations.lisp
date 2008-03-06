@@ -1,35 +1,14 @@
 (in-package :elephant)
 
+;; ===============================
+;;  Association API
+;; ===============================
 
-
-
-
-;;
-;; Association Objects
-;;
-
-(defclass association (persistent-collection)
-  ((type :accessor association-type :initarg :type :type (member :1-n :n-m)))
-  (:documentation "Base class for pairwise associations between persistent objects."))
-
-(defmethod valid-association-pair ((primary persistent) (secondary persistent) (assoc association))
-  t)
-
-(defmethod valid-association-pair ((primary t) (secondary t) (assoc association))
-  (error "Associations must be between persistent objects"))
-
-(defun make-association (type &optional (sc *store-controller*))
-  (build-association type sc))
-
-
-;;
-;; Association API
-;;
 ;; Separate association methods from metaprotocol issues
 
-(defgeneric build-association (classname1 classname2 type sc)
-  (:documentation "Allow backend-specific overrides by creating instances
-                   via this interface"))
+;;(defgeneric build-association (classname1 classname2 type sc)
+;;  (:documentation "Allow backend-specific overrides by creating instances
+;;                   via this interface"))
 
 (defgeneric add-association (inst1 inst2 assoc)
   (:documentation "Validates class types and adds the association"))
@@ -54,9 +33,26 @@
   (:documentation "What it says"))
 
 
-;;
-;; Generic association implementation
-;;
+;; ======================================
+;;  Association Objects
+;; ======================================
+
+(defclass association (persistent-collection)
+  ((type :accessor association-type :initarg :type :type (member :1-n :n-m)))
+  (:documentation "Base class for pairwise associations between persistent objects."))
+
+(defmethod valid-association-pair ((primary persistent) (secondary persistent) (assoc association))
+  t)
+
+(defmethod valid-association-pair ((primary t) (secondary t) (assoc association))
+  (error "Associations must be between persistent objects"))
+
+(defun make-association (type &optional (sc *store-controller*))
+  (build-association type sc))
+
+;; =======================================
+;;  Generic association implementation
+;; =======================================
 
 (defstruct oid-pair left right)
 
@@ -69,10 +65,10 @@
                    to create their own interfaces for improved performance
                    or backend specific features."))
 
-(defmethod build-association (type sc)
-  (let ((table (make-indexed-btree sc)))
-    (add-index table :index-name :primary)
-    (make-instance 'default-association)))
+;; (defmethod build-association (type sc)
+;;   (let ((table (make-indexed-btree sc)))
+;;     (add-index table :index-name :primary)
+;;     (make-instance 'default-association)))
 
 
 

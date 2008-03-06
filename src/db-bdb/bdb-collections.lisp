@@ -783,7 +783,8 @@
 	(serialize value value-buf sc)
 	(db-put-buffered (controller-dup-btrees sc)
 			 key-buf value-buf
-			 :transaction (my-current-transaction sc))))
+			 :transaction (my-current-transaction sc)
+			 :no-dup t)))
     value)
 
 (defmethod remove-kv (key (bt bdb-dup-btree))

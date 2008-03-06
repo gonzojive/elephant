@@ -498,7 +498,7 @@
 	      (let* ((id (buffer-read-fixnum bs))
 		     (maybe-hash (lookup-id id)))
 		(declare (type fixnum id))
-		(format t "~A ~A~%" maybe-hash id)
+;;		(format t "~A ~A~%" maybe-hash id)
 		(if maybe-hash maybe-hash
 		    (let* ((test (%deserialize bs))
 			   (rehash-size (%deserialize bs))
