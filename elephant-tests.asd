@@ -60,6 +60,7 @@
              #+use-fiveam
              (:file "fiveam-rt")
              (:file "elephant-tests")
+	     (:file "testconcurrency")
              (:file "testperformance")
 	     (:file "testserializer")
 	     (:file "testconditions")
