@@ -190,7 +190,18 @@ lookup, updating ALL other secondary indices."
 
 (defun make-dup-btree (&optional (sc *store-controller*))
   (build-dup-btree sc))
-  
+
+(defmethod remove-kv-pair (key value (dbt dup-btree))
+  "Yuck!  Is there a more efficient way to update an index than:
+   Read, delete, write?  At least the read caches the delete page?"
+  (let ((sc (get-con dbt)))
+    (ensure-transaction (:store-controller sc)
+      (with-btree-cursor (cur dbt)
+	(multiple-value-bind (exists? k v)
+	    (cursor-get-both cur key value)
+	  (declare (ignore k v))
+  	  (when exists? 
+	    (cursor-delete cur)))))))
 
 ;;
 ;; Cursors for all btree types

@@ -214,7 +214,7 @@
 
    #:btree #:make-btree
    #:dup-btree #:make-dup-btree
-   #:get-value #:remove-kv #:existsp
+   #:get-value #:remove-kv #:remove-kv-pair #:existsp
    #:indexed-btree #:make-indexed-btree 
    #:btree-index
    #:add-index #:get-index #:remove-index #:map-indices

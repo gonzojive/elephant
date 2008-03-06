@@ -51,29 +51,6 @@
 	   (add-slot-def-index new-idx slot-def sc)
 	   new-idx))))
 
-(defmethod remove-kv-pair (key value (dbt dup-btree))
-  "Yuck!  Is there a more efficient way to update an index than:
-   Read, delete, write?  At least the read caches the delete page?"
-  (let ((sc (get-con dbt)))
-    (ensure-transaction (:store-controller sc)
-      (with-btree-cursor (cur dbt)
-	(multiple-value-bind (exists? k v)
-	    (cursor-set-range cur key)
-	  (declare (ignore k))
-  	  (if (and exists? (eq v value))
-	      (cursor-delete cur)
-	      (loop do
-		 (multiple-value-bind (exists? k v)
-		     (cursor-next cur)
-		   (declare (ignore k))
-		   (when (not exists?)
-		     (error "Cannot remove key/value ~A/~A from dup-btree ~A: not found"
-			    key value dbt))
-		   (when (eq v value)
-		     (cursor-delete cur)
-		     (return value))))))))))
-
-
 ;; =================================
 ;;   INTERNAL ACCESS TO INDICES
 ;; =================================

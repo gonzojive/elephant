@@ -806,3 +806,9 @@
 				      :transaction (my-current-transaction sc))
 		   :oid (oid bt))))
 
+(defmethod cursor-delete ((cursor bdb-dup-cursor))
+  (if (cursor-initialized-p cursor)
+      (progn (db-cursor-delete (cursor-handle cursor))
+	     (setf (cursor-initialized-p cursor) nil))
+      (error "Can't delete with uninitialized cursor!")))
+
