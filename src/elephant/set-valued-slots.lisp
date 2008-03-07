@@ -40,7 +40,7 @@
       (call-next-method)
       (insert-item new-value (slot-value-using-class class instance slot-def))))
 
-(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
+(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def set-valued-slot-definition))
   "Make sure we reclaim the pset storage"
   (awhen (and (slot-boundp-using-class class instance slot-def)
 	      (slot-value-using-class class instance slot-def))

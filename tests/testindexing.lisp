@@ -44,8 +44,8 @@
 
 (defun wipe-class (name)
   (when (find-class name nil)
-    ;; drop indices
-;;    (disable-class-indexing name :errorp nil)
+    (when (elephant::persistent-p (find-class name))
+      (drop-instances (get-instances-by-class (find-class name))))
     (setf (find-class name nil) nil)))
 
 (defun wipe-all ()
@@ -286,9 +286,9 @@
 		(slot2 inst2)
 		(slot3 inst2)
 		(slot4 inst2)
-		(equal (elephant::indexing-record-slots (elephant::indexed-record (find-class 'idx-two)))
+		(equal (elephant::indexed-slot-names (find-class 'idx-two))
 		       '(slot1 slot2))
-		(equal (elephant::indexing-record-slots (elephant::indexed-record (find-class 'idx-three)))
+		(equal (elephant::indexed-slot-names (find-class 'idx-three))
 		       '(slot1 slot3 slot4)))))
   1 2 3 4 1 20 30 40 t t)
 

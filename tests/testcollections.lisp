@@ -182,7 +182,7 @@
   (declare (ignore s key))
   (values t (slot1 value)))
 
-(test (add-indices :depends-on indexed-btree-make)
+(deftest (add-indices :depends-on indexed-btree-make)
   (5am:finishes
     (with-transaction (:store-controller *store-controller*)
       (setf index1

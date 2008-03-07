@@ -155,8 +155,8 @@ slots."
     (if from-oid
 	(initialize-cached-slots instance cached-slots)
 	(setq transient-slots (union transient-slots cached-slots)))
-    (apply #'call-next-method instance transient-slots initargs)
     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)
+    (apply #'call-next-method instance transient-slots initargs)
     (unless from-oid
       (initialize-set-slots class instance set-slots))))
 
@@ -386,8 +386,8 @@ slots."
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-name symbol))
   (loop for slot in (class-slots class)
      until (eq (slot-definition-name slot) slot-name)
-     finally (return (if (or (subtypep slot 'persistent-slot-definition)
-			     (subtypep slot 'cached-slot-definition))
+     finally (return (if (or (typep slot 'persistent-slot-definition)
+			     (typep slot 'cached-slot-definition))
 			 (slot-makunbound-using-class class instance slot)
 			 (call-next-method)))))
 

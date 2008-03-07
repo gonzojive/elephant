@@ -137,7 +137,10 @@
 
 (defmethod get-instance-by-value ((class persistent-metaclass) slot-name value)
   (awhen (find-inverted-index class slot-name)
-    (get-value value it)))
+    (multiple-value-bind (oid found?)
+	(get-value value it)
+      (when found?
+	(controller-recreate-instance (get-con it) oid)))))
 
 (defmethod get-instance-by-value ((class symbol) slot-name value)
  (get-instance-by-value (find-class class) slot-name value))
