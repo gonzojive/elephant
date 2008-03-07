@@ -23,7 +23,7 @@
 ;; Indexed slot accesses
 ;; ======================================================
 
-(defmethod (setf slot-value-using-class) :around
+(defmethod (setf slot-value-using-class)
     (new-value (class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Update indices when writing an indexed slot.  Make around method to ensure a single transaction
    for write + index update"
@@ -68,8 +68,8 @@
 ;;   INTERNAL ACCESS TO INDICES
 ;; =================================
 
-(defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil))
-  (find-inverted-index (find-class class) slot :null-on-fail null-on-fail))
+(defmethod find-inverted-index ((class symbol) slot &key (null-on-fail nil) (sc *store-controller*))
+  (find-inverted-index (find-class class) slot :null-on-fail null-on-fail :sc sc))
 
 (defmethod find-inverted-index ((class persistent-metaclass) slot &key (null-on-fail nil) (sc *store-controller*))
   (ensure-finalized class)
@@ -208,42 +208,6 @@
 	  (map-btree (if oids fn #'map-obj) index :value value :collect collect)
 	  (map-btree (if oids fn #'map-obj) index :start start :end end :from-end from-end :collect collect)))))
 
-;; ===================
-;;   USER CURSOR API
-;; ===================
-
-(defgeneric make-inverted-cursor (class name)
-  (:documentation "Define a cursor on the inverted (slot or derived) index"))
-
-(defgeneric make-class-cursor (class)
-  (:documentation "Define a cursor over all class instances"))
-
-
-(defmethod make-inverted-cursor ((class persistent-metaclass) name)
-  (make-cursor (find-inverted-index class name)))
-
-(defmethod make-inverted-cursor ((class symbol) name)
-  (make-cursor (find-inverted-index class name)))
-
-(defmacro with-inverted-cursor ((var class name) &body body)
-  "Bind the var argument to an inverted cursor on the index
-   specified the provided class and index name"
-  `(let ((,var (make-inverted-cursor ,class ,name)))
-     (unwind-protect (progn ,@body)
-       (cursor-close ,var))))
-
-(defmethod make-class-cursor ((class persistent-metaclass))
-  (make-cursor (find-class-index class)))
-
-(defmethod make-class-cursor ((class symbol))
-  (make-cursor (find-class-index class)))
-
-(defmacro with-class-cursor ((var class) &body body)
-  "Bind the var argument in the body to a class cursor on the
-   index specified the provided class or class name"
-  `(let ((,var (make-class-cursor ,class)))
-     (unwind-protect (progn ,@body)
-       (cursor-close ,var))))
 
 
 

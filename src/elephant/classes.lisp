@@ -145,16 +145,20 @@ class is fully initialized.  Calls the next method for the transient
 slots."
   (let* ((class (class-of instance))
 	 (transient-slots (get-init-slotnames class #'transient-slot-names slot-names))
-	 (set-slots (union (association-slot-names class) 
-			   (set-valued-slot-names class)))
+	 (cached-slots (get-init-slotnames class #'cached-slot-names slot-names))
 	 (indexed-slots (get-init-slotnames class #'indexed-slot-names slot-names))
 	 (persistent-initializable-slots 
 	  (union (get-init-slotnames class #'persistent-slot-names slot-names)
-		 indexed-slots :test #'equal)))
-    (unless from-oid
-      (initialize-set-slots class instance set-slots))
+		 indexed-slots))
+	 (set-slots (union (association-slot-names class) 
+			   (set-valued-slot-names class))))
+    (if from-oid
+	(initialize-cached-slots instance cached-slots)
+	(setq transient-slots (union transient-slots cached-slots)))
+    (apply #'call-next-method instance transient-slots initargs)
     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)
-    (apply #'call-next-method instance transient-slots initargs)))
+    (unless from-oid
+      (initialize-set-slots class instance set-slots))))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (ensure-transaction (:store-controller (get-con instance))
@@ -382,9 +386,8 @@ slots."
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-name symbol))
   (loop for slot in (class-slots class)
      until (eq (slot-definition-name slot) slot-name)
-     finally (return (if (typep slot 'persistent-slot-definition)
-;;			 (if (indexed-p class)
-;;			     (indexed-slot-makunbound class instance slot)
+     finally (return (if (or (subtypep slot 'persistent-slot-definition)
+			     (subtypep slot 'cached-slot-definition))
 			 (slot-makunbound-using-class class instance slot)
 			 (call-next-method)))))
 
@@ -411,6 +414,13 @@ slots."
 	(class-name (class-name class)))
     (loop for reader in readers
 	  do (make-persistent-reader reader slot-definition class class-name))
+    (loop for writer in writers
+	  do (make-persistent-writer writer slot-definition class class-name))))
+
+#+allegro
+(defmethod initialize-accessors ((slot-definition cached-slot-definition) class)
+  (let ((writers (slot-definition-writers slot-definition))
+	(class-name (class-name class)))
     (loop for writer in writers
 	  do (make-persistent-writer writer slot-definition class class-name))))
 
@@ -477,9 +487,7 @@ slots."
   (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
 		      (find slot (class-slots class)))))
     (if (typep slot-def 'persistent-slot-definition)
-	(if (indexed class)
-	    (indexed-slot-writer class instance slot-def new-value)
-	    (persistent-slot-writer (get-con instance) new-value instance (slot-definition-name slot-def)))
+	(persistent-slot-writer (get-con instance) new-value instance (slot-definition-name slot-def))
 	(call-next-method new-value class instance (slot-definition-name slot-def)))))
 
 #+lispworks
@@ -488,7 +496,5 @@ slots."
   (let ((slot-def (or (find slot (class-slots class) :key 'slot-definition-name)
 		      (find slot (class-slots class)))))
     (if (typep slot-def 'persistent-slot-definition)
-	(if (indexed class)
-	    (indexed-slot-makunbound class instance slot-def)
-	    (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def)))
+	(persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def))
 	(call-next-method class instance (slot-definition-name slot-def)))))

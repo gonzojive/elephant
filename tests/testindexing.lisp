@@ -28,23 +28,24 @@
 (defvar inst2)
 (defvar inst3)
 
-(test disable-class-indexing-test 
-  (5am:finishes
-    (when (find-class 'idx-one nil)
-      (disable-class-indexing 'idx-one  :errorp nil)
-      (setf (find-class 'idx-one) nil))
+;; (test disable-class-indexing-test 
+;;   (5am:finishes
+;;     (when (find-class 'idx-one nil)
+;;       (disable-class-indexing 'idx-one  :errorp nil)
+;;       (setf (find-class 'idx-one) nil))
       
-    (defclass idx-one ()
-      ((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
-      (:metaclass persistent-metaclass))
+;;     (defclass idx-one ()
+;;       ((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
+;;       (:metaclass persistent-metaclass))
 
-    (disable-class-indexing 'idx-one  :errorp nil)
-    (disable-class-indexing 'idx-one  :errorp nil)
-    (setf (find-class 'idx-one) nil)))
+;;     (disable-class-indexing 'idx-one  :errorp nil)
+;;     (disable-class-indexing 'idx-one  :errorp nil)
+;;     (setf (find-class 'idx-one) nil)))
 
 (defun wipe-class (name)
   (when (find-class name nil)
-    (disable-class-indexing name :errorp nil)
+    ;; drop indices
+;;    (disable-class-indexing name :errorp nil)
     (setf (find-class name nil) nil)))
 
 (defun wipe-all ()
@@ -234,7 +235,7 @@
 
       (make-instance 'idx-cslot)
 
-      (values (if (class-indexedp-by-name 'idx-cslot) t nil)))
+      (values (if (> (length (get-instances-by-class 'idx-cslot)) 0) t nil)))
   t)
 
 
@@ -553,14 +554,14 @@
 
 (defun make-stress-classes ()
   (defclass stress-normal ()
-    ((stress1 :accessor stress1 :initarg :stress1 :initform nil :index nil)
-     (stress2 :accessor stress2 :initarg :stress2 :initform nil :index nil))
+    ((stress1 :accessor stress1 :initarg :stress1 :initform nil)
+     (stress2 :accessor stress2 :initarg :stress2 :initform nil))
     (:metaclass persistent-metaclass))
 
   (defclass stress-index ()
     ((stress1 :accessor stress1 :initarg :stress1 :initform nil :index t)
      (stress2 :accessor stress2 :initarg :stress2 :initform 2 :index t)
-     (stress3 :accessor stress3 :initarg :stress3 :initform 3 :index nil))
+     (stress3 :accessor stress3 :initarg :stress3 :initform 3))
     (:metaclass persistent-metaclass)))
 
 (defparameter *stress-count* 700)

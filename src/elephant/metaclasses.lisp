@@ -113,6 +113,25 @@
   (find-slot-def-names-by-type class 'persistent-effective-slot-definition t))
 
 ;;
+;; Cached slots (a placeholder for future development)
+;;
+
+(defclass cached-slot-definition (standard-slot-definition)
+  ((cache :accessor cached-slot-p :initarg :cache)))
+
+(defclass cached-direct-slot-definition (standard-direct-slot-definition cached-slot-definition)
+  ())
+
+(defclass cached-effective-slot-definition (standard-effective-slot-definition cached-slot-definition)
+  ())
+
+(defun cached-slot-defs (class)
+  (find-slot-defs-by-type class 'cached-effective-slot-definition nil))
+
+(defun cached-slot-names (class)
+  (find-slot-def-names-by-type class 'cached-effective-slot-definition nil))
+
+;;
 ;; Standard/transient slots
 ;;
 
@@ -125,19 +144,21 @@
 (defclass transient-effective-slot-definition (standard-effective-slot-definition transient-slot-definition)
   ())
 
-(defgeneric transient (slot)
-  (:method ((slot standard-direct-slot-definition)) t)
-  (:method ((slot persistent-direct-slot-definition)) nil))
+(defgeneric transient-p (slot)
+  (:method ((slot standard-slot-definition)) t)
+  (:method ((slot transient-slot-definition)) t)
+  (:method ((slot cached-slot-definition)) nil)
+  (:method ((slot persistent-slot-definition)) nil))
 
 (defun ensure-transient-chain (slot-definitions initargs)
   (declare (ignore initargs))
   (loop for slot-definition in slot-definitions
-     always (transient slot-definition)))
+     always (transient-p slot-definition)))
 
 (defun transient-slot-defs (class)
   (let ((slot-definitions (class-slots class)))
     (loop for slot-def in slot-definitions
-       unless (persistent-p slot-def)
+       when (transient-p slot-def)
        collect slot-def)))
 
 (defun transient-slot-names (class)
@@ -241,11 +262,13 @@
 	 (has-initarg-p (getf ,initargs :initargs))
 	 (transient-p (getf ,initargs :transient))
 	 (indexed-p (getf ,initargs :index))
+	 (cached-p (getf ,initargs :cache))
 	 (set-valued-p (getf ,initargs :set-valued))
 	 (associate-p (getf ,initargs :associate)))
      (declare (ignorable allocation-key has-initarg-p))
      (when (consp transient-p) (setq transient-p (car transient-p)))
      (when (consp indexed-p) (setq indexed-p (car indexed-p)))
+     (when (consp cached-p) (setq cached-p (car cached-p)))
      (when (consp set-valued-p) (setq set-valued-p (car set-valued-p)))
      (when (consp associate-p) (setq associate-p (car associate-p)))
      ,@body))
@@ -267,6 +290,10 @@
 	   (find-class 'indexed-direct-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-direct-slot-definition))
+	  (cached-p
+	   (cerror "Ignore and try anyway?" 
+		   "Cache slot argument not yet supported")
+	   (find-class 'cached-direct-slot-definition))
 	  (associate-p
 	   (find-class 'association-direct-slot-definition))
   	  (transient-p
@@ -282,6 +309,8 @@ definition class depending on the keyword."
 	   (find-class 'indexed-effective-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-effective-slot-definition))
+	  (cached-p
+	   (find-class 'cached-effective-slot-definition))
 	  (associate-p
 	   (find-class 'association-effective-slot-definition))
 	  (transient-p
@@ -293,11 +322,14 @@ definition class depending on the keyword."
   #+lispworks (declare (ignore slot-name))
   (let ((initargs (call-next-method))
 	(parent-direct-slot (first slot-definitions)))
-    (if (ensure-transient-chain slot-definitions initargs)
-	(setf initargs (append initargs '(:transient t)))
-	(setf (getf initargs :allocation) :database))
+    (cond ((ensure-transient-chain slot-definitions initargs)
+	   (setf initargs (append initargs '(:transient t))))
+	  ((not (eq (type-of parent-direct-slot) 'cached-direct-slot-definition))
+	   (setf (getf initargs :allocation) :database)))
     (when (eq (type-of parent-direct-slot) 'set-valued-direct-slot-definition)
       (setf (getf initargs :set-valued) t))
+    (when (eq (type-of parent-direct-slot) 'cached-direct-slot-definition)
+      (setf (getf initargs :cache) t))
     (when (eq (type-of parent-direct-slot) 'association-direct-slot-definition)
       (setf (getf initargs :associate) t))
     (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
