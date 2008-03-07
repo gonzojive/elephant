@@ -1027,7 +1027,9 @@ double read_num(unsigned char *buf) {
 double read_num2(unsigned char *buf);
 
 /* The new base serializer comparison fn */
-int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsigned char *bd) {
+int lisp_compare2(DB *dbp, 
+		  const DBT *a, unsigned char *ad, const unsigned int asize,
+		  const DBT *b, unsigned char *bd, const unsigned int bsize) {
   int difference;
   int offset;
   double ddifference;
@@ -1044,7 +1046,7 @@ int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsign
   if ((type_numeric2(at)) && (type_numeric2(bt))) {
     /*****
     printf("Num1: %f  Num2: %f\n", read_num2(ad), read_num2(bd));
-    *****/    
+    *****/
     ddifference = read_num2(ad) - read_num2(bd);
     if (ddifference > 0) return 1;
     else if (ddifference < 0) return -1;
@@ -1073,7 +1075,7 @@ int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsign
 
   /*****
   printf("Prefix type: %d  offset: %d\n", ad[1], offset);
-  *****/    
+  *****/
 
   /* Same type*/
   switch (at) {
@@ -1089,7 +1091,7 @@ int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsign
   case S2_UTF16_STRING: /* 16-bit string */
     /*****
     printf("Doing a 16-bit compare\n");
-    *****/    
+    *****/
     return utf16_cmp(ad+5+offset, read_int32(ad+offset, 1), bd+5+offset, read_int32(bd+offset, 1));
   case S2_UTF32_STRING:
     /*****
@@ -1100,7 +1102,7 @@ int lisp_compare2(DB *dbp, const DBT *a, unsigned char *ad, const DBT *b, unsign
     /*****
     printf("Doing a lex compare\n");
     *****/
-    return lex_cmp(ad+1+offset, (a->size)-1, bd+1+offset, (b->size)-1);
+    return lex_cmp(ad+1+offset, asize-1, bd+1+offset, bsize-1);
   }
 }
 
@@ -1112,7 +1114,7 @@ int lisp_compare_value2(DB *dbp, const DBT *a, const DBT *b) {
   /*****
   printf("Compare values: \n");
   *****/
-  return lisp_compare2(dbp, a, ad, b, bd);
+  return lisp_compare2(dbp, a, ad, a->size, b, bd, b->size);
 }
   
 /* New key form serializer comparison */
@@ -1142,7 +1144,7 @@ int lisp_compare_key2(DB *dbp, const DBT *a, const DBT *b) {
   else if (b->size == 4) 
     return 1;
 
-  return lisp_compare2(dbp, a, &ad[4], b, &bd[4]);
+  return lisp_compare2(dbp, a, &ad[4], (a->size)-4, b, &bd[4], (b->size)-4);
 }
 
 
@@ -1286,8 +1288,16 @@ int wcs_cmp(const wchar_t *a, int32_t length1,
 
 int lex_cmp(const unsigned char *a, int32_t length1, const unsigned char *b, int32_t length2) {
   int min, sizediff, diff;
+  /*****
+  int i;
+  *****/
   sizediff = length1 - length2;
   min = sizediff > 0 ? length2 : length1;
+    /*****
+  for(i=0; i < min; i++) {
+    printf("a: %d  b: %d\n", a[i], b[i]);
+  }
+    *****/
   diff = memcmp(a, b, min);
   if (diff == 0) return sizediff;
   return diff;

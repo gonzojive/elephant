@@ -31,7 +31,7 @@
   (:import-from :sb-bignum
 		%bignum-ref)
   (:import-from #:elephant 
-		get-cached-instance
+		controller-recreate-instance
 		slot-definition-allocation
 		slot-definition-name
 		compute-slots
@@ -373,10 +373,9 @@
 	     ((= tag +ucs4-string+)
 	      (buffer-read-ucs4-string bs (buffer-read-fixnum bs)))
 	     ((= tag +persistent+)
-;;	      (get-cached-instance *store-controller*
-	      (get-cached-instance sc
-				   (buffer-read-fixnum bs)
-				   (%deserialize bs)))
+	      (let ((oid (buffer-read-fixnum bs))
+		    (cname (%deserialize bs)))
+		(controller-recreate-instance sc oid cname)))
 	     ((= tag +single-float+)
 	      (buffer-read-float bs))
 	     ((= tag +double-float+)

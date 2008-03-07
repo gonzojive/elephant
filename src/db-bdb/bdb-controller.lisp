@@ -267,7 +267,7 @@ et cetera."))
 (defmethod oid->schema-id (oid (sc bdb-store-controller))
   "For default data structures, provide a fixed mapping to class IDs based
    on the known startup order.  It's ugly, it's sad, but it works."
-  (if (< oid 3)
+  (if (< oid 2)
       (case oid
 	(0 4)
 	(1 4)
