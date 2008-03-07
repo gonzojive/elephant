@@ -50,10 +50,10 @@
 (defun lookup-data-store-con-init (name)
   (gethash name *elephant-controller-init*))
 
-(defvar *dbconnection-spec* (make-hash-table :test 'equalp))
+(defvar *dbconnection-spec* nil)
 (defvar *dbconnection-lock* (ele-make-lock))
 
-(defgeneric get-con (instance &optional sc)
+(defgeneric get-con (instance)
   (:documentation "This is used to find and validate the connection spec
    maintained for in-memory persistent objects.  Should
    we re-open the controller from the spec if it's not
@@ -71,13 +71,43 @@
 	  :object object
 	  :spec (db-spec object)))
 
-(defmethod get-con ((instance persistent) &optional (sc *store-controller*))
+(defun lookup-con-spec (spec)
+  (ifret (fast-lookup-con-spec spec)
+	 (ifret (slow-lookup-con-spec spec)
+		nil)))
+
+(defun fast-lookup-con-spec (spec)
+  (let ((result (assoc spec *dbconnection-spec*)))
+    (when result
+      (cdr result))))
+
+(defun slow-lookup-con-spec (spec)
+  (let ((result (assoc spec *dbconnection-spec* :test #'equalp)))
+    (when result
+      (cdr result))))
+
+(defun set-con-spec (spec sc)
+  (ele-with-lock (*dbconnection-lock*)
+    (setf *dbconnection-spec* 
+	  (acons spec sc *dbconnection-spec*))))
+
+(defun delete-con-spec (spec)
+  (ele-with-lock (*dbconnection-lock*)
+    (setf *dbconnection-spec*
+	  (delete spec *dbconnection-spec* :key #'car :test #'equalp))))
+
+(defmethod get-con ((instance persistent))
   (declare (ignore sc))
-  (let ((con (gethash (db-spec instance) *dbconnection-spec*)))
+  (let ((con (fast-lookup-con-spec (db-spec instance))))
     (cond ((not con)
-	   (progn (signal-controller-lost-error instance)
-		  (open-controller 
-		   (get-controller (db-spec instance)))))
+	   (aif (slow-lookup-con-spec (db-spec instance))
+  	     (progn
+	       (setf (db-spec instance) 
+		     (car (find it *dbconnection-spec* :key #'cdr)))
+	       (get-con instance))
+	     (progn (signal-controller-lost-error instance)
+		    (open-controller 
+		     (get-controller (db-spec instance))))))
 	  ;; If it's valid and open
 	  ((and con (connection-is-indeed-open con))
 	   con)
@@ -92,7 +122,7 @@
    from specs.  Get-con is used to validate connections and
    reopen if necessary and perhaps these two should be combined
    at some point"
-  (let ((cached-sc (gethash spec *dbconnection-spec*)))
+  (let ((cached-sc (lookup-con-spec spec)))
     (if (and cached-sc (connection-is-indeed-open cached-sc))
 	cached-sc
 	(build-controller spec))))
@@ -106,8 +136,7 @@
   (let ((init (lookup-data-store-con-init (first spec))))
       (unless init (error "Store controller init function not registered for data store ~A." (car spec)))
       (let ((sc (funcall (symbol-function init) spec)))
-	(ele-with-lock (*dbconnection-lock*)
-	  (setf (gethash spec *dbconnection-spec*) sc))
+	(set-con-spec spec sc)
 	sc)))
 
 (defun load-data-store (type)
@@ -317,6 +346,7 @@
 
 (defmethod register-controller-schema (class (sc store-controller))
   "We don't have a cached version, so create a new one"
+  (ensure-finalized class)
   (let ((db-schema (make-db-schema (next-cid sc) (%class-schema class))))
     ;; Add to database
     (setf (get-value (schema-id db-schema) (controller-schema-table sc))
@@ -561,7 +591,7 @@ true."))
 			:key-form 'instance-cidx-keyform))))
 
 (defmethod close-controller :before ((sc store-controller))
-  (remhash (controller-spec sc) *dbconnection-spec*)
+  (delete-con-spec (controller-spec sc))
   (setf (slot-value sc 'schema-name-index) nil)
   (setf (slot-value sc 'instance-class-index) nil))
 
@@ -641,10 +671,8 @@ true."))
     (setf *store-controller* nil)))
 
 (defun close-all-stores ()
-  (maphash (lambda (k v)
-	     (declare (ignore k))
-	     (close-store v))
-	   *dbconnection-spec*))
+  (loop for pair in *dbconnection-spec*
+       do (close-store (cdr pair))))
 
 (defmacro with-open-store ((spec) &body body)
   "Executes the body with an open controller,
