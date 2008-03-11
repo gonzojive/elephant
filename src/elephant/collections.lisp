@@ -567,7 +567,7 @@ not), evaluates the forms, then closes the cursor."
 	     (funcall fn skey val)
 	     (loop  
 		(handler-case
-		    (with-index-cursor-values ,step
+		    (with-cursor-values ,step
 		      (if (and exists? (continue-p skey))
 			  (funcall fn skey val)
 			  (return (nreverse results))))
@@ -664,7 +664,7 @@ not), evaluates the forms, then closes the cursor."
        (when exists?
 	 (funcall fn skey val pkey)
 	 (loop  
-	    (with-index-cursor-values ,step
+	    (with-cursor-values ,step
 	      (if (and exists? (continue-p skey))
 		  (funcall fn skey val pkey)
 		  (return (nreverse results)))))))))

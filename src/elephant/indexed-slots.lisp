@@ -193,7 +193,7 @@
 	   (schema-ids (if db-schemas 
 			   (mapcar #'schema-id (reverse db-schemas))
 			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
-      (dump-schema-status sc classname)
+;;      (dump-schema-status sc classname)
       (loop for schema-id in schema-ids appending
 	   (map-index #'map-fn (controller-instance-class-index sc)
 		      :value schema-id

@@ -26,8 +26,8 @@
 (defclass schema ()
   ((classname :accessor schema-classname :initarg :name)
    (successor :accessor schema-successor :initarg :successor :initform nil)
-   (predecessor :accessor schema-predecessor :initarg :predecessor)
-   (slot-recs :accessor schema-slot-recs :initarg :slot-recs))
+   (predecessor :accessor schema-predecessor :initarg :predecessor :initform nil)
+   (slot-recs :accessor schema-slot-recs :initarg :slot-recs :initform nil))
   (:documentation "Keep a doubly linked list of schemas in the db"))
 
 (defmethod print-object ((schema schema) stream)

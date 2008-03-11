@@ -530,13 +530,10 @@
 				       ;; to abort completely, we will return a special object...
 				       ;; This behavior could be configurable; the user might 
 				       ;; prefer an abort here, but I prefer surviving...
-				       (make-instance typedesig)
-				       )
+				       (make-instance typedesig))
  				   (error (v) (format t "got typedesig error: ~A ~A ~%" v typedesig)
  					  (list 'caught-error v typedesig)))
-				 (list 'uninstantiable-object-of-type typedesig)
-				 )
-			      ))
+				 (list 'uninstantiable-object-of-type typedesig))))
 			(if (listp o)
 			    o
 			    (progn

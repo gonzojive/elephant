@@ -127,6 +127,12 @@
 ;; CLASS INSTANCE INITIALIZATION
 ;;
 
+(defmethod initialize-instance :around ((instance persistent-object) &rest initargs 
+					&key (sc *store-controller*) &allow-other-keys)
+  "Ensure instance creation is inside a transaction, huge (5x) performance impact per object"
+  (ensure-transaction (:store-controller sc)
+    (call-next-method)))
+    
 
 (defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid &allow-other-keys)
   "Initializes the persistent slots via initargs or forms.
@@ -158,23 +164,21 @@ slots."
 	(initialize-set-slots class instance set-slots)))))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
-  (ensure-transaction (:store-controller (get-con instance))
-    (dolist (slotname persistent-slot-inits)
-      (let ((slot-def (find-slot-def-by-name class slotname)))
-	(unless (or (initialize-from-initarg class instance slot-def 
-					     (slot-definition-initargs slot-def) initargs)
-		    object-exists
-		    (slot-boundp-using-class class instance slot-def))
-	  (awhen (slot-definition-initfunction slot-def)
-	    (setf (slot-value-using-class class instance slot-def)
-		  (funcall it))))))))
+  (dolist (slotname persistent-slot-inits)
+    (let ((slot-def (find-slot-def-by-name class slotname)))
+      (unless (or (initialize-from-initarg class instance slot-def 
+					   (slot-definition-initargs slot-def) initargs)
+		  object-exists
+		  (slot-boundp-using-class class instance slot-def))
+	(awhen (slot-definition-initfunction slot-def)
+	  (setf (slot-value-using-class class instance slot-def)
+		(funcall it))))))))
 
 (defun initialize-set-slots (class instance set-slots)
-  (ensure-transaction (:store-controller (get-con instance))
-    (dolist (slotname set-slots)
-      (setf (slot-value-using-class class instance
-				    (find-slot-def-by-name class slotname))
-	    nil))))
+  (dolist (slotname set-slots)
+    (setf (slot-value-using-class class instance
+				  (find-slot-def-by-name class slotname))
+	  nil)))
 
 (defun initialize-from-initarg (class instance slot-def slot-initargs initargs)
   (loop for slot-initarg in slot-initargs
@@ -223,9 +227,10 @@ slots."
     ;; Initialize basic instance data
     (initial-persistent-setup instance :from-oid from-oid :sc sc)
     ;; Update db instance data
-    (let ((official-schema (lookup-schema sc (class-of instance))))
-      (unless (eq (schema-id schema) (schema-id official-schema))
-	(upgrade-db-instance instance official-schema schema)))
+    (when schema
+      (let ((official-schema (lookup-schema sc (class-of instance))))
+	(unless (eq (schema-id schema) (schema-id official-schema))
+	  (upgrade-db-instance instance official-schema schema))))
     ;; Load cached slots, set, assoc values, etc.
     (shared-initialize instance t :from-oid from-oid)))
 

@@ -258,10 +258,13 @@
 (defmethod register-instance ((sc store-controller) class instance)
   "When creating an instance for the first time, write it to the persistent
    instance table using the controller instance for its class"
-  (setf (get-value (oid instance) (controller-instance-table sc))
-	(if (subtypep (type-of instance) 'btree)
-	    (default-class-id (type-of instance) sc)
-	    (schema-id (lookup-schema sc class)))))
+  (set-instance-schema-id sc (oid instance)
+			  (if (subtypep (type-of instance) 'btree)
+			      (default-class-id (type-of instance) sc)
+			      (schema-id (lookup-schema sc class)))))
+
+(defmethod set-instance-schema-id ((sc store-controller) oid cid)
+  (setf (get-value oid (controller-instance-table sc)) cid))
 
 (defmethod get-instance-class ((sc store-controller) oid &optional classname)
   "Get the class object using the oid or using the provided classname"
