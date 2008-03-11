@@ -169,7 +169,7 @@
 ;;
 
 (defclass indexed-slot-definition (persistent-slot-definition)
-  ((indexed :accessor indexed-p :initarg :indexed :initform nil :allocation :instance)))
+  ((indexed :accessor indexed-p :initarg :indexed :initarg :index :initform nil :allocation :instance)))
 
 (defclass indexed-direct-slot-definition (persistent-direct-slot-definition indexed-slot-definition)
   ())
@@ -261,7 +261,8 @@
   `(let ((allocation-key (getf ,initargs :allocation))
 	 (has-initarg-p (getf ,initargs :initargs))
 	 (transient-p (getf ,initargs :transient))
-	 (indexed-p (getf ,initargs :indexed))
+	 (indexed-p (or (getf ,initargs :indexed)
+			(getf ,initargs :index)))
 	 (cached-p (getf ,initargs :cached))
 	 (set-valued-p (getf ,initargs :set-valued))
 	 (associate-p (getf ,initargs :associate)))

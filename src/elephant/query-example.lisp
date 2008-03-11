@@ -36,7 +36,7 @@
    (school :accessor school :initarg :school)))
 
 (defpclass school ()
-  ((name :accessor name :initarg :name :index t)))
+  ((name :accessor name :initarg :name :indexed t)))
 
 (defun make-instances ()
   (with-transaction ()
