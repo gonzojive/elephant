@@ -51,23 +51,23 @@
        (eq (class-name (class-of (%class-schema class)))
 	   'persistent-schema)))
 
-(defmethod has-class-controller-schema-p ((class persistent-metaclass) sc)
-  (and (get-class-controller-schema class sc) t))
+(defmethod has-class-controller-schema-p (sc (class persistent-metaclass))
+  (and (get-class-controller-schema sc class) t))
 
-(defmethod get-class-controller-schema ((class persistent-metaclass) sc)
+(defmethod get-class-controller-schema (sc (class persistent-metaclass))
   (awhen (assoc (controller-spec sc) (%store-schemas class))
     (cdr it)))
 
-(defmethod add-class-controller-schema ((class persistent-metaclass) sc schema)
-  (remove-class-controller-schema class sc)
+(defmethod add-class-controller-schema (sc (class persistent-metaclass) schema)
+  (remove-class-controller-schema sc class)
   ;; NOTE: Needs to be lock protected
   (setf (%store-schemas class)
 	(acons (controller-spec sc) schema (%store-schemas class))))
 
-(defmethod remove-class-controller-schema ((class persistent-metaclass) sc)
+(defmethod remove-class-controller-schema (sc (class persistent-metaclass))
   ;; NOTE: Needs to be lock protected
   (setf (%store-schemas class)
-	(delete (controller-spec sc) (%store-schemas class) :key #'car)))
+	(remove (controller-spec sc) (%store-schemas class) :key #'car :test #'equalp)))
 
 ;;
 ;; Top level defclass form - hide metaclass option
@@ -117,7 +117,7 @@
 ;;
 
 (defclass cached-slot-definition (standard-slot-definition)
-  ((cache :accessor cached-slot-p :initarg :cache)))
+  ((cache :accessor cached-slot-p :initarg :cached)))
 
 (defclass cached-direct-slot-definition (standard-direct-slot-definition cached-slot-definition)
   ())
@@ -169,7 +169,7 @@
 ;;
 
 (defclass indexed-slot-definition (persistent-slot-definition)
-  ((indexed :accessor indexed-p :initarg :index :initform nil :allocation :instance)))
+  ((indexed :accessor indexed-p :initarg :indexed :initform nil :allocation :instance)))
 
 (defclass indexed-direct-slot-definition (persistent-direct-slot-definition indexed-slot-definition)
   ())
@@ -261,8 +261,8 @@
   `(let ((allocation-key (getf ,initargs :allocation))
 	 (has-initarg-p (getf ,initargs :initargs))
 	 (transient-p (getf ,initargs :transient))
-	 (indexed-p (getf ,initargs :index))
-	 (cached-p (getf ,initargs :cache))
+	 (indexed-p (getf ,initargs :indexed))
+	 (cached-p (getf ,initargs :cached))
 	 (set-valued-p (getf ,initargs :set-valued))
 	 (associate-p (getf ,initargs :associate)))
      (declare (ignorable allocation-key has-initarg-p))
@@ -291,8 +291,6 @@
 	  (set-valued-p
 	   (find-class 'set-valued-direct-slot-definition))
 	  (cached-p
-	   (cerror "Ignore and try anyway?" 
-		   "Cache slot argument not yet supported")
 	   (find-class 'cached-direct-slot-definition))
 	  (associate-p
 	   (find-class 'association-direct-slot-definition))
@@ -329,11 +327,11 @@ definition class depending on the keyword."
     (when (eq (type-of parent-direct-slot) 'set-valued-direct-slot-definition)
       (setf (getf initargs :set-valued) t))
     (when (eq (type-of parent-direct-slot) 'cached-direct-slot-definition)
-      (setf (getf initargs :cache) t))
+      (setf (getf initargs :cached) t))
     (when (eq (type-of parent-direct-slot) 'association-direct-slot-definition)
       (setf (getf initargs :associate) t))
     (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
-      (setf (getf initargs :index) t)
+      (setf (getf initargs :indexed) t)
       (setf (getf initargs :base-class)
 	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
     initargs))

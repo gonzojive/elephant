@@ -136,7 +136,7 @@
 (defmethod revert-txn-op ((op txn-new-instance-op) sc)
   "This object should not be reference, if it is it will yield an error
    when persistent slots are dereferenced"
-  (let ((instance (get-cached-instance sc (txn-oid op) (txn-classname op))))
+  (let ((instance (get-cached-instance sc (txn-oid op))))
     (setf (oid instance) nil)
     (decf (last-oid sc))
     (uncache-instance sc (txn-oid op))))
@@ -232,7 +232,7 @@
        (get-con bt)))))
 
 (defmethod revert-txn-op ((op txn-btree-write-op) sc)
-  (let ((bt (elephant::get-cached-instance sc (txn-oid op) nil)))
+  (let ((bt (elephant::get-cached-instance sc (txn-oid op))))
     (remove-kv (txn-key op) (txn-new-value op))
     (setf (get-value (txn-key op) bt) (txn-old-value op))))
 

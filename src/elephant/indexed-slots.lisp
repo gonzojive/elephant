@@ -27,18 +27,8 @@
     (new-value (class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Update indices when writing an indexed slot.  Make around method to ensure a single transaction
    for write + index update"
-  (let ((sc (get-con instance))
-	(oid (oid instance)))
-    (ensure-transaction (:store-controller sc)
-      (let ((idx (get-slot-def-index slot-def sc))
-	    (old-value (when (slot-boundp-using-class class instance slot-def)
-			 (slot-value-using-class class instance slot-def))))
-	(unless idx
-	  (setf idx (initialize-slot-def-index slot-def sc)))
-	(when old-value 
-	  (remove-kv-pair old-value oid idx))
-	(setf (get-value new-value idx) oid))
-      (call-next-method))))
+  (update-slot-index class instance slot-def new-value)
+  (call-next-method))
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Removes the slot value from the database."
@@ -54,15 +44,38 @@
 	  (remove-kv-pair old-value oid idx)))
       (call-next-method))))
 
+(defun update-slot-index (class instance slot-def new-value)
+  "Update an index value when written"
+  (let ((sc (get-con instance))
+	(oid (oid instance)))
+    (ensure-transaction (:store-controller sc)
+      (let ((idx (get-slot-def-index slot-def sc))
+	    (old-value (when (slot-boundp-using-class class instance slot-def)
+			 (slot-value-using-class class instance slot-def))))
+	(unless idx
+	  (setf idx (initialize-slot-def-index slot-def sc)))
+	(when old-value 
+	  (remove-kv-pair old-value oid idx))
+	(setf (get-value new-value idx) oid)))))
+
 (defun initialize-slot-def-index (slot-def sc)
+  "If a slot's index does not exist, create it"
   (let* ((master (controller-index-table sc))
-	 (idx-ref (cons (indexed-slot-base slot-def) (slot-definition-name slot-def)) ))
-    (aif (get-value idx-ref master)
+	 (base (indexed-slot-base slot-def))
+	 (name (slot-definition-name slot-def)))
+    (aif (get-value (cons base name) master)
 	 (progn (add-slot-def-index it slot-def sc) it)
 	 (let ((new-idx (make-dup-btree sc)))
-	   (setf (get-value idx-ref master) new-idx)
+	   (add-slot-index sc new-idx (indexed-slot-base slot-def) (slot-definition-name slot-def))
 	   (add-slot-def-index new-idx slot-def sc)
 	   new-idx))))
+
+(defmethod add-slot-index ((sc store-controller) new-index class-name index-name)
+  (setf (get-value (cons class-name index-name) (controller-index-table sc))
+	new-index))
+
+(defmethod drop-slot-index ((sc store-controller) class-name index-name)
+  (remove-kv (cons class-name index-name) (controller-index-table sc)))
 
 ;; =================================
 ;;   INTERNAL ACCESS TO INDICES
@@ -171,13 +184,20 @@
 
 (defun map-class (fn class &key collect (sc *store-controller*))
   "Perform a map operation over all instances of class.  Takes a
-   function of one argument, a class instance"
+   function of one argument, a class instance."
   (flet ((map-fn (cidx pcidx oid)
 	   (declare (ignore cidx pcidx))
 	   (funcall fn (controller-recreate-instance sc oid))))
-    (map-index #'map-fn (controller-instance-class-index sc)
-	       :value (schema-id (get-controller-schema (if (symbolp class) (find-class class) class) sc))
-	       :collect collect)))
+    (let* ((classname (if (symbolp class) class (class-name class)))
+	   (db-schemas (get-db-schemas sc classname))
+	   (schema-ids (if db-schemas 
+			   (mapcar #'schema-id (reverse db-schemas))
+			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
+      (dump-schema-status sc classname)
+      (loop for schema-id in schema-ids appending
+	   (map-index #'map-fn (controller-instance-class-index sc)
+		      :value schema-id
+		      :collect collect)))))
 
 (defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect oids)
   "map-inverted-index maps a function of two variables, taking key

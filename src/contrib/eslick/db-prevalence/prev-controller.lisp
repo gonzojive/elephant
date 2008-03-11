@@ -56,6 +56,9 @@
    (object-records :accessor controller-object-records :initform nil)
    (last-oid :accessor last-oid
 	     :documentation "OID state"
+	     :initform 0)
+   (last-cid :accessor last-cid
+	     :documentation "OID state"
 	     :initform 0))
   (:documentation "Controller for the Elephant prevalence system"))
 
@@ -74,13 +77,18 @@
 
 (defun initialize-roots (sc)
   (setf (slot-value sc 'root)
-	(make-instance 'prev-btree :sc sc))
-  (setf (slot-value sc 'class-root)
-	(make-instance 'prev-indexed-btree :sc sc)))
+	(make-instance 'prev-btree :sc sc :from-oid 1))
+  (setf (slot-value sc 'index-table)
+	(make-instance 'prev-btree :sc sc :from-oid 2))
+  (setf (slot-value sc 'instance-table)
+	(make-instance 'prev-indexed-btree :sc sc :from-oid 3))
+  (setf (slot-value sc 'schema-table)
+	(make-instance 'prev-indexed-btree :sc sc :from-oid 4)))
+
 
 (defun close-open-streams (sc)
   (when (slot-boundp sc 'transaction-log-stream)
-    (when (slot-value sc 'transaction-log-stream) 
+    (when (slot-value sc 'transaction-log-stream)
       (close (transaction-log-stream sc))))
   (setf (transaction-log-stream sc) nil))
 
@@ -117,6 +125,8 @@
   (initialize-serializer sc)
   (setf (controller-object-records sc) 
 	(build-controller-object-records (last-oid sc)))
+  (setf (controller-object-records sc) 
+	(build-controller-object-records (last-cid sc)))
   (let ((snapshot? (probe-file (snapshot-file sc)))
 	(txn-log? (probe-file (transaction-log sc))))
     (when snapshot?
@@ -146,6 +156,7 @@
 (defmethod close-controller ((sc prev-store-controller))
   (close-open-streams sc)
   (setf (last-oid sc) 0)
+  (setf (last-cid sc) 0)
   (setf (transaction-lock sc) nil))
 
 ;;
@@ -173,6 +184,10 @@
 
 (defmethod next-oid ((sc prev-store-controller))
   (maybe-extend-records (+ 10 (last-oid sc)) sc)
+  (incf (last-oid sc)))
+
+(defmethod next-cid ((sc prev-store-controller))
+  (maybe-extend-records (+ 10 (last-cid sc)) sc)
   (incf (last-oid sc)))
 
 ;;
@@ -320,9 +335,13 @@
 
 (defun set-cached-roots (sc)
   (setf (slot-value sc 'root)
-	(get-cached-instance sc 1 'prev-btree))
-  (setf (slot-value sc 'class-root)
-	(get-cached-instance sc 2 'prev-indexed-btree)))
+	(get-cached-instance sc 1))
+  (setf (slot-value sc 'index-table)
+	(get-cached-instance sc 2))
+  (setf (slot-value sc 'instance-table)
+	(get-cached-instance sc 3))
+  (setf (slot-value sc 'schema-table)
+	(get-cached-instance sc 4)))
 
 ;; =================================================
 ;; Support Code

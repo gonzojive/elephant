@@ -191,18 +191,6 @@ lookup, updating ALL other secondary indices."
 (defun make-dup-btree (&optional (sc *store-controller*))
   (build-dup-btree sc))
 
-(defmethod remove-kv-pair (key value (dbt dup-btree))
-  "Yuck!  Is there a more efficient way to update an index than:
-   Read, delete, write?  At least the read caches the delete page?"
-  (let ((sc (get-con dbt)))
-    (ensure-transaction (:store-controller sc)
-      (with-btree-cursor (cur dbt)
-	(multiple-value-bind (exists? k v)
-	    (cursor-get-both cur key value)
-	  (declare (ignore k v))
-  	  (when exists? 
-	    (cursor-delete cur)))))))
-
 ;;
 ;; Cursors for all btree types
 ;;
@@ -440,6 +428,18 @@ not), evaluates the forms, then closes the cursor."
 	 while exists?
 	 do (remove-kv key bt)))))
 
+(defmethod remove-kv-pair (key value (dbt dup-btree))
+  "Too bad there isn't a direct way to do this, but with
+   ordered duplicates this should be reasonably efficient"
+  (let ((sc (get-con dbt)))
+    (ensure-transaction (:store-controller sc)
+      (with-btree-cursor (cur dbt)
+	(multiple-value-bind (exists? k v)
+	    (cursor-get-both cur key value)
+	  (declare (ignore k v))
+  	  (when exists? 
+	    (cursor-delete cur)))))))
+
 ;; =======================================
 ;;   Generic Mapping Functions
 ;; =======================================
@@ -515,70 +515,113 @@ not), evaluates the forms, then closes the cursor."
    each call of fn in a fresh list and return that list in the 
    same order the calls were made (first to last)."))
 
+(defun validate-map-call (start end)
+  (unless (or (null start) (null end) (lisp-compare<= start end))
+    (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
+	   start end)))
+
+(defmacro with-map-collector ((fn collect-p) &body body)
+  "Binds free var results to the collected results of function in
+   symbol-argument fn based on boolean parameter collect-p,
+   otherwise result is nil"
+  (with-gensyms (collector k v)
+    `(let ((results nil))
+       (flet ((,collector (,k ,v)
+		(push (funcall ,fn ,k ,v) results)))
+	 (declare (dynamic-extent (function ,collector)))
+	 (let ((,fn (if ,collect-p #',collector ,fn))) 
+	   ,@body)))))
+
+(defmacro with-map-wrapper ((fn btree collect cur) &body body)
+  "Binds variable sc to the store controller, overrieds fn with a collector
+   if dynamic value of collect is true and binds variable named cur to
+   the current cursor"
+  `(let ((sc (get-con ,btree)))
+     (with-map-collector (,fn ,collect)
+       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
+	 (with-btree-cursor (,cur ,btree)
+	   (with-current-cursor (,cur)
+	     ,@body))))))
+
+(defmacro with-cursor-values (expr &body body)
+  "Binds exists?, skey, val and pkey from expression assuming
+   expression returns a set of cursor operation values or nil"
+  `(multiple-value-bind (exists? skey val pkey)
+       ,expr
+     (declare (ignorable exists? skey val pkey))
+     ,@body))
+
+(defmacro iterate-map-btree (&key start continue step)
+  "In context with bound variables: cur, sc, value, start, end, fn
+   Provide a start expression that returns index cursor values
+   Provide a continue expression that uses the
+     bound variables key, start, value or end to determine if 
+     the iteration should continue
+   Provide a step expression that returns index cursor values."
+  `(labels ((continue-p (key)
+	      (declare (ignorable key))
+	      ,continue))
+     (handler-case 
+	 (with-cursor-values ,start
+	   (when exists?
+	     (funcall fn skey val)
+	     (loop  
+		(handler-case
+		    (with-index-cursor-values ,step
+		      (if (and exists? (continue-p skey))
+			  (funcall fn skey val)
+			  (return (nreverse results))))
+		  (elephant-deserialization-error (e)
+		    (declare (ignore e))
+		    (format t "Deserialization error in map: returning nil for element~%")
+		    (return nil))))))
+       (elephant-deserialization-error (e)
+	 (declare (ignore e))
+	 (format t "Deserialization error in map: returning nil for element~%")
+	 nil))))
+
+
 ;; NOTE: the use of nil for the last element in a btree only works because the C comparison
 ;; function orders by type tag and nil is the highest valued type tag so nils are the last
 ;; possible element in a btree ordered by value.
 
+
 (defmethod map-btree (fn (btree btree) &rest args &key start end (value nil value-set-p) 
 		      from-end collect &allow-other-keys)
-  (let ((end (if value-set-p value end))
-	(results nil))
-    (ensure-transaction (:store-controller (get-con btree) :degree-2 *map-using-degree2*)
-      (handler-case 
-	  (with-btree-cursor (curs btree)
-	    (flet ((continue-p (key)
-		     ;; Do we go to the next value?
-		     (or (if from-end (null start) (null end))
-			 (if from-end 
-			     (or (not (lisp-compare<= key start))
-				 (lisp-compare-equal key start))
-			     (lisp-compare<= key end))))
-		   (collector (k v)
-		     (push (funcall fn k v) results)))
-	      (let ((fn (if collect #'collector fn))
-		    (*current-cursor* curs))
-		(declare (dynamic-extent (function continue-p) (function collector))
-			 (special *current-cursor*))
-		(multiple-value-bind (exists? key value)
-		    (cond (value-set-p
-			   (cursor-set curs value))
-			  ((and (not from-end) (null start))
-			   (cursor-first curs))
-			  ((and from-end (null end))
-			   (cursor-last curs))
-			  (t (if from-end
-				 (cursor-set-range curs end)
-				 (cursor-set-range curs start))))
-		  (declare (dynamic-extent exists?))
-		  (if exists?
-		      (funcall fn key value)
-		      nil)
-		  (loop
-		     (handler-case 
-			 (progn
-			   (multiple-value-bind (exists? k v)
-			       (if from-end
-				   (cursor-prev curs)
-				   (cursor-next curs))
-			     (declare (dynamic-extent exists?))
-			     (if (and exists? (continue-p k))
-				 (funcall fn k v)
-				 (return nil))))
-		       (elephant-deserialization-error (e)
-			 (declare (ignore e))
-			 (format t "local deserialization-error: returning nil~%")
-			 (return nil)
-			 nil))
-		     )))
-	      ))
-	(elephant-deserialization-error (e)
-	  (declare (ignore e))
-	  (format t "deserialization-error on transaction: returning nil~%")
-	  nil
-	  )
-	)
-      )
-    (nreverse results)))
+  (validate-map-call start end)
+  (cond (value-set-p (map-btree-values fn btree value collect))
+	(from-end (map-btree-from-end fn btree start end collect))
+	(t (map-btree-from-start fn btree start end collect))))
+
+(defun map-btree-values (fn btree value collect)
+  (with-map-wrapper (fn btree collect cur)
+    (iterate-map-btree 
+     :start (cursor-set cur value)
+     :continue (lisp-compare-equal key value)
+     :step (cursor-next cur))))
+
+(defun map-btree-from-start (fn btree start end collect)
+  (with-map-wrapper (fn btree collect cur)
+    (iterate-map-btree
+     :start (if start
+		(cursor-set-range cur start)
+		(cursor-first cur))
+     :continue (or (null end) (lisp-compare<= key end))
+     :step (cursor-next cur))))
+
+(defun map-btree-from-end (fn btree start end collect)
+  (with-map-wrapper (fn btree collect cur)
+    (iterate-map-btree
+     :start (if end
+		(with-cursor-values (cursor-set-range cur end)
+		  (cond ((and exists? (lisp-compare-equal skey end))
+			 (cursor-next-nodup cur)
+			 (cursor-prev cur))
+			(t (cursor-prev cur))))
+		(cursor-last cur))
+     :continue (or (null start) (lisp-compare>= key start))
+     :step (cursor-prev cur))))
+
 
 ;; Special support for mapping indexes of a secondary btree
 
@@ -595,12 +638,7 @@ not), evaluates the forms, then closes the cursor."
    each call of fn in a fresh list and return that list in the 
    same order the calls were made (first to last)"))
 
-(defun validate-map-index-call (start end)
-  (unless (or (null start) (null end) (lisp-compare<= start end))
-    (error "map-index called with start = ~A and end = ~A. Start must be less than or equal to end according to elephant::lisp-compare<=."
-	   start end)))
-
-(defmacro with-map-collector ((fn collect-p) &body body)
+(defmacro with-map-index-collector ((fn collect-p) &body body)
   "Binds free var results to the collected results of function in
    symbol-argument fn based on boolean parameter collect-p,
    otherwise result is nil"
@@ -611,25 +649,6 @@ not), evaluates the forms, then closes the cursor."
 	 (declare (dynamic-extent (function ,collector)))
 	 (let ((,fn (if ,collect-p #',collector ,fn))) 
 	   ,@body)))))
-
-(defmacro with-map-index-wrapper ((fn index collect cur) &body body)
-  "Binds variable sc to the store controller, overrieds fn with a collector
-   if dynamic value of collect is true and binds variable named cur to
-   the current cursor"
-  `(let ((sc (get-con index)))
-     (with-map-collector (,fn ,collect)
-       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
-	 (with-btree-cursor (,cur ,index)
-	   (with-current-cursor (,cur)
-	     ,@body))))))
-
-(defmacro with-cursor-values (expr &body body)
-  "Binds exists?, skey, val and pkey from expression assuming
-   expression returns a set of cursor operation values or nil"
-  `(multiple-value-bind (exists? skey val pkey)
-       ,expr
-     (declare (ignorable exists? skey val pkey))
-     ,@body))
 
 (defmacro iterate-map-index (&key start continue step)
   "In context with bound variables: cur, sc, value, start, end, fn
@@ -645,10 +664,21 @@ not), evaluates the forms, then closes the cursor."
        (when exists?
 	 (funcall fn skey val pkey)
 	 (loop  
-	    (with-cursor-values ,step
+	    (with-index-cursor-values ,step
 	      (if (and exists? (continue-p skey))
 		  (funcall fn skey val pkey)
 		  (return (nreverse results)))))))))
+
+(defmacro with-map-index-wrapper ((fn btree collect cur) &body body)
+  "Binds variable sc to the store controller, overrieds fn with a collector
+   if dynamic value of collect is true and binds variable named cur to
+   the current cursor"
+  `(let ((sc (get-con ,btree)))
+     (with-map-index-collector (,fn ,collect)
+       (ensure-transaction (:store-controller sc :degree-2 *map-using-degree2*)
+	 (with-btree-cursor (,cur ,btree)
+	   (with-current-cursor (,cur)
+	     ,@body))))))
 
 (defun pset-range-for-descending (cur end)
   (if (cursor-pset cur end)
@@ -662,19 +692,19 @@ not), evaluates the forms, then closes the cursor."
 (defmethod map-index (fn (index btree-index) &rest args
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
-  (validate-map-index-call start end)
+  (validate-map-call start end)
   (cond (value-set-p (map-index-values fn index value collect))
 	(from-end (map-index-from-end fn index start end collect))
 	(t (map-index-from-start fn index start end collect))))
 
-(defmethod map-index-values (fn index value collect)
+(defun map-index-values (fn index value collect)
   (with-map-index-wrapper (fn index collect cur)
     (iterate-map-index
-	:start (cursor-pset cur value)
-	:continue t
-	:step (cursor-pnext-dup cur))))
+     :start (cursor-pset cur value)
+     :continue t
+     :step (cursor-pnext-dup cur))))
 
-(defmethod map-index-from-start (fn index start end collect)
+(defun map-index-from-start (fn index start end collect)
   (with-map-index-wrapper (fn index collect cur)
     (iterate-map-index
       :start (if start 
@@ -683,7 +713,7 @@ not), evaluates the forms, then closes the cursor."
       :continue (or (null end) (lisp-compare<= key end))
       :step (cursor-pnext cur))))
 
-(defmethod map-index-from-end (fn index start end collect)
+(defun map-index-from-end (fn index start end collect)
   (with-map-index-wrapper (fn index collect cur)
     (iterate-map-index
      :start (if end 

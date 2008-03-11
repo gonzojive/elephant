@@ -26,7 +26,7 @@
   (multiple-value-bind (value exists?)
       (read-controller-slot (oid instance) name sc)
     (if exists? value
-	(error 'unbound-slot :instance instance :name name))))
+	(slot-unbound (class-of instance) instance name))))
 
 (defmethod persistent-slot-writer ((sc prev-store-controller) value instance name)
   (write-controller-slot value (oid instance) name sc))

@@ -687,7 +687,7 @@
 	      (values t (deserialize key (get-con (cursor-btree cursor))) 
 		      (deserialize val (get-con (cursor-btree cursor))))
 	      (setf (cursor-initialized-p cursor) nil))))
-      (cursor-first cursor)))	  
+      (cursor-first cursor)))
 
 (defmethod cursor-prev-nodup ((cursor bdb-secondary-cursor))
   (if (cursor-initialized-p cursor)
@@ -805,6 +805,18 @@
 		   :handle (db-cursor (controller-dup-btrees sc)
 				      :transaction (my-current-transaction sc))
 		   :oid (oid bt))))
+
+(defmethod cursor-next-nodup ((cursor bdb-dup-cursor))
+  (if (cursor-initialized-p cursor)
+      (with-buffer-streams (key-buf value-buf)
+	(multiple-value-bind (key val)
+	    (db-cursor-move-buffered (cursor-handle cursor)
+				     key-buf value-buf :next-nodup t)
+	  (if (and key (= (buffer-read-oid key) (cursor-oid cursor)))
+	      (values t (deserialize key (get-con (cursor-btree cursor))) 
+		      (deserialize val (get-con (cursor-btree cursor))))
+	      (setf (cursor-initialized-p cursor) nil))))
+      (cursor-first cursor)))
 
 (defmethod cursor-delete ((cursor bdb-dup-cursor))
   (if (cursor-initialized-p cursor)

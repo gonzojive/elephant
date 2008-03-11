@@ -772,7 +772,8 @@
        sc)
     (if existsp
 	v
-	(error  'unbound-slot :instance instance :name name))))
+	(slot-unbound (class-of instance) instance name))))
+
 
 (defmethod persistent-slot-boundp ((sc sql-store-controller) instance name)
   (if (sql-from-root-existsp

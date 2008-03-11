@@ -265,7 +265,7 @@
                    (persistent-slot-collection-of sc))
       (if existsp
           v
-          (error 'unbound-slot :instance instance :name name)))))
+	  (slot-unbound (class-of instance) instance name)))))
 
 (defmethod persistent-slot-boundp ((sc postmodern-store-controller) instance name)
   (with-controller-for-btree (sc)

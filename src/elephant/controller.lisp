@@ -26,10 +26,10 @@
 ;; TRACKING OBJECT STORES
 ;;
 
-(defvar *elephant-data-stores*
+(defparameter *elephant-data-stores*
   '((:bdb (:ele-bdb))
     (:clsql (:ele-clsql))
-    (:prevalence (:ele-prevalence))
+    (:prevalence ())
     (:postmodern (:ele-postmodern))
     )
   "Tells the main elephant code the tag used in a store spec to
@@ -127,8 +127,6 @@
 	cached-sc
 	(build-controller spec))))
 
-
-
 (defun build-controller (spec)
   "Actually construct the controller & load dependencies"
   (assert (and (consp spec) (symbolp (first spec))))
@@ -169,7 +167,7 @@
 (defun initialize-user-parameters ()
   (loop for (keyword variable) in *user-configurable-parameters* do
        (awhen (get-user-configuration-parameter keyword)
-	 (setq variable it))))
+	 (setf (symbol-value variable) it))))
 
 ;;
 ;; COMMON STORE CONTROLLER FUNCTIONALITY
@@ -254,21 +252,33 @@
   (format stream "#<~A ~A>" (type-of sc) (second (controller-spec sc))))
 
 ;;
-;; Controller instance creation 
+;; Maintain persistent instance table
 ;;
 
+(defmethod register-instance ((sc store-controller) class instance)
+  "When creating an instance for the first time, write it to the persistent
+   instance table using the controller instance for its class"
+  (setf (get-value (oid instance) (controller-instance-table sc))
+	(if (subtypep (type-of instance) 'btree)
+	    (default-class-id (type-of instance) sc)
+	    (schema-id (lookup-schema sc class)))))
 
-(defmethod controller-recreate-instance ((sc store-controller) oid &optional classname)
-  "Called by the deserializer to return an instance"
-  (awhen (get-cached-instance sc oid)
-    (return-from controller-recreate-instance it))
-  ;; Should get cached since make-instance calls cache-instance
-  (recreate-instance-using-class (get-class-from-sc oid classname sc)
-				 :from-oid oid :sc sc))
+(defmethod get-instance-class ((sc store-controller) oid &optional classname)
+  "Get the class object using the oid or using the provided classname"
+  (when classname
+    (return-from get-instance-class (find-class classname)))
+  (let ((cid (oid->schema-id oid sc)))
+    (unless cid
+      (signal-missing-instance oid (controller-spec sc))
+      (return-from get-instance-class (find-class 'persistent-object)))
+    (get-schema-id-class sc cid)))
 
-;;
-;; Looking up the class
-;;
+(defmethod get-schema-id-class ((sc store-controller) cid)
+  "Get the class given the schema id"
+  (aif (default-class-id-type cid sc)
+       (find-class it)
+       (let ((schema (get-controller-schema sc cid)))
+	 (values (find-class (schema-classname schema)) schema))))
 
 (define-condition missing-persistent-instance ()
    ((oid :initarg :oid :accessor missing-persistent-instance-oid)
@@ -282,85 +292,20 @@
 	  :oid oid
 	  :spec spec))
 
-(defun get-class-from-sc (oid classname sc)
-  "Get the class object using the oid or using the provided classname"
-  (if (null classname)
-      (oid->class oid sc)
-      (find-class classname))) ;; legacy support (for migration)
-
-(defmethod oid->class (oid (sc store-controller))
-  "Use the oid map to extract a class object via the 
-    cached schema table"
-  (let ((cid (oid->schema-id oid sc)))
-    (unless cid
-      (signal-missing-instance oid (controller-spec sc))
-      (return-from oid->class (find-class 'persistent-object)))
-    (aif (default-class-id-type cid sc)
-	 (find-class it)
-	 (find-class (schema-classname (lookup-schema cid sc))))))
-
-(defmethod oid->schema-id (oid (sc store-controller))
-  (get-value oid (controller-instance-table sc)))
-
-(defmethod lookup-schema ((schema-id integer) (sc store-controller))
-  "Find the db class schema by schema id"
-  (ifret (get-cache schema-id (controller-schema-cache sc))
-	 (let* ((schema (get-value schema-id (controller-schema-table sc)))
-		(class (find-class (schema-classname schema))))
-	   (ele-with-fast-lock ((controller-schema-cache-lock sc))
-	     (setf (get-cache schema-id (controller-schema-cache sc)) schema))
-	   (add-class-controller-schema class sc schema)
-	   schema)))
-
 ;;
-;; Maintain persistent instance table
+;; Controller instance creation 
 ;;
 
-(defmethod register-instance (instance class (sc store-controller))
-  "When creating an instance for the first time, write it to the persistent
-   instance table"
-  (setf (get-value (oid instance) (controller-instance-table sc))
-	(if (subtypep (type-of instance) 'btree)
-	    (default-class-id (type-of instance) sc)
-	    (schema-id (get-controller-schema class sc)))))
+
+(defmethod controller-recreate-instance ((sc store-controller) oid &optional classname)
+  "Called by the deserializer to return an instance"
+  (awhen (get-cached-instance sc oid)
+    (return-from controller-recreate-instance it))
+  (multiple-value-bind (class schema) (get-instance-class sc oid classname)
+    (recreate-instance-using-class class :from-oid oid :sc sc :schema schema)))
 
 ;;
-;; Maintain schema table
-;;
-
-(defgeneric default-class-id (base-type sc)
-  (:documentation "A method implemented by the store controller for providing
-   fixed class ids for basic btree derivative types"))
-
-(defgeneric default-class-id-type (id sc)
-  (:documentation "A method implemented by the store controller which provides
-   the type associated with a default id or nil if the id does not match"))
-
-(defmethod get-controller-schema ((class persistent-metaclass) (sc store-controller))
-  "Get the db-schema managed by the controller"
-  ;; Lookup class cached version
-  (aif (get-class-controller-schema class sc) it
-       ;; Lookup persistent version
-       (aif (get-value (class-name class) (controller-schema-name-index sc)) it
-	    (register-controller-schema class sc))))
-
-(defmethod register-controller-schema (class (sc store-controller))
-  "We don't have a cached version, so create a new one"
-  (ensure-finalized class)
-  (let ((db-schema (make-db-schema (next-cid sc) (%class-schema class))))
-    ;; Add to database
-    (setf (get-value (schema-id db-schema) (controller-schema-table sc))
-	  db-schema)
-    ;; Add to controller cache for fast cid lookup
-    (ele-with-fast-lock ((controller-schema-cache-lock sc))
-      (setf (get-cache (schema-id db-schema) (controller-schema-cache sc))
-	    db-schema))
-    ;; Add to class for fast instance serialization
-    (add-class-controller-schema class sc db-schema)
-    db-schema))
-
-;;
-;; Per-controller instance caching
+;; Controller instance caching
 ;;
 
 (defmethod cache-instance ((sc store-controller) obj)
@@ -387,6 +332,99 @@
   (ele-with-fast-lock ((controller-instance-cache-lock sc))
     (setf (controller-instance-cache sc)
 	  (make-cache-table :test 'eql))))
+
+;;
+;; Maintaining Schemas
+;;
+
+;; Schema ID bootstrapping
+
+(defmethod oid->schema-id (oid (sc store-controller))
+  (get-value oid (controller-instance-table sc)))
+
+(defgeneric default-class-id (base-type sc)
+  (:documentation "A method implemented by the store controller for providing
+   fixed class ids for basic btree derivative types"))
+
+(defgeneric default-class-id-type (id sc)
+  (:documentation "A method implemented by the store controller which provides
+   the type associated with a default id or nil if the id does not match"))
+
+;; Looking up schemas
+
+(defmethod lookup-schema ((sc store-controller) (class persistent-metaclass))
+  "Get the latest db class schema from caches, etc."
+  ;; Lookup class cached version
+  (aif (get-class-controller-schema sc class) it
+       ;; Lookup persistent version
+       (aif (get-current-db-schema sc (class-name class))
+	    ;; Store it
+	    (prog1 it
+	      (add-class-controller-schema sc class it))
+	    ;; Or create it
+	    (create-controller-schema sc class))))
+
+(defmethod get-controller-schema ((sc store-controller) schema-id)
+  "Find the db class schema by schema id"
+  (assert (typep schema-id 'fixnum))
+  ;; Lookup in controller cache
+  (ifret (get-cache schema-id (controller-schema-cache sc))
+	 ;; Lookup in store table
+	 (let* ((schema (get-value schema-id (controller-schema-table sc)))
+		(class (find-class (schema-classname schema))))
+	   (assert schema)
+	   ;; Update controller cache
+	   (ele-with-fast-lock ((controller-schema-cache-lock sc))
+	     (setf (get-cache schema-id (controller-schema-cache sc)) schema))
+	   ;; Also cache in class slot
+	   (add-class-controller-schema sc class schema)
+	   schema)))
+
+(defmethod create-controller-schema ((sc store-controller) class)
+  "We don't have a cached version, so create a new one"
+  (ensure-finalized class)
+  (let ((db-schema (make-db-schema (next-cid sc) (%class-schema class))))
+    ;; Add to database
+    (setf (get-value (schema-id db-schema) (controller-schema-table sc))
+	  db-schema)
+    ;; Let get-controller-schema cache it for us
+    (get-controller-schema sc (schema-id db-schema))))
+
+(defmethod uncache-controller-schema ((sc store-controller) schema-id)
+  (remove-class-controller-schema sc (get-schema-id-class sc schema-id))
+  (ele-with-fast-lock ((controller-schema-cache-lock sc))
+    (remcache schema-id (controller-schema-cache sc))))
+
+(defmethod update-controller-schema ((sc store-controller) db-schema)
+  "Use this to update the schema version that is on store and in 
+   all the various caches"
+  (assert (typep db-schema 'db-schema))
+  (assert (schema-id db-schema))
+  (let ((schema-id (schema-id db-schema)))
+    (setf (get-value schema-id (controller-schema-table sc))
+	  db-schema)
+    (ele-with-fast-lock ((controller-schema-cache-lock sc))
+      (setf (get-cache schema-id (controller-schema-cache sc)) db-schema))
+    (add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema)))
+
+(defmethod remove-controller-schema ((sc store-controller) schema-id)
+  "Internal use only.  Used when we know all instances have been upgraded,
+   usually via a full class index scan"
+  (uncache-controller-schema sc schema-id)
+  (remove-kv schema-id (controller-schema-table sc)))
+
+(defun get-current-db-schema (sc name)
+  (awhen (sort (get-db-schemas sc name)
+	       #'> :key #'schema-id)
+    (car it)))
+
+(defun get-db-schemas (sc classname)
+  "Return schemas ordered oldest to youngest (ascending cids)"
+  (map-btree #'(lambda (cid schema)
+		 (declare (ignore cid))
+		 schema)
+	     (controller-schema-name-index sc)
+	     :value classname :collect t))
 
 
 ;;
@@ -591,9 +629,14 @@ true."))
 			:key-form 'instance-cidx-keyform))))
 
 (defmethod close-controller :before ((sc store-controller))
-  (delete-con-spec (controller-spec sc))
+  (map-cache (lambda (schema-id schema) 
+	       (declare (ignore schema))
+	       (uncache-controller-schema sc schema-id))
+	     (controller-schema-cache sc))
   (setf (slot-value sc 'schema-name-index) nil)
-  (setf (slot-value sc 'instance-class-index) nil))
+  (setf (slot-value sc 'instance-class-index) nil)
+  (delete-con-spec (controller-spec sc)))
+
 
 (defgeneric connection-is-indeed-open (controller)
   (:documentation "Validate the controller and the db that it is connected to")

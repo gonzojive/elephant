@@ -36,10 +36,7 @@
 				    key-buf value-buf
 				    :transaction (my-current-transaction sc))))
       (if buf (deserialize buf sc)
-	  #+cmu
-	  (error 'unbound-slot :instance instance :slot name)
-	  #-cmu
-	  (error 'unbound-slot :instance instance :name name)))))
+	  (slot-unbound (class-of instance) instance name)))))
 
 (defmethod persistent-slot-writer ((sc bdb-store-controller) new-value instance name)
   (with-buffer-streams (key-buf value-buf)

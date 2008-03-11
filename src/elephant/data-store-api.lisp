@@ -59,7 +59,6 @@
    #:controller-instance-table
    #:controller-schema-table
    #:schema-table 
-   #:oid->schema-id
    #:instance-table 
    #:index-table
    #:schema-name-index 
@@ -68,8 +67,9 @@
    #:copy-spec
    #:delete-spec
 
-   ;; Class Schemas
+   ;; Class Schema Support
    #:next-cid
+   #:oid->schema-id
    #:schema-classname
    #:schema-classname-keyform
    #:default-class-id 

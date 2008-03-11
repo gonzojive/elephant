@@ -34,6 +34,8 @@
   (check-valid-store-controller sc)
   (handler-case 
       (funcall (symbol-function (controller-deserialize sc)) bs sc oid-only)
+    (unbound-slot (u)
+      (signal u))
     (error (e)
       (error 'elephant-deserialization-error :condition e))))
 

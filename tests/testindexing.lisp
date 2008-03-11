@@ -292,6 +292,43 @@
 		       '(slot1 slot3 slot4)))))
   1 2 3 4 1 20 30 40 t t)
 
+(defun object-values (list)
+  (mapcar #'slot1 list))
+
+(deftest (indexing-hierarchy :depends-on index-reset)
+    (progn
+      (mapcar #'wipe-class '(idx-two-base idx-two-sub1 idx-two-sub1-1 idx-two-sub2))
+
+      (defpclass idx-two-base ()
+	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
+	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t)))
+
+      (defpclass idx-two-sub1 (idx-two-base)
+	((slot3 :initarg :slot3 :initform 30 :accessor slot3 :index t)))
+
+      (defpclass idx-two-sub1-1 (idx-two-sub1)
+	((slot2 :initarg :slot3 :initform 31 :accessor slot3)))
+
+      (defpclass idx-two-sub2 (idx-two-base)
+	((slot1 :initarg :slot1 :initform 100 :accessor slot1 :index t)))
+
+      (with-transaction ()
+	(make-instance 'idx-two-base :slot1 1)
+	(make-instance 'idx-two-sub1 :slot1 2)
+	(make-instance 'idx-two-sub1-1 :slot1 3)
+	(make-instance 'idx-two-sub2 :slot1 4))
+
+      (values (object-values (get-instances-by-range 'idx-two-base 'slot1 1 100))
+	      (object-values (get-instances-by-range 'idx-two-sub1 'slot1 1 100))
+	      (object-values (get-instances-by-range 'idx-two-base 'slot2 1 100))
+	      (object-values (get-instances-by-range 'idx-two-sub1 'slot3 1 100))
+	      (object-values (get-instances-by-range 'idx-two-sub2 'slot1 1 100))))
+
+  (1 2 3) (1 2 3) (1 2 4) (2 3) (4))
+
+
+      
+
 (deftest (indexing-range :depends-on index-reset)
     (progn
 ;;       (format t "range store: ~A  ~A~%" *store-controller* (elephant::controller-spec *store-controller*))

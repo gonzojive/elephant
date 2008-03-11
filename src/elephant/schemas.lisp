@@ -25,70 +25,64 @@
 
 (defclass schema ()
   ((classname :accessor schema-classname :initarg :name)
-   (prior :accessor schema-prior :initarg :prior
-	  :documentation "Schema evolution support; maintains a list of
-                          older schemas.  Can hold oid or object reference")))
+   (successor :accessor schema-successor :initarg :successor :initform nil)
+   (predecessor :accessor schema-predecessor :initarg :predecessor)
+   (slot-recs :accessor schema-slot-recs :initarg :slot-recs))
+  (:documentation "Keep a doubly linked list of schemas in the db"))
 
-(defclass standard-schema (schema)
-  ((slot-list :accessor schema-ordered-slot-list :initarg :slot-order)))
+(defmethod print-object ((schema schema) stream)
+  (format stream "#<CLASS-SCHEMA ~A>" (schema-classname schema)))
 
-(defclass persistent-schema (schema)
-  ((pslots :accessor schema-persistent-slots :initarg :pslots
-	   :documentation "Persistent slots")
-   (islots :accessor schema-indexed-slots :initarg :islots
-	   :documentation "Indexed slots")
-   (sslots :accessor schema-set-slots :initarg :sslots
-	   :documentation "List of set slot names and ids")
-   (aslots :accessor schema-assoc-slots :initarg :aslots
-	   :documentation "List of slotname/association ids")))
+(defstruct slot-rec type name args)
 
-;;
-;; Compute a schema from a definition
-;;
+(defun slot-rec-eq (rec1 rec2)
+  (and (eq (slot-rec-name rec1) (slot-rec-name rec2))
+       (eq (slot-rec-type rec1) (slot-rec-type rec2))))
 
-(defmethod compute-schema ((class-obj standard-class))
-  (make-instance 'standard-schema
-		 :name (class-name class-obj)
-		 :prior nil
-		 :slot-order (mapcar #'slot-definition-name (class-slots class-obj))))
+(defun get-slot-recs-by-type (type schema)
+  (remove-if-not (lambda (rec)
+		   (eq (slot-rec-type rec) type))
+		 (schema-slot-recs schema)))
 
 ;;
 ;; For schemas stored in a database
 ;;
 
-(defclass db-schema ()
+(defclass db-schema (schema)
   ((id :accessor schema-id :initarg :id)
-;;   (prior-id :accessor prior-schema-id :initarg :prior-id)
-   (upgrade-fn :accessor schema-upgrade-fn :initarg :upgrade-fn
+   (upgrade-fn :accessor schema-upgrade-fn :initarg :upgrade-fn :initform nil
 	       :documentation "A form or functionname that is to be called
                                when upgrading from the prior version to the current")
-   (upgraded :accessor schema-upgraded-p :initarg :upgraded-p)
-   (version :accessor schema-version :initarg :version :initform 1
-	    :documentation "Keep track of changes to schemas classes without having
+   (upgraded :accessor schema-upgraded-p :initarg :upgraded-p :initform nil)
+   (schema-version :accessor schema-version :initarg :version :initform 1
+		   :documentation "Keep track of changes to schemas classes without having
                             a recursive schema problem so we can run an upgrade
                             over the schema DB when necessary")))
 
-(defclass db-persistent-schema (persistent-schema db-schema)
-  ())
-
-(defclass db-standard-schema (standard-schema db-schema)
-  ())
+(defmethod print-object ((schema db-schema) stream)
+  (format stream "#<DB-SCHEMA ~A ~A (s: ~A p: ~A)>" 
+	  (schema-id schema) (schema-classname schema)
+	  (schema-successor schema) (schema-predecessor schema)))
 
 (defun make-db-schema (cid class-schema)
-  (let ((db-schema (copy-schema 'db-persistent-schema class-schema)))
+  (let ((db-schema (logical-copy-schema 'db-schema class-schema)))
     (setf (schema-id db-schema) cid)
     db-schema))
 
-(defun copy-schema (type schema)
-  (assert (subtypep type 'persistent-schema))
+(defun logical-copy-schema (type schema)
+  (assert (subtypep type 'schema))
+  (make-instance type
+		 :name (schema-classname schema)
+		 :slot-recs (copy-list (schema-slot-recs schema))))
+
+(defun copy-schema (type schema)    
+  (assert (subtypep type 'schema))
   (let ((new 
 	 (make-instance type
 			:name (schema-classname schema)
-			:prior (schema-prior schema)
-			:pslots (copy-list (schema-persistent-slots schema))
-			:islots (copy-list (schema-indexed-slots schema))
-			:sslots (copy-list (schema-set-slots schema))
-			:aslots (copy-list (schema-assoc-slots schema)))))
+			:successor (schema-successor schema)
+			:predecessor (schema-predecessor schema)
+			:slot-recs (copy-list (schema-slot-recs schema)))))
     (when (subtypep (type-of schema) 'db-schema)
       (setf (schema-id new) (schema-id schema))
       (setf (schema-upgrade-fn new) (schema-upgrade-fn schema))
@@ -96,44 +90,76 @@
       (setf (schema-version new) (schema-version schema)))
     new))
 
-		 
-
-
-;;
-;; Schema upgrades
-;;
-
-(defmethod upgrade-instance-from-schemas (oid old-schema new-schema)
-  ;; deserialize oid with proxy class 
-  ;; use change class w/ hook into update-instance-for-redefined-class
-  )
-
 ;;
 ;; Schema matching - has the schema changed?
 ;;
 
-(defmethod match-schemas ((sch1 db-persistent-schema) sch2)
-  "Are the two schemas equivalent?"
-  (and (eq (class-of sch1) (class-of sch2))
-       (equal (schema-classname sch1) (schema-classname sch2))
-       (equal (sorted-slots 'pslots sch1)
-	      (sorted-slots 'pslots sch2))
-       (equal (sorted-slots 'islots sch1)
-	      (sorted-slots 'islots sch2))
-       (equal (sorted-slots 'sslots sch1)
-	      (sorted-slots 'sslots sch2))
-       (equal (sorted-slots 'aslots sch1)
-	      (sorted-slots 'aslots sch2))))
+(defmethod match-schemas ((sch1 schema) (sch2 schema))
+  "Are the two schemas functionally equivalent?"
+  (and (equal (schema-classname sch1) (schema-classname sch2))
+       (equal (merge 'list 
+		     (sorted-slots :persistent sch1)
+		     (sorted-slots :cached sch1)
+		     #'symbol<)
+	      (merge 'list
+		     (sorted-slots :persistent sch2)
+		     (sorted-slots :cached sch2)
+		     #'symbol<))
+       (equal (sorted-slots :indexed sch1)
+	      (sorted-slots :indexed sch2))
+       (equal (sorted-slots :set-valued sch1)
+	      (sorted-slots :set-valued sch2))
+       (equal (sorted-slots :association sch1)
+	      (sorted-slots :association sch2))))
 
-(defun sorted-slots (slotname schema)
-  (let ((list (slot-value schema slotname)))
-    (sort (mapcar #'car list) #'string<)))
+(defun symbol< (sym1 sym2) 
+  (string< (symbol-name sym1) (symbol-name sym2)))
+
+(defun sorted-slots (type schema)
+  (let ((list (mapcar #'slot-rec-name (get-slot-recs-by-type type schema))))
+    (sort list #'symbol<)))
 
 ;;
 ;; Schema diffs
 ;;
 
-;; added slots
-;; removed slots
-;;   by type
+(defmethod schema-diff (new old)
+  "Returns a list of lists :add, :rem, :change with one or two slot-recs"
+  (let ((new-recs (schema-slot-recs new))
+	(old-recs (schema-slot-recs old)))
+    (labels ((find-old-rec (new-rec) 
+	       (find (slot-rec-name new-rec) old-recs :key #'slot-rec-name))
+	     (diff-add-change () 
+	       (loop for new-rec in new-recs collect
+		    (aif (find-old-rec new-rec)
+			 (unless (slot-rec-eq new-rec it)
+			   `(:change ,it ,new-rec))
+			 `(:add ,new-rec))))
+	     (diff-rem () 
+	       (mapcar #'(lambda (rec) `(:rem ,rec))
+		       (set-difference old-recs new-recs :key #'slot-rec-name))))
+      (remove-if #'null (append (diff-add-change) (diff-rem))))))
 
+
+(defun diff-type (diff-entry) (car diff-entry))
+(defun diff-recs (diff-entry) (cdr diff-entry))
+
+;;
+;; Debugging tools
+;;
+
+(defun dump-schema (schema &optional (stream t))
+  (assert (subtypep (type-of schema) 'schema))
+  (format stream "Schema for ~A (~A)~%" (schema-classname schema) schema)
+  (when (subtypep (type-of schema) 'db-schema)
+    (format stream "id: ~A~%" (schema-id schema))
+    (awhen (schema-upgrade-fn schema)
+      (format stream "upgrade-fn:~%~A~%") it))
+  (format stream "Successor: ~A   Predecessor: ~A~%" 
+	  (schema-successor schema) (schema-predecessor schema))
+  (dump-slots schema))
+
+(defun dump-slots (schema)
+  (loop for rec in (schema-slot-recs schema) do
+       (format t "  ~A ~A ~A~%" (slot-rec-name rec) (slot-rec-type rec) (slot-rec-args rec))))
+       

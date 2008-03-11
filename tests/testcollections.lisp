@@ -119,6 +119,128 @@
     (is-true (and (subsetp ks (cdr keys) :test #'equalp) 
                   (subsetp (cdr keys) ks :test #'equalp)))))
 
+(test (map-btree-ranges)
+  (let ((bt (make-btree)))
+    (setf (get-value 5 bt) 50)
+    (setf (get-value 10 bt) 100)
+    (setf (get-value 15 bt) 150)
+    (setf (get-value 20 bt) 200)
+    ;; Value
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :value 5 :collect t)
+		    '(50)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :value 5 :from-end t :collect t)
+		    '(50)))
+    (is-false (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			 :value 12 :collect t))
+    (is-false (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			 :value 12 :from-end t :collect t))
+
+    ;; No collect
+    (is-false (map-btree (lambda (k v) (declare (ignore k)) v) bt :value 5))
+
+    ;; Forward range
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 5 :end 12 :collect t)
+		    '(50 100)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :end 12 :collect t)
+		    '(50 100)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 8 :end 18 :collect t)
+		    '(100 150)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 12 :collect t)
+		    '(150 200)))
+
+    ;; Reverse range
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 5 :end 12 :from-end t :collect t)
+		    '(100 50)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :end 12 :from-end t :collect t)
+		    '(100 50)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 8 :end 18 :from-end t :collect t)
+		    '(150 100)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 12 :from-end t :collect t)
+		    '(200 150)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 10 :from-end t :collect t)
+		    '(200 150 100)))))
+
+(test (map-dup-btree-ranges)
+  (let ((bt (make-dup-btree)))
+    (setf (get-value 5 bt) 1)
+    (setf (get-value 10 bt) 2)    
+    (setf (get-value 10 bt) 3)
+    (setf (get-value 15 bt) 4)
+    (setf (get-value 20 bt) 5)
+    (setf (get-value 20 bt) 6)
+    ;; Values
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :value 5 :collect t)
+		    '(1)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :value 10 :collect t)
+		    '(2 3)))
+;; We don't yet need to guarantee that from-end effects value ordering 
+;; on value traversals.  Can do it with :start 10 :end 10 :from-end t
+;;
+;;    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+;;			       :value 10 :from-end t :collect t)
+;;		    '(3 2)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt
+			       :start 10 :end 10 :from-end t :collect t)
+		    '(3 2)))
+    (is-false (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			 :value 12 :collect t))
+    ;; No collect; no return
+    (is-false (map-btree (lambda (k v) (declare (ignore k)) v) bt :value 10))
+
+    ;; Forward ranges
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 5 :end 10 :collect t)
+		    '(1 2 3)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 6 :end 12 :collect t)
+		    '(2 3)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :end 16 :collect t)
+		    '(1 2 3 4)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 12 :collect t)
+		    '(4 5 6)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 20 :collect t)
+		    '(5 6)))
+
+    ;; Reverse ranges
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 5 :end 10 :from-end t :collect t)
+		    '(3 2 1)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 6 :end 12 :from-end t :collect t)
+		    '(3 2)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :end 16 :from-end t :collect t)
+		    '(4 3 2 1)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 12 :from-end t :collect t)
+		    '(6 5 4)))
+    (is-true (equal (map-btree (lambda (k v) (declare (ignore k)) v) bt 
+			       :start 20 :from-end t :collect t)
+		    '(6 5)))))
+
+    
+
+    
+
+
+	     
+
 (test (btree-cursor :depends-on (and remove-kv map-btree))
   (with-transaction (:store-controller *store-controller*)
     (with-btree-cursor (cur bt)
