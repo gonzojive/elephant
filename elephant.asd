@@ -324,7 +324,7 @@ directory to my-config.sexp and edit it appropriately."))
 		       (:file "unicode")
 		       (:file "migrate")
 		       (:file "gc")
-;;		       (:file "query")
+		       (:file "query")
 		       (:file "data-store-api"))
 		      :serial t
 		      :depends-on (memutil utils)))))

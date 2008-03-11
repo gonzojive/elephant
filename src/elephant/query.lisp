@@ -106,6 +106,13 @@
 (defun make-bindings (vars)
   (mapcar #'(lambda (def) (cons (first def) nil)) vars))
 
+(defun satisfied-bindings-p (bindings)
+  (every #'(lambda (binding)
+	     (and (listp binding)
+		  (cdr binding)
+		  (not (null (second binding)))))
+	 bindings))
+
 (defun reset-bindings (inst bindings)
   (setf (cdr (car bindings)) inst)
   (mapcar #'(lambda (binding) (setf (cdr binding) nil)) (cdr bindings)))
@@ -127,15 +134,17 @@
 
 (defun interpret-constraints (fn constraints bindings)
   (if (null constraints) 
-      (apply fn (cdrs bindings))
+      (if (satisfied-bindings-p bindings)
+	  (apply fn (cdrs bindings))
+	  t)
       (let ((constraint (car constraints)))
 	(cond ((and-expr-p constraint)
-	       (interpret-and-constraint fn constraint bindings))
+	       (interpret-and-constraint fn constraint (rest constraints) bindings))
 	      ((or-expr-p constraint)
-	       (interpret-or-constraint fn constraint bindings))
-	      ((member (car expr) comparison-2ops) ;; simplify here
-	       (let ((rval1 (reference-value (second expr) bindings))
-		     (rval2 (reference-value (third expr) bindings)))
+	       (interpret-or-constraint fn constraint (rest constraints) bindings))
+	      ((member (car constraint) comparison-2ops) ;; simplify here
+	       (let ((rval1 (reference-value (second constraint) bindings))
+		     (rval2 (reference-value (third constraint) bindings)))
 		 (cond ((query-variable? rval1)
 			(let ((pair (assoc rval1 bindings)))
 			  (if (consp pair)
@@ -146,9 +155,9 @@
 			  (if (consp pair)
 			      (setf (cdr pair) rval1)
 			      (error "Variable ~A not found in bindings: ~A" rval2 bindings))))
-		       (t (when (funcall (symbol-function (first expr)) rval1 rval2)
-			    (recurse (rest exprs)))))))
-	      (t (error "Expression: ~A unrecognized~%" expr))))))
+		       (t (when (funcall (symbol-function (first constraint)) rval1 rval2)
+			    (interpret-constraints fn (rest constraints) bindings))))))
+	      (t (error "Expression: ~A unrecognized~%" constraint))))))
 
 ;;    (when (recurse constraints)
 ;;      (return-from filter-by-clauses (apply fn (cdrs bindings))))))
@@ -163,15 +172,15 @@
 (defun and-expr-p (expr)
   (match-symbol-name (car expr) :and))
 
-(defun interpret-and-expr (fn constraint rest bindings)
-  (when (every #'(lambda (c) (interpret-single-constraint fn c bindings)) constraint)
+(defun interpret-and-constraint (fn constraint rest bindings)
+  (when (every #'(lambda (c) (interpret-single-constraint fn c bindings)) (rest constraint))
     (interpret-constraints fn rest bindings)))
 
 (defun or-expr-p (expr)
   (match-symbol-name (car expr) :or))
 
-(defun interpret-or-expr (fn constraint rest bindings)
-  (when (some #'(lambda (c) (interpret-single-constraint fn c bindings)) constraint)
+(defun interpret-or-constraint (fn constraint rest bindings)
+  (when (some #'(lambda (c) (interpret-single-constraint fn c bindings)) (rest constraint))
     (interpret-constraints fn rest bindings)))
 
 (defun query-variable? (symbol)
@@ -196,6 +205,18 @@
 
 
 #|
+
+(query
+ :select ( (person person) (school school) )
+ :with ( (sport sport) )
+ :where (and (member sport (sports person))
+	     (= school (school person))
+	     (has-sport school)))
+
+(do-query
+    :return '((person person) (school school))
+    :with '((sport sport))
+    :where '(and ...))
 
 (select ((?a person) (?b school))
   :with-vars (min max)

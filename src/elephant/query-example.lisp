@@ -64,8 +64,8 @@
   (query-select #'(lambda (person school) (format t "Person named: ~A at ~A~%" (name person) (name school)))
 		'(select ((?p person) (?s school))
 		  (where (and (> (age ?p) 10) (< (age ?p) 25))
-		         (string> (name (school ?p)) "Foo")
-		         (= (name (school ?p) (name ?s))))))
+		         (= ?s (school ?p))
+		         (string> (name ?s) "Foo")))))
 
 
 #|
