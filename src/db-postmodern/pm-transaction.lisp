@@ -61,14 +61,39 @@
                               (setf commited t))))
                         (unless commited (controller-abort-transaction sc tran))
                         (decf (tran-count-of sc))))
-                    (dbpm-error (e)
-                      (warn "dbpm txn manager: caught error ~A~%" (errno e))
+                    (cl-postgres:database-error (e)
+                      (warn "dbpm txn manager: caught error ~A~%" (cl-postgres:database-error-code e))
                       (cond
-                        ((string= (errno e) "40P01")
+                        ((or (string= (cl-postgres:database-error-code e) "40P01")  ; deadlock
+                             (string= (cl-postgres:database-error-code e) "23505")  ; duplicate primary key
+                             (string= (cl-postgres:database-error-code e) "42P05")) ; prepared stmt exists
                          ;(if savepoint
                          ;(rollback-to-savepoint (active-connection) savepoint)
                          (controller-abort-transaction sc tran)
-                         (go retry)))))))))))
+                         (go retry))
+
+                        ((string= (cl-postgres:database-error-code e)
+                                  "25P02")
+                         (warn "25P02: Transaction aborted; something wasn't handled correctly!")
+                         'ignoring-this-error)
+
+                        (t (error e)))))))))))
+
+#|
+
+Notes on error handling:
+
+  40P01: the correct way to handle a detected deadlock is restarting aborted
+         transactions until the locks are resolved. (Leslie)
+
+  23505: this occurs due to a race condition we can't really prevent since
+         it's caused by PL/PGSQL code. Rollback until all races are resolved.
+         A more elegant solution will involve savepoints. (Leslie)
+
+  42P05: another race condition, this time for statements preparation.
+         Same solution. (Leslie)
+
+|#
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
   (with-postmodern-conn ((controller-connection-for-thread sc))
