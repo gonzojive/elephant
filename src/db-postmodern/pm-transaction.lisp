@@ -26,79 +26,56 @@
 (defun txn-cache-clear-value (bt key)
   (cache-clear-value *txn-value-cache* bt key))
 
+(defun execute-transaction-one-try (sc txn-fn always-rollback)
+  (let (tran commited
+	(*txn-value-cache* (make-value-cache sc)))
+    (incf (tran-count-of sc))
+    (setf tran (controller-start-transaction sc))
+    (unwind-protect
+	 (multiple-value-prog1 	     
+	     (funcall txn-fn) 
+	   (unless always-rollback ; automatically commit unless always-rollback is on
+	     (controller-commit-transaction sc tran)
+	     (setf commited t)))
+      (unless commited (controller-abort-transaction sc tran))
+      (decf (tran-count-of sc)))))
+
+(defmacro with-concurrency-errors-handler (&body body)
+  "execute body with a handler catching postgres concurrency errors 
+   and invoking restart-transaction restart automatically"
+  `(handler-bind
+    ((cl-postgres:database-error
+      (lambda (c)
+	(let ((err-code (cl-postgres:database-error-code c)))
+	  (when (or (string= err-code "40001") ; SERIALIZATION FAILURE
+		    (string= err-code "40P01")); DEADLOCK DETECTED
+	    (invoke-restart 'retry-transaction c))))))
+    ,@body))
+
 (defmethod execute-transaction ((sc postmodern-store-controller) txn-fn
-				&key (retries 50) (always-rollback nil) &allow-other-keys)
+				&key (always-rollback nil) &allow-other-keys)
+  ;; SQL doesn't support nested transaction
   (with-postmodern-conn ((controller-connection-for-thread sc))
-    (let (savepoint (try 0))
-      (tagbody
-        retry (incf try)
-              (when (>= try retries)
-                (cerror "Retry transaction again?"
-		       'transaction-retry-count-exceeded
-		       :format-control "Transaction exceeded the limit of ~A retries"
-		       :format-arguments (list retries)
-		       :count retries))
-              ;(format t "txn-mgr (thr ~A): try ~A~%" sb-thread::*current-thread* try)
-              ;; XXX honor max retries
-              (if (> (tran-count-of sc) 0) ;; SQL doesn't support nested transaction
-                (progn
-                  ;(setf savepoint (princ-to-string (gensym)))
-                  ;(set-savepoint (active-connection) savepoint)
-                  ;(setf savepoint nil)
-                  ;(format t "detected nested transaction~%")
-                  (return-from execute-transaction (funcall txn-fn)))
-                (let (tran)
-                  (handler-case
-                    (let (commited (*txn-value-cache* (make-value-cache sc)))
-                      (incf (tran-count-of sc))
-                      (unwind-protect
-                        (return-from execute-transaction
-                          (prog2 
-                            (setf tran (controller-start-transaction sc))
-                            (funcall txn-fn) ;; this gets returned
-                            (unless always-rollback ;; automatically commit unless always rollback
-                              (controller-commit-transaction sc tran)
-                              (setf commited t))))
-                        (unless commited (controller-abort-transaction sc tran))
-                        (decf (tran-count-of sc))))
-                    (cl-postgres:database-error (e)
-                      (warn "dbpm txn manager: caught error ~A~%" (cl-postgres:database-error-code e))
-                      (cond
-                        ((or (string= (cl-postgres:database-error-code e) "40P01")  ; deadlock
-                             (string= (cl-postgres:database-error-code e) "23505")  ; duplicate primary key
-                             (string= (cl-postgres:database-error-code e) "42P05")) ; prepared stmt exists
-                         ;(if savepoint
-                         ;(rollback-to-savepoint (active-connection) savepoint)
-                         (controller-abort-transaction sc tran)
-                         (go retry))
-
-                        ((string= (cl-postgres:database-error-code e)
-                                  "25P02")
-                         (warn "25P02: Transaction aborted; something wasn't handled correctly!")
-                         'ignoring-this-error)
-
-                        (t (error e)))))))))))
-
-#|
-
-Notes on error handling:
-
-  40P01: the correct way to handle a detected deadlock is restarting aborted
-         transactions until the locks are resolved. (Leslie)
-
-  23505: this occurs due to a race condition we can't really prevent since
-         it's caused by PL/PGSQL code. Rollback until all races are resolved.
-         A more elegant solution will involve savepoints. (Leslie)
-
-  42P05: another race condition, this time for statements preparation.
-         Same solution. (Leslie)
-
-|#
+    (if (> (tran-count-of sc) 0)
+        (funcall txn-fn)
+        (let (tran 
+	      commited
+	      (*txn-value-cache* (make-value-cache sc)))
+          (incf (tran-count-of sc))
+          (unwind-protect
+	       (prog2 
+		   (setf tran (controller-start-transaction sc))
+		   (funcall txn-fn) ;;this gets returned
+		 (unless always-rollback ;;automatically commit unless always rollback
+		   (controller-commit-transaction sc tran)
+		   (setf commited t)))
+	    (unless commited (controller-abort-transaction sc tran))
+	    (decf (tran-count-of sc)))))))
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
   (with-postmodern-conn ((controller-connection-for-thread sc))
     (let ((transaction (make-instance 'postmodern::transaction-handle)))
-      (postmodern:execute "BEGIN")
+      (postmodern:execute "BEGIN ISOLATION LEVEL SERIALIZABLE")
       transaction)))
 
 (defmethod controller-commit-transaction ((sc postmodern-store-controller) transaction &key &allow-other-keys)
