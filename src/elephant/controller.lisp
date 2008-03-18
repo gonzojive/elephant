@@ -264,7 +264,9 @@
 			      (schema-id (lookup-schema sc class)))))
 
 (defmethod set-instance-schema-id ((sc store-controller) oid cid)
-  (setf (get-value oid (controller-instance-table sc)) cid))
+  (let ((table (controller-instance-table sc)))
+    (remove-kv oid table)
+    (setf (get-value oid table) cid)))
 
 (defmethod get-instance-class ((sc store-controller) oid &optional classname)
   "Get the class object using the oid or using the provided classname"
@@ -393,12 +395,7 @@
     ;; Let get-controller-schema cache it for us
     (get-controller-schema sc (schema-id db-schema))))
 
-(defmethod uncache-controller-schema ((sc store-controller) schema-id)
-  (remove-class-controller-schema sc (get-schema-id-class sc schema-id))
-  (ele-with-fast-lock ((controller-schema-cache-lock sc))
-    (remcache schema-id (controller-schema-cache sc))))
-
-(defmethod update-controller-schema ((sc store-controller) db-schema)
+(defmethod update-controller-schema ((sc store-controller) db-schema &optional update-cache)
   "Use this to update the schema version that is on store and in 
    all the various caches"
   (assert (typep db-schema 'db-schema))
@@ -406,15 +403,24 @@
   (let ((schema-id (schema-id db-schema)))
     (setf (get-value schema-id (controller-schema-table sc))
 	  db-schema)
-    (ele-with-fast-lock ((controller-schema-cache-lock sc))
-      (setf (get-cache schema-id (controller-schema-cache sc)) db-schema))
-    (add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema)))
+    (when update-cache
+      (ele-with-fast-lock ((controller-schema-cache-lock sc))
+	(setf (get-cache schema-id (controller-schema-cache sc)) db-schema))
+      (add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema))))
 
 (defmethod remove-controller-schema ((sc store-controller) schema-id)
-  "Internal use only.  Used when we know all instances have been upgraded,
-   usually via a full class index scan"
-  (uncache-controller-schema sc schema-id)
+  "Remove a schema from the controller table; uncache separately"
   (remove-kv schema-id (controller-schema-table sc)))
+
+(defmethod uncache-controller-schema ((sc store-controller) schema-id)
+  (handler-case
+      (progn
+	(ele-with-fast-lock ((controller-schema-cache-lock sc))
+	  (remcache schema-id (controller-schema-cache sc)))
+	(remove-class-controller-schema sc (get-schema-id-class sc schema-id)))
+    (program-error (e) ;; in case the class is gone for some reason
+      (format t "Error ~A in uncache-controller-schema , ignoring" e)
+      nil)))
 
 (defun get-current-db-schema (sc name)
   (awhen (sort (get-db-schemas sc name)
@@ -783,10 +789,13 @@ true."))
    as it implements the proper behavior for indexed classes"))
 
 (defmethod drop-pobject ((inst persistent-object))
-  (let ((pslots (all-persistent-slot-names (class-of inst))))
+  (let ((sc (get-con inst))
+	(pslots (all-persistent-slot-names (class-of inst))))
     (dolist (slot pslots)
-      (slot-makunbound inst slot)))
-  (remcache (oid inst) (controller-instance-cache (get-con inst))))
+      (slot-makunbound inst slot))
+    (ele-with-fast-lock ((controller-instance-cache-lock sc))
+      (remcache (oid inst) (controller-instance-cache sc)))
+    (remove-kv (oid inst) (controller-instance-table sc))))
 
 ;;
 ;; DATABASE PROPERTY INTERFACE (Not used by system as of 0.6.1, but supported)

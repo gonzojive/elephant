@@ -110,7 +110,8 @@
   (find-slot-def-names-by-type class 'persistent-effective-slot-definition nil))
 
 (defun all-persistent-slot-names (class)
-  (find-slot-def-names-by-type class 'persistent-effective-slot-definition t))
+  (append (find-slot-def-names-by-type class 'persistent-effective-slot-definition t)
+	  (find-slot-def-names-by-type class 'cached-effective-slot-definition t)))
 
 ;;
 ;; Cached slots (a placeholder for future development)

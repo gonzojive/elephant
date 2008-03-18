@@ -327,8 +327,6 @@
   (1 2 3) (1 2 3) (1 2 4) (2 3) (4))
 
 
-      
-
 (deftest (indexing-range :depends-on index-reset)
     (progn
 ;;       (format t "range store: ~A  ~A~%" *store-controller* (elephant::controller-spec *store-controller*))
@@ -408,7 +406,7 @@
       (with-transaction (:store-controller *store-controller*)
 	(drop-instances (get-instances-by-class 'idx-five-del))
 	(make-instance 'idx-five-del))
-      
+
       (let ((r1 (get-instances-by-value 'idx-five-del 'slot1 1)))
 
 	(defclass idx-five-del ()
@@ -418,52 +416,9 @@
 	(values 
 	 (eq (length r1) 1)
 	 (signals-error (get-instances-by-value 'idx-five-del 'slot1 1))
-	 (null (get-index (get-value 'idx-five-del (elephant::controller-class-root *store-controller*))
-			  'slot1)))))
+	 (not (typep (elephant::find-slot-def-by-name (find-class 'idx-five-del) 'slot1)
+		     'elephant::indexed-effective-slot-definition)))))
   t t t)
-
-(deftest (indexing-reconnect-db :depends-on index-reset)
-    (progn 
-
-      (defclass idx-five ()
-	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
-	 (slot2 :initarg :slot2 :initform 2 :accessor slot2)
-	 (slot3 :initarg :slot3 :initform 3 :accessor slot3 :index t))
-	(:metaclass persistent-metaclass))
-
-      (wipe-class 'idx-five)
-
-      (defclass idx-five ()
-	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
-	 (slot2 :initarg :slot2 :initform 2 :accessor slot2)
-	 (slot3 :initarg :slot3 :initform 3 :accessor slot3 :index t))
-	(:metaclass persistent-metaclass))
-
-      (let ((*default-indexed-class-synch-policy* :db))
-	(with-transaction (:store-controller *store-controller*)
-	  (make-instance 'idx-five))
-	
-	;; Wipe out the class so it's not a redefinition
-	(setf (find-class 'idx-five) nil)
-
-	;; Assume our db is out of synch with our class def
-	(defclass idx-five ()
-	  ((slot1 :initarg :slot1 :initform 1 :accessor slot1)
-	   (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t)
-	   (slot3 :initarg :slot3 :initform 3 :accessor slot3 :index t))
-	  (:metaclass persistent-metaclass))
-	
-	;; Add an instance of the new class
-	(with-transaction ()
-	  (make-instance 'idx-five))
-
-	;; DB should dominate (if set as default)
-	(if elephant::*enable-multi-store-indexing*
-	    (values 2 2 t)
-	    (values (length (get-instances-by-value 'idx-five 'slot3 3))
-		    (length (get-instances-by-value 'idx-five 'slot1 1))
-		    (signals-error (length (get-instances-by-value 'idx-five 'slot2 2)))))))
-  2 2 t)
 
 (test (indexing-change-class :depends-on index-reset)
 
@@ -472,23 +427,8 @@
 	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t))
 	(:metaclass persistent-metaclass))
 
-      (wipe-class 'idx-six)
-
       (defclass idx-seven ()
-	((slot1 :initarg :slot1 :initform 10 :accessor slot1 :index nil)
-	 (slot3 :initarg :slot3 :initform 30 :accessor slot3 :index t)
-	 (slot4 :initarg :slot4 :initform 40 :accessor slot4 :index t))
-	(:metaclass persistent-metaclass))
-
-      (wipe-class 'idx-seven)
-
-      (defclass idx-six ()
-	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
-	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t))
-	(:metaclass persistent-metaclass))
-
-      (defclass idx-seven ()
-	((slot1 :initarg :slot1 :initform 10 :accessor slot1 :index nil)
+	((slot1 :initarg :slot1 :initform 10 :accessor slot1)
 	 (slot3 :initarg :slot3 :initform 30 :accessor slot3 :index t)
 	 (slot4 :initarg :slot4 :initform 40 :accessor slot4 :index t))
 	(:metaclass persistent-metaclass))
@@ -496,7 +436,7 @@
       (defmethod update-instance-for-different-class :before ((old idx-six)
 							      (new idx-seven)
 							      &key)
-	(setf (slot3 new) (slot2 old)))
+	(setf (slot3 new) (slot-value old 'slot2)))
 
       (let ((foo (make-instance 'idx-six)))
 	(change-class foo 'idx-seven)
@@ -545,39 +485,39 @@
 	(with-transaction ()
 	  (setf o1 (make-instance 'idx-eight :slot1 1 :slot2 2 :slot3 3 :slot4 4 :slot5 5))
 	  (setf o2 (make-instance 'idx-eight :slot1 10 :slot2 20 :slot3 30 :slot4 40 :slot5 50)))
-
 	(defclass idx-eight ()
 	  ((slot1 :accessor slot1 :initarg :slot1 :initform 11)
 	   (slot2 :accessor slot2 :initarg :slot2 :initform 12 :index t)
 	   (slot3 :accessor slot3 :initarg :slot3 :initform 13)
 	   (slot6 :accessor slot6 :initarg :slot6 :initform 14 :index t)
-	   (slot7 :accessor slot7 :initarg :slot7))
+	   (slot7 :accessor slot7 :initarg :slot7)
+	   (slot8 :accessor slot8 :initarg :slot8 :initform 15 :transient t))
 	  (:metaclass persistent-metaclass))
-	;;      (format t "indexing redef-class d~%")
+	      (format t "indexing redef-class d~%")
 	(let ((
 	       v1
 	       (and (eq (slot1 o1) 1)
 		    (signals-error (get-instances-by-value 'idx-eight 'slot1 1))))
-	      ;;	      (v1x       (format t "indexing redef-class v1x~%"))
+	      ;; (v1x       (format t "indexing redef-class v1x~%"))
 	      (v2 (and (eq (slot2 o1) 2)
 		       (eq (length (get-instances-by-value 'idx-eight 'slot2 2)) 1)))
-	      ;;	      (v2x       (format t "indexing redef-class v2x~%"))
+	      ;; (v2x       (format t "indexing redef-class v2x~%"))
 	      (v3 (eq (slot3 o1) 13)) ;; transient values not preserved (would be inconsistent)
-	      ;;	      (v3x       (format t "indexing redef-class v3x~%"))
+	      ;; (v3x       (format t "indexing redef-class v3x~%"))
 	      (v4 (and (not (slot-exists-p o1 'slot4))
 		       (not (slot-exists-p o1 'slot5))
 		       (signals-error (get-instances-by-value 'idx-eight 'slot4 4))))
-	      ;;	      (v4x       (format t "indexing redef-class v4x~%"))
+	      ;; (v4x       (format t "indexing redef-class v4x~%"))
 	      (v5 (eq (slot6 o1) 14))
-	      ;;	      (v5x       (format t "indexing redef-class v5x~%"))
+	      ;; (v5x       (format t "indexing redef-class v5x~%"))
 	      (v6 (eq (length (get-instances-by-value 'idx-eight 'slot6 14)) 2))
-	      ;;	      (v6x       (format t "indexing redef-class v6x~%"))
+	      ;; (v6x       (format t "indexing redef-class v6x~%"))
 	      (v7 (and ;;(slot-exists-p o1 'slot7)
 		   (not (slot-boundp o1 'slot7))))
-	      ;;	      (v7x       (format t "indexing redef-class v7x~%"))
+	      ;; (v7x       (format t "indexing redef-class v7x~%"))
 	      (v8 (and ;;(slot-exists-p o2 'slot7)
 		   (not (slot-boundp o2 'slot7))))
-	      ;;	      (v8x       (format t "indexing redef-class v8x~%")))
+	      ;; (v8x       (format t "indexing redef-class v8x~%"))
 	      )
 	      (values 
 	       v1 v2 v3 v4 v5 v6 v7 v8))))

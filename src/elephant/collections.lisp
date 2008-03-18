@@ -758,6 +758,19 @@ not), evaluates the forms, then closes the cursor."
   (format t "BTREE keys and types for ~A~%" bt)
   (dump-btree bt :print-fn print-fn :count count))
 
+(defun print-index-entry (k v pk)
+  (format t "key: ~A / value: ~A / primary-key: ~A~%" k v pk))
+
+(defun dump-index (idx &key (print-fn #'print-index-entry) (count nil))
+  (format t "DMP INDEX ~A~%" idx)
+  (let ((i 0))
+  (map-index
+   (lambda (k v pk)
+     (when (and count (>= (incf i) count))
+       (return-from dump-index))
+     (funcall print-fn k v pk))
+   idx)))
+
 (defmethod btree-differ-p ((x btree) (y btree))
 ;;  (assert (eq (get-con x) (get-con y)))
   (ensure-transaction (:store-controller (get-con x))

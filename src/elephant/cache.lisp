@@ -113,3 +113,8 @@ collected, so are the keys."
 	   (return-from map-cache))
 	 (funcall fn key value)))))
 
+(defun dump-cache (cache)
+  (format t "Dumping cache: ~A~%" cache)
+  (map-cache #'(lambda (k v) 
+		 (format t "key: ~A / value: ~A~%" k v))
+	     cache))

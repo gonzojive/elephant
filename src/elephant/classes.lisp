@@ -105,13 +105,16 @@
 
 
 
-;; ================================================
-;; PERSISTENT OBJECT MAINTENANCE
-;; ================================================
+;; ===============================================
+;;  CLASS INSTANCE INITIALIZATION PROTOCOL
+;; ===============================================
 
 ;; Some syntactic sugar
 
 (defmacro bind-slot-defs (class slots bindings &body body)
+  "Bindings contain name, accessor pairs.  Extract 
+   slot-definitions into variable name using accessor and
+   filter by the list of valid slots"
   (with-gensyms (classref slotrefs)
     `(let* ((,classref ,class)
 	    (,slotrefs ,slots)
@@ -120,19 +123,17 @@
 
 (eval-when (:compile-toplevel :load-toplevel)
   (defun compute-bindings (class slots bindings)
+    "Helper function for bind-slot-defs"
     (loop for (name accessor) in bindings collect
 	 `(,name (get-init-slotnames ,class #',accessor ,slots)))))
 
-;;
-;; CLASS INSTANCE INITIALIZATION
-;;
+;; Main protocol
 
 (defmethod initialize-instance :around ((instance persistent-object) &rest initargs 
 					&key (sc *store-controller*) &allow-other-keys)
   "Ensure instance creation is inside a transaction, huge (5x) performance impact per object"
   (ensure-transaction (:store-controller sc)
     (call-next-method)))
-    
 
 (defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid &allow-other-keys)
   "Initializes the persistent slots via initargs or forms.
@@ -144,7 +145,7 @@ class is fully initialized.  Calls the next method for the transient
 slots."
   (bind-slot-defs (class-of instance) slot-names
     ((transient-slots transient-slot-names)
-     (cached-slots transient-slot-names)
+     (cached-slots cached-slot-names)
      (indexed-slots indexed-slot-names)
      (persistent-slots persistent-slot-names))
     (let* ((class (class-of instance))
@@ -172,7 +173,7 @@ slots."
 		  (slot-boundp-using-class class instance slot-def))
 	(awhen (slot-definition-initfunction slot-def)
 	  (setf (slot-value-using-class class instance slot-def)
-		(funcall it))))))))
+		(funcall it)))))))
 
 (defun initialize-set-slots (class instance set-slots)
   (dolist (slotname set-slots)
@@ -218,9 +219,9 @@ slots."
        when (member (slot-definition-name slot-def) slotnames)
        do (slot-makunbound-using-class class instance slot-def))))
 
-;;
-;; RECREATING A PERSISTENT INSTANCE
-;;
+;; ================================================
+;;  RECREATING A PERSISTENT INSTANCE FROM THE DB
+;; ================================================
 
 (defgeneric recreate-instance (instance &rest initargs &key &allow-other-keys)
   (:method ((instance persistent-object) &rest args &key from-oid schema (sc *store-controller*))
@@ -246,14 +247,14 @@ slots."
       (apply #'recreate-instance instance initargs)
       instance))
 
-;;
-;; CLASS REDEFINITION PROTOCOL
-;;
+;; ================================
+;;  CLASS REDEFINITION PROTOCOL
+;; ================================
 
 (defmethod update-instance-for-redefined-class :around ((instance persistent-object) added-slots 
 							discarded-slots property-list &rest initargs)
   (declare (ignore property-list discarded-slots added-slots initargs))
-  (prog1
+  (prog1 
       (call-next-method)
     (let* ((sc (get-con instance))
 	   (current-schema (get-current-db-schema sc (type-of instance)))
@@ -261,9 +262,10 @@ slots."
       (assert (and current-schema prior-schema))
       (upgrade-db-instance instance current-schema prior-schema))))
 
-;;
-;; CLASS CHANGE PROTOCOL   
-;;
+
+;; =================================
+;;  CLASS CHANGE PROTOCOL   
+;; =================================
 
 (defmethod change-class :before ((previous persistent) (new-class standard-class) &rest initargs)
   (declare (ignorable initargs))
@@ -275,48 +277,20 @@ slots."
   (unless (subtypep (type-of previous) 'persistent)
     (error "Standard classes cannot be changed to persistent classes in change-class")))
 
-(defmethod update-instance-for-different-class :around ((previous persistent-object) (current persistent-object) 
+(defmethod update-instance-for-different-class :after ((previous persistent-object) (current persistent-object) 
 							&rest initargs &key)
-  (change-db-instance-class previous current)
-;; call update-db-instance
-;; - handles dropped, added and changed
-;; for slots with same name: update new indexes, remove from prior indexes
-;; update associations
-;; update oid-table to point to new cid
-  )
-
-
-;;   (let* ((old-class (class-of previous))
-;; 	 (new-class (class-of current))
-;; 	 (old-pslots (persistent-slots old-class))
-;; 	 (new-pslots (persistent-slots new-class))
-;; 	 (new-persistent-slots (set-difference new-pslots old-pslots))
-;; 	 (dropped-persistent-slots (set-difference old-pslots new-pslots))
-;; 	 (raw-retained-persistent-slots (intersection new-pslots old-pslots))
-;; 	 (retained-unbound-slots (loop for slot-name in raw-retained-persistent-slots
-;; 				       when (not (persistent-slot-boundp (get-con previous) previous slot-name))
-;; 				       collect slot-name))
-;;  	 (retained-persistent-slots (set-difference raw-retained-persistent-slots retained-unbound-slots)))
-;;     ;; Apply default values for unbound & new slots (updates class index)
-;;     (apply #'shared-initialize current (append new-persistent-slots retained-unbound-slots) initargs)
-;;     (ensure-transaction (:store-controller (get-con current))
-;;       ;; Copy old slot values to new slot values
-;;       (loop for slot-def in (class-slots new-class)
-;; 	 when (member (slot-definition-name slot-def) retained-persistent-slots)
-;; 	 do (setf (slot-value-using-class new-class
-;; 					  current
-;; 					  slot-def)
-;; 		  (slot-value-using-class old-class
-;; 					  previous
-;; 					  (find-slot-def-by-name old-class (slot-definition-name slot-def))))))
-;;     (call-next-method)
-;;     (ensure-transaction (:store-controller (get-con current))
-;;       ;; Reclaim space from dropped slots
-;;       (drop-slots old-class previous dropped-persistent-slots)
-;;       ;; Delete this instance from its old class index, if exists
-;;       (when (indexed old-class)
-;; 	(remove-kv (oid previous) (find-class-index old-class))))))
-
+  ;; Update db to new class configuration
+  ;; - handle indices, removals, associations and additions
+  (let* ((sc (get-con current))
+	 (current-schema (lookup-schema sc (class-of current)))
+	 (previous-schema (lookup-schema sc (class-of previous))))
+    (assert (eq sc (get-con previous)))
+    (change-db-instance current previous current-schema previous-schema)
+    ;; Deal with new persistent slot, cached and transient initialization
+    (let* ((diff-entries (schema-diff current-schema previous-schema))
+	   (add-entries (remove-if-not (lambda (entry) (eq :add (diff-type entry))) diff-entries))
+	   (add-names (when add-entries (mapcar #'slot-rec-name (mapcan #'diff-recs add-entries)))))
+      (apply #'shared-initialize current add-names initargs))))
 
 ;; =============================================
 ;; SHARED SLOT ACCESS PROTOCOL DEFINITIONS
@@ -353,7 +327,7 @@ slots."
   (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def)))
 
 ;; ===================================
-;; Multi-store error checking
+;;  Multi-store error checking
 ;; ===================================
 
 (defun valid-persistent-reference-p (object sc)
@@ -381,9 +355,9 @@ slots."
 	  :foreign-ctrl sc))
 
 
-;; ======================================================
-;; Lisp-specific overrides of normal slot operation
-;; ======================================================
+;; =========================================================
+;;  LISP vendor-specific overrides of normal slot operation
+;; =========================================================
 
 ;;
 ;; ALLEGRO 
@@ -394,6 +368,7 @@ slots."
   (loop for slot in (class-slots class)
      until (eq (slot-definition-name slot) slot-name)
      finally (return (if (or (typep slot 'persistent-slot-definition)
+			     (typep slot 'indexed-slot-definition)
 			     (typep slot 'cached-slot-definition))
 			 (slot-makunbound-using-class class instance slot)
 			 (call-next-method)))))

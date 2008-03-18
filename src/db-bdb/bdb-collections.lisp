@@ -194,22 +194,20 @@
 	  (db-put-buffered (controller-btrees sc)
 			   key-buf value-buf
 			   :transaction (my-current-transaction sc))
+	  ;; Manually write value into secondary index
 	  (loop for index being the hash-value of indices
 	     do
 	     (multiple-value-bind (index? secondary-key)
 		 (funcall (key-fn index) index key value)
 	       (when index?
-		 ;; Manually write value into secondary index
+		 ;; Insert
 		 (buffer-write-oid (oid index) secondary-buf)
 		 (serialize secondary-key secondary-buf sc)
-		 ;; should silently do nothing if the key/value already
-		 ;; exists
 		 (db-put-buffered (controller-indices sc)
 				  secondary-buf key-buf
 				  :transaction (my-current-transaction sc))
 		 (reset-buffer-stream secondary-buf))))
-	  value))))
-  )
+	  value)))))
 
 (defmethod remove-kv (key (bt bdb-indexed-btree))
   "Remove a key / value pair, and update secondary indices."

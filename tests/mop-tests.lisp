@@ -203,6 +203,7 @@
 	 (signals-condition (slot1 foo)))))
   2 t)
 
+;; Bound values are retained
 (deftest change-class
     (progn
       (defclass class-one ()
@@ -221,21 +222,8 @@
 	   (slot2 foo))))
   1 2)
 
-;;
-;; ISE NOTE: This violates single backend testing, I've removed it for now
-;;
-;; (deftest change-class2
-;;     (with-transaction (:store-controller *store-controller*)
-;;       (let ((foo (make-btree *store-controller*)))
-;; 	(change-class foo (find-class 
-;; 			   (if (typep *store-controller* 'bdb-store-controller)
-;; 			       'bdb-indexed-btree
-;; 			       'sql-indexed-btree)
-;; 			   ))
-;; 	(is-not-null (indices foo))))
-;;   t)
-
-(deftest (change-class3 :depends-on change-class)
+;; Unbound values are also retained!
+(deftest change-class2
     (progn
       (defclass class-one ()
 	((slot1 :accessor slot1))
@@ -249,9 +237,9 @@
       	(let* ((foo (make-instance 'class-one :sc *store-controller*)))
 	  (change-class foo (find-class 'class-two))
 	  (values
-	   (slot1 foo)
+	   (slot-boundp foo 'slot1)
 	   (slot2 foo))))
-  0 2)
+  nil 2)
 
 
       

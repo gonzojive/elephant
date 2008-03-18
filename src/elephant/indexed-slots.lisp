@@ -27,8 +27,8 @@
     (new-value (class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Update indices when writing an indexed slot.  Make around method to ensure a single transaction
    for write + index update"
-  (update-slot-index class instance slot-def new-value)
-  (call-next-method))
+  (call-next-method)
+  (update-slot-index class instance slot-def new-value))
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Removes the slot value from the database."
@@ -39,7 +39,7 @@
 	    (old-value (when (slot-boundp-using-class class instance slot-def)
 			 (slot-value-using-class class instance slot-def))))
 	(unless idx
-	  (setf idx (initialize-slot-def-index slot-def sc)))
+	  (setf idx (ensure-slot-def-index slot-def sc)))
 	(when old-value 
 	  (remove-kv-pair old-value oid idx)))
       (call-next-method))))
@@ -53,22 +53,26 @@
 	    (old-value (when (slot-boundp-using-class class instance slot-def)
 			 (slot-value-using-class class instance slot-def))))
 	(unless idx
-	  (setf idx (initialize-slot-def-index slot-def sc)))
+	  (setf idx (ensure-slot-def-index slot-def sc)))
 	(when old-value 
-	  (remove-kv-pair old-value oid idx))
+  	  (remove-kv-pair old-value oid idx))
 	(setf (get-value new-value idx) oid)))))
 
-(defun initialize-slot-def-index (slot-def sc)
-  "If a slot's index does not exist, create it"
+(defun get-slot-def-controller-index (slot-def sc)
+  "Get the slot-def's index from the store"
   (let* ((master (controller-index-table sc))
 	 (base (indexed-slot-base slot-def))
 	 (name (slot-definition-name slot-def)))
-    (aif (get-value (cons base name) master)
-	 (progn (add-slot-def-index it slot-def sc) it)
-	 (let ((new-idx (make-dup-btree sc)))
-	   (add-slot-index sc new-idx (indexed-slot-base slot-def) (slot-definition-name slot-def))
-	   (add-slot-def-index new-idx slot-def sc)
-	   new-idx))))
+    (get-value (cons base name) master)))
+
+(defun ensure-slot-def-index (slot-def sc)
+  "If a slot's index does not exist, create it"
+  (aif (get-slot-def-controller-index slot-def sc)
+       (progn (add-slot-def-index it slot-def sc) it)
+       (let ((new-idx (make-dup-btree sc)))
+	 (add-slot-index sc new-idx (indexed-slot-base slot-def) (slot-definition-name slot-def))
+	 (add-slot-def-index new-idx slot-def sc)
+	 new-idx)))
 
 (defmethod add-slot-index ((sc store-controller) new-index class-name index-name)
   (setf (get-value (cons class-name index-name) (controller-index-table sc))
@@ -97,7 +101,7 @@
 	(assert-error))
       (let ((idx (get-slot-def-index slot-def sc)))
 	(unless idx
-	  (setf idx (initialize-slot-def-index slot-def sc)))
+	  (setf idx (ensure-slot-def-index slot-def sc)))
 	idx))))
 
 (defun ensure-finalized (class)
@@ -174,20 +178,20 @@
     (do-subsets (subset 500 instances)
       (ensure-transaction (:store-controller sc)
 	(mapc (lambda (instance)
-		(drop-pobject instance)
-		(remove-kv (oid instance) (controller-instance-table sc)))
+		(drop-pobject instance))
 	      subset)))))
 
 ;; ======================
 ;;    USER MAPPING API 
 ;; ======================
 
-(defun map-class (fn class &key collect (sc *store-controller*))
+(defun map-class (fn class &key collect oids (sc *store-controller*))
   "Perform a map operation over all instances of class.  Takes a
    function of one argument, a class instance."
   (flet ((map-fn (cidx pcidx oid)
 	   (declare (ignore cidx pcidx))
 	   (funcall fn (controller-recreate-instance sc oid))))
+    (declare (dynamic-extent map-fn))
     (let* ((classname (if (symbolp class) class (class-name class)))
 	   (db-schemas (get-db-schemas sc classname))
 	   (schema-ids (if db-schemas 
@@ -195,7 +199,8 @@
 			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
 ;;      (dump-schema-status sc classname)
       (loop for schema-id in schema-ids appending
-	   (map-index #'map-fn (controller-instance-class-index sc)
+	   (map-index (if oids fn #'map-fn)
+		      (controller-instance-class-index sc)
 		      :value schema-id
 		      :collect collect)))))
 
@@ -218,7 +223,10 @@
    This is the only way to travers all nil values.
 
    To map from :end to :start in descending order, set :from-end
-   to true.  If :value is used, :from-end is ignored"
+   to true.  If :value is used, :from-end is ignored
+
+   The 'oids' argument passes the oid of the instance to the provided
+   function instead of the recreated instance."
   (declare (dynamic-extent args)
 	   (ignorable args))
   (let* ((index (if (symbolp index)

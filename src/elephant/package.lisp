@@ -207,6 +207,7 @@
 
    #:persistent #:persistent-object #:persistent-metaclass #:defpclass
    #:persistent-collection #:drop-pobject
+   #:*oid-only*
 
    #:pset #:make-pset #:insert-item #:remove-item #:map-pset #:find-item #:pset-list #:drop-pset
 
@@ -220,7 +221,7 @@
    #:add-index #:get-index #:remove-index #:map-indices
    #:get-primary-key #:primary #:key-form #:key-fn
    #:with-btree-cursor #:map-btree #:map-index #:drop-btree
-   #:empty-btree-p #:dump-btree #:btree-keys #:btree-differ-p
+   #:empty-btree-p #:dump-btree #:dump-index #:btree-keys #:btree-differ-p
    #:remove-current-kv 
 
    #:cursor #:secondary-cursor #:make-cursor #:make-simple-cursor
@@ -278,7 +279,6 @@
    #:with-inhibited-warnings
    #:cross-reference-error
    #:controller-lost-error
-   #:persistent-class-not-indexed
    #:bdb-db-error
    #:elephant-deserialization-error
    #:elephant-type-deserialization-error

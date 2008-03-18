@@ -35,8 +35,3 @@
 	  (close-store sc2))))
   t t t t)
 
-(deftest unindexed-class-condition
-    (let ((inst (make-instance 'pfoo :slot1 1)))
-      (signals-specific-condition (persistent-class-not-indexed)
-	(find-class-index 'pfoo)))
-  t)
