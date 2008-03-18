@@ -144,7 +144,7 @@
     (ensure-cache-up-to-date (parent-cache w))
     (setf (cache-updated w) t)))
 
-(defmethod value-cache-commit :around ((w cache-update-wrapper))
+(defmethod value-cache-commit ((w cache-update-wrapper))
   (when (cache-updated w) ;;only call next method if there were some activities
     (call-next-method)))
 
