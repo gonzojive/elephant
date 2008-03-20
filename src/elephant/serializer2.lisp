@@ -36,10 +36,10 @@
 		slots-and-values
 		struct-slots-and-values
 		oid
-		make-oid-pair
-		oid-pair
-		oid-pair-left
-		oid-pair-right
+;;		make-oid-pair
+;;		oid-pair
+;;		oid-pair-left
+;;		oid-pair-right
 		int-byte-spec
 		array-type-from-byte
 	        byte-from-array-type
@@ -95,7 +95,7 @@
 (defconstant +struct+               20)
 (defconstant +class+                21)
 (defconstant +complex+              22)
-(defconstant +oid-pair+             23)
+;;(defconstant +oid-pair+             23)
 
 ;; Lispworks support
 (defconstant +short-float+          30)
@@ -248,10 +248,10 @@
 	      (buffer-write-byte +char+ bs)
 	      ;; might be wide!
 	      (buffer-write-uint32 (char-code frob) bs))
-	     (oid-pair
-	      (buffer-write-byte +oid-pair+ bs)
-	      (buffer-write-int32 (oid-pair-left frob) bs)
-	      (buffer-write-int32 (oid-pair-right frob) bs))
+;;	     (oid-pair
+;;	      (buffer-write-byte +oid-pair+ bs)
+;;	      (buffer-write-int32 (oid-pair-left frob) bs)
+;;	      (buffer-write-int32 (oid-pair-right frob) bs))
 	     (cons
 	      (buffer-write-byte +cons+ bs)
 	      (let ((idp (gethash frob circularity-hash)))
@@ -378,7 +378,7 @@
     (,+pathname+ . "pathname")
     (,+persistent+ . "persistent object (old)")
     (,+persistent-ref+ . "persistent object reference (new)")
-    (,+oid-pair+ . "oid pair for associations")
+;;    (,+oid-pair+ . "oid pair for associations")
     (,+cons+ . "cons cell")
     (,+hash-table+ . "hash table")
     (,+object+ . "standard object")
@@ -476,10 +476,10 @@
 	     ((= tag +rational+) 
 	      (/ (the integer (%deserialize bs)) 
 		 (the integer (%deserialize bs))))
-	     ((= tag +oid-pair+)
-	      (let ((pair (make-oid-pair)))
-		(setf (oid-pair-left pair) (buffer-read-fixnum32 bs))
-		(setf (oid-pair-right pair) (buffer-read-fixnum32 bs))))
+;;	     ((= tag +oid-pair+)
+;;	      (let ((pair (make-oid-pair)))
+;;		(setf (oid-pair-left pair) (buffer-read-fixnum32 bs))
+;;		(setf (oid-pair-right pair) (buffer-read-fixnum32 bs))))
 	     ((= tag +cons+)
 	      (let* ((id (buffer-read-fixnum bs))
 		     (maybe-cons (lookup-id id)))

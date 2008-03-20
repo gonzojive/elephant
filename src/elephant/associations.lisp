@@ -51,8 +51,8 @@
 (defmethod slot-makunbound-using-class 
     ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
   (when (eq (association-type slot-def) :end)
-    (call-next-method) ;; remove storage
-    (remove-association class instance slot-def)))
+    (remove-association-end class instance slot-def)
+    (call-next-method))) ;; remove storage
 
 
 ;; =========================
@@ -94,14 +94,20 @@
 ;;  Handling updates
 ;; ==========================
 
-(defun update-association-end (class instance slot-def target)
+tion(defun update-association-end (class instance slot-def target)
   "Get the association index and add the target object as a key that
    refers back to this instance so we can get the set of referrers to target"
   (let ((index (get-association-index slot-def (get-con instance))))
     (when (and (association-end-p slot-def)
 	       (slot-boundp-using-class class instance slot-def))
-      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid target) index))
+      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index))
     (setf (get-value (oid target) index) (oid instance))))
+
+(defun remove-association-end (class instance slot-def)
+  (let ((index (get-association-index slot-def (get-con instance))))
+    (when (and (association-end-p slot-def)
+	       (slot-boundp-using-class class instance slot-def))
+      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index))))
 
 (defun update-other-association-end (class instance slot-def other-instance)
   "Update the association index for the other object so that it maps from
@@ -112,7 +118,6 @@
 	 (sc (get-con other-instance)))
     (update-association-end fclass other-instance fslot instance)
     (persistent-slot-writer sc instance other-instance (slot-definition-name fslot))))
-
 
 (defun get-foreign-class (slot-def)
   (find-class (foreign-classname slot-def)))

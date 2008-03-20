@@ -360,14 +360,17 @@
 (defmethod lookup-schema ((sc store-controller) (class persistent-metaclass))
   "Get the latest db class schema from caches, etc."
   ;; Lookup class cached version
-  (aif (get-class-controller-schema sc class) it
-       ;; Lookup persistent version
-       (aif (get-current-db-schema sc (class-name class))
-	    ;; Store it
-	    (prog1 it
-	      (add-class-controller-schema sc class it))
-	    ;; Or create it
-	    (create-controller-schema sc class))))
+  (awhen (get-class-controller-schema sc class) 
+    (when (eq (schema-successor it) nil) 
+      (return-from lookup-schema it)))
+
+  ;; Lookup persistent version
+  (aif (get-current-db-schema sc (class-name class))
+       ;; Store it
+       (prog1 it
+	 (add-class-controller-schema sc class it))
+       ;; Or create it
+       (create-controller-schema sc class)))
 
 (defmethod get-controller-schema ((sc store-controller) schema-id)
   "Find the db class schema by schema id"
