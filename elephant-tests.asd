@@ -66,6 +66,7 @@
 	     (:file "mop-tests")
 	     (:file "testcollections")
 	     (:file "testindexing")
+	     (:file "testassociations")
 	     (:file "testmigration")
 	     )
 	    :serial t)))
