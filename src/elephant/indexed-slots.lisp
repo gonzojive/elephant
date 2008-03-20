@@ -27,8 +27,10 @@
     (new-value (class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Update indices when writing an indexed slot.  Make around method to ensure a single transaction
    for write + index update"
-  (call-next-method)
-  (update-slot-index class instance slot-def new-value))
+  (let ((sc (get-con instance)))
+    (ensure-transaction (:store-controller sc)
+      (update-slot-index sc class instance slot-def new-value)
+      (call-next-method))))
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def indexed-slot-definition))
   "Removes the slot value from the database."
@@ -44,10 +46,9 @@
 	  (remove-kv-pair old-value oid idx)))
       (call-next-method))))
 
-(defun update-slot-index (class instance slot-def new-value)
+(defun update-slot-index (sc class instance slot-def new-value)
   "Update an index value when written"
-  (let ((sc (get-con instance))
-	(oid (oid instance)))
+  (let ((oid (oid instance)))
     (ensure-transaction (:store-controller sc)
       (let ((idx (get-slot-def-index slot-def sc))
 	    (old-value (when (slot-boundp-using-class class instance slot-def)
@@ -58,7 +59,7 @@
   	  (remove-kv-pair old-value oid idx))
 	(setf (get-value new-value idx) oid)))))
 
-(defun get-slot-def-controller-index (slot-def sc)
+(defun get-controller-index (slot-def sc)
   "Get the slot-def's index from the store"
   (let* ((master (controller-index-table sc))
 	 (base (indexed-slot-base slot-def))
@@ -67,7 +68,7 @@
 
 (defun ensure-slot-def-index (slot-def sc)
   "If a slot's index does not exist, create it"
-  (aif (get-slot-def-controller-index slot-def sc)
+  (aif (get-controller-index slot-def sc)
        (progn (add-slot-def-index it slot-def sc) it)
        (let ((new-idx (make-dup-btree sc)))
 	 (add-slot-index sc new-idx (indexed-slot-base slot-def) (slot-definition-name slot-def))

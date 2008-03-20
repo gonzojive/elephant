@@ -132,6 +132,7 @@
 (defmethod initialize-instance :around ((instance persistent-object) &rest initargs 
 					&key (sc *store-controller*) &allow-other-keys)
   "Ensure instance creation is inside a transaction, huge (5x) performance impact per object"
+  (assert sc nil "You must have an open store controller to create ~A" instance)
   (ensure-transaction (:store-controller sc)
     (call-next-method)))
 
@@ -151,8 +152,7 @@ slots."
     (let* ((class (class-of instance))
 	   (persistent-initializable-slots 
 	   (union persistent-slots indexed-slots))
-	   (set-slots (union (get-init-slotnames class #'association-slot-names slot-names)
-			     (get-init-slotnames class #'set-valued-slot-names slot-names))))
+	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
       (cond (from-oid ;; If re-starting, make sure we read the cached values
 	     (initialize-cached-slots instance cached-slots))
 	    (t        ;; If new instance, initialize all slots
@@ -231,7 +231,7 @@ slots."
     (when schema
       (let ((official-schema (lookup-schema sc (class-of instance))))
 	(unless (eq (schema-id schema) (schema-id official-schema))
-	  (upgrade-db-instance instance official-schema schema))))
+	  (upgrade-db-instance instance official-schema schema nil))))
     ;; Load cached slots, set, assoc values, etc.
     (shared-initialize instance t :from-oid from-oid)))
 
@@ -253,14 +253,19 @@ slots."
 
 (defmethod update-instance-for-redefined-class :around ((instance persistent-object) added-slots 
 							discarded-slots property-list &rest initargs)
-  (declare (ignore property-list discarded-slots added-slots initargs))
-  (prog1 
-      (call-next-method)
-    (let* ((sc (get-con instance))
-	   (current-schema (get-current-db-schema sc (type-of instance)))
-	   (prior-schema (get-controller-schema sc (schema-predecessor current-schema))))
-      (assert (and current-schema prior-schema))
-      (upgrade-db-instance instance current-schema prior-schema))))
+  (declare (ignore discarded-slots added-slots initargs))
+  (let* ((sc (get-con instance))
+	 (class (class-of instance))
+	 (current-schema (get-current-db-schema sc (type-of instance))))
+;;    (unless (match-schemas (%class-schema class) current-schema))
+      (prog1 
+	  (call-next-method)
+	(let ((prior-schema (aif (schema-predecessor current-schema)
+				 (get-controller-schema sc it)
+				 (error "If the schemas mismatch, a derived controller schema should have been computed"))))
+	  (assert (and current-schema prior-schema))
+	  (break)
+	  (upgrade-db-instance instance current-schema prior-schema property-list)))))
 
 
 ;; =================================

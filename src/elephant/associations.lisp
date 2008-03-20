@@ -1,118 +1,141 @@
+;;; -*- Mode: Lisp; Syntax: ANSI-Common-Lisp; Base: 10 -*-
+;;;
+;;; associations.lisp -- persistent slot accesses
+;;; 
+;;; part of
+;;;
+;;; Elephant: an object-oriented database for Common Lisp
+;;;
+;;; Original Copyright (c) 2004 by Andrew Blumberg and Ben Lee
+;;; <ablumberg@common-lisp.net> <blee@common-lisp.net>
+;;;
+;;; Portions Copyright (c) 2005-2007 by Robert Read and Ian Eslick
+;;; <rread common-lisp net> <ieslick common-lisp net>
+;;;
+;;; Elephant users are granted the rights to distribute and use this software
+;;; as governed by the terms of the Lisp Lesser GNU Public License
+;;; (http://opensource.franz.com/preamble.html), also known as the LLGPL.
+;;;
+
 (in-package :elephant)
 
 ;; ===============================
-;;  Association API
+;;  Association Slots
 ;; ===============================
 
-;; Separate association methods from metaprotocol issues
+(defmethod slot-value-using-class 
+    ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
+  (case (association-type slot-def)
+    (:end (call-next-method))
+    (:m21 (get-associated instance slot-def))
+    (:m2m (get-associated instance slot-def))))
 
-;;(defgeneric build-association (classname1 classname2 type sc)
-;;  (:documentation "Allow backend-specific overrides by creating instances
-;;                   via this interface"))
+(defmethod (setf slot-value-using-class) 
+    (new-value (class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
+  (when (type-check-association instance slot-def new-value)
+    (let ((sc (get-con instance)))
+      (ensure-transaction (:store-controller sc)
+	(case (association-type slot-def)
+	  (:end (update-association-end class instance slot-def new-value)
+		(persistent-slot-writer sc new-value instance (slot-definition-name slot-def)))
+	  (:m21 (update-other-association-end class instance slot-def new-value))
+	  (:m2m (update-association-end class instance slot-def new-value)
+		(update-other-association-end class instance slot-def new-value))))))
+  new-value)
 
-(defgeneric add-association (inst1 inst2 assoc)
-  (:documentation "Validates class types and adds the association"))
-
-(defgeneric remove-association (inst1 inst2 assoc)
-  (:documentation "Remove the association between inst1 and inst2 in assoc"))
-
-(defgeneric remove-all-associations (type inst assoc)
-  (:documentation "Remove all associations.  Valid types are :primary and :secondary"))
-
-(defgeneric associated-p (inst1 inst2 assoc)
-  (:documentation "Predicate: are the instances in the association set"))
-
-(defgeneric get-association-list (from inst assoc)
-  (:documentation "Get a freshly consed list of the associated objects"))
-
-(defgeneric get-association-pset (from inst assoc)
-  (:documentation "Return a proxy pset object for the associations. Lighter weight 
-                   than the "))
+(defmethod slot-boundp-using-class 
+    ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
+  (when (association-end-p slot-def)
+    (call-next-method)))
   
-(defgeneric map-associations (fn from inst assoc)
-  (:documentation "What it says"))
+(defmethod slot-makunbound-using-class 
+    ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
+  (when (eq (association-type slot-def) :end)
+    (call-next-method) ;; remove storage
+    (remove-association class instance slot-def)))
 
 
-;; ======================================
-;;  Association Objects
-;; ======================================
+;; =========================
+;; Handling reads
+;; =========================
 
-(defclass association (persistent-collection)
-  ((type :accessor association-type :initarg :type :type (member :1-n :n-m)))
-  (:documentation "Base class for pairwise associations between persistent objects."))
-
-(defmethod valid-association-pair ((primary persistent) (secondary persistent) (assoc association))
+(defun type-check-association (instance slot-def other-instance)
+  (when (null other-instance)
+    (return-from type-check-association t))
+  (unless (subtypep (type-of other-instance) (foreign-classname slot-def))
+    (cerror "Ignore and return"
+	    "Value ~A written to association slot ~A of instance ~A 
+             of class ~A must be a subtype of ~A"
+	    other-instance (foreign-slotname slot-def) instance
+	    (type-of instance) (foreign-classname slot-def))
+    (return-from type-check-association nil))
+  (unless (equal (db-spec instance) (db-spec other-instance))
+    (cerror "Ignore and return"
+	    "Cannot association objects from different controllers:
+             ~A is in ~A and ~A is in ~A"
+	    instance (get-con instance)
+	    other-instance (get-con other-instance))
+    (return-from type-check-association nil))
   t)
 
-(defmethod valid-association-pair ((primary t) (secondary t) (assoc association))
-  (error "Associations must be between persistent objects"))
-
-(defun make-association (type &optional (sc *store-controller*))
-  (build-association type sc))
-
-;; =======================================
-;;  Generic association implementation
-;; =======================================
-
-(defstruct oid-pair left right)
-
-(defpclass default-association (default-pset association)
-  ((next-id :accessor next-id :initarg :start-id :initform 1)
-   (table :accessor association-table :initarg :table)
-   (type :accessor association-type :initarg :type))
-  (:documentation "Contains references to the underlying persistent
-                   data so backends can override build-association
-                   to create their own interfaces for improved performance
-                   or backend specific features."))
-
-;; (defmethod build-association (type sc)
-;;   (let ((table (make-indexed-btree sc)))
-;;     (add-index table :index-name :primary)
-;;     (make-instance 'default-association)))
+(defun get-associated (instance slot-def)
+  (let* ((fclass (get-foreign-class slot-def))
+	 (fslot (get-foreign-slot fclass slot-def))
+	 (sc (get-con instance))
+	 (index (get-association-index fslot sc)))
+    (flet ((map-obj (value oid)
+	     (declare (ignore value))
+	     (controller-recreate-instance sc oid)))
+      (declare (dynamic-extent map-obj))
+      (map-btree #'map-obj index :value (oid instance) :collect t))))
 
 
+;; ==========================
+;;  Handling updates
+;; ==========================
 
-;; ====================================================
+(defun update-association-end (class instance slot-def target)
+  "Get the association index and add the target object as a key that
+   refers back to this instance so we can get the set of referrers to target"
+  (let ((index (get-association-index slot-def (get-con instance))))
+    (when (and (association-end-p slot-def)
+	       (slot-boundp-using-class class instance slot-def))
+      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid target) index))
+    (setf (get-value (oid target) index) (oid instance))))
 
-;;
-;; Metaprotocol support for class associations
-;;
-
-(defmacro def-association (type class1def class2def)
-  (destructuring-bind (classname1 &key slot1 initarg1) class1def
-    (destructuring-bind (classname2 &key slot2 initarg2) class2def
-      (let ((class1 (find-class classname1))
-	    (class2 (find-class classname2)))
-	))))
-
-;;
-;; Slot generic functions for backends
-;;
-
-;; raw slot value is pset?
-;; setf raw slot value requires pset; union or destructive?
-
-;; (defgeneric insert-item (instance slot item))
-
-;; (defmethod insert-item (assoc slot item))
-
-;; (defgeneric delete-item (instance slot item))
-
-;; (defgeneric find-item (class slot item))
-
-;; (defgeneric list-of (class slot))
-
-;; (defgeneric list-of-oids (class slot))
-
-;; (defgeneric (setf list-of) (class slot))
-
-;; (defgeneric size (class slot))
+(defun update-other-association-end (class instance slot-def other-instance)
+  "Update the association index for the other object so that it maps from
+   us to it.  Also add error handling."
+  (declare (ignore class))
+  (let* ((fclass (class-of other-instance))
+	 (fslot (get-foreign-slot fclass slot-def))
+	 (sc (get-con other-instance)))
+    (update-association-end fclass other-instance fslot instance)
+    (persistent-slot-writer sc instance other-instance (slot-definition-name fslot))))
 
 
+(defun get-foreign-class (slot-def)
+  (find-class (foreign-classname slot-def)))
 
-;;
-;; Small utilities
-;;
+(defun get-foreign-slot (fclass slot-def)
+  (find-slot-def-by-name fclass (foreign-slotname slot-def)))
 
-;;(defun safe-find-class 
+;; =============================
+;;  Late-binding Initialization
+;; =============================
+
+(defun get-association-index (slot-def sc)
+  (ifret (get-association-slot-index slot-def sc)
+    (aif (get-controller-association-index slot-def sc)
+	 (progn (add-association-slot-index it slot-def sc) it)
+	 (let ((new-idx (make-dup-btree sc)))
+	   (add-slot-index sc new-idx (foreign-classname slot-def) (foreign-slotname slot-def))
+	   (add-association-slot-index new-idx slot-def sc)
+	   new-idx))))
+
+(defun get-controller-association-index (slot-def sc)
+  (let* ((master (controller-index-table sc))
+	 (base (association-slot-base slot-def))
+	 (slotname (slot-definition-name slot-def)))
+    (get-value (cons base slotname) master)))
 

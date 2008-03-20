@@ -43,10 +43,13 @@
 ;;     (setf (find-class 'idx-one) nil)))
 
 (defun wipe-class (name)
-  (when (find-class name nil)
-    (when (elephant::persistent-p (find-class name))
-      (drop-instances (get-instances-by-class (find-class name))))
-    (setf (find-class name nil) nil)))
+  (handler-case 
+      (when (find-class name nil)
+	(when (elephant::persistent-p (find-class name))
+	  (drop-instances (get-instances-by-class (find-class name))))
+	(setf (find-class name nil) nil))
+    (program-error ()
+      nil)))
 
 (defun wipe-all ()
   (mapcar #'wipe-class
@@ -394,12 +397,6 @@
 
       (defclass idx-five-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
-	(:metaclass persistent-metaclass))
-
-      (wipe-class 'idx-five-del)
-
-      (defclass idx-five-del ()
-	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass
 	 :index t))
 
@@ -461,17 +458,8 @@
 (deftest (indexing-redef-class :depends-on index-reset)
     (progn
 
-      (defclass idx-eight ()
-	((slot1 :accessor slot1 :initarg :slot1 :index t)
-	 (slot2 :accessor slot2 :initarg :slot2)
-	 (slot3 :accessor slot3 :initarg :slot3 :transient t)
-	 (slot4 :accessor slot4 :initarg :slot4 :index t)
-	 (slot5 :accessor slot5 :initarg :slot5))
-	(:metaclass persistent-metaclass))
-      
       (wipe-class 'idx-eight)
 
-      ;;      (format t "sc: ~A  ct: ~A~%" *store-controller* *current-transaction*)
       (defclass idx-eight ()
 	((slot1 :accessor slot1 :initarg :slot1 :index t)
 	 (slot2 :accessor slot2 :initarg :slot2)

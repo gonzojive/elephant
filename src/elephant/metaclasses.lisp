@@ -176,9 +176,9 @@
   ())
 
 (defclass indexed-effective-slot-definition (persistent-effective-slot-definition indexed-slot-definition)
-  ((indices :accessor indexed-slot-indices :initform nil 
+  ((indices :accessor indexed-slot-indices :initform nil :allocation :instance
 	    :documentation "Alist of actual indices by store")
-   (base-class :accessor indexed-slot-base :initarg :base-class 
+   (base-class :accessor indexed-slot-base :initarg :base-class :allocation :instance
 	       :documentation "The base class to use as an index")))
 
 (defmethod get-slot-def-index ((def indexed-effective-slot-definition) sc)
@@ -219,19 +219,61 @@
 ;;
 
 (defclass association-slot-definition (persistent-slot-definition)
-  ((assoc :accessor association :initarg :associate :allocation :instance)))
+  ((assoc :accessor association :initarg :associate :allocation :instance)
+   (m2m :accessor many-to-many-p :initarg :many-to-many :initform nil :allocation :instance)))
 
 (defclass association-direct-slot-definition (persistent-direct-slot-definition association-slot-definition) 
   ())
 
 (defclass association-effective-slot-definition (persistent-effective-slot-definition association-slot-definition) 
-  ((tables :accessor association-table :initarg :table :allocation :instance :initform nil)))
+  ((type :accessor association-type :initarg :association-type)
+   (base-class :accessor association-slot-base :initarg :base-class :allocation :instance
+	       :documentation "The base class to use as an index")
+   (indices :accessor association-slot-indices :initform nil 
+	    :documentation "Alist of actual indices by store")
+   (classname :accessor foreign-classname :initarg :foreign-classname)
+   (slotname :accessor foreign-slotname :initarg :foreign-slotname)
+   (class :accessor foreign-class :initarg :foreign-class :initform nil
+	  :documentation "Direct pointer to foreign class; late binding")))
+
+(defmethod initialize-instance :after ((slot-def association-effective-slot-definition) &rest args)
+  (declare (ignore args))
+  (let ((assoc (association slot-def)))
+    (cond ((symbolp (association slot-def))
+	   (when (many-to-many-p slot-def)
+	     (error "Cannot specify ~A in a many-to-many association, must be of form (class slotname)"))
+	   (setf (association-type slot-def) :end
+		 (foreign-classname slot-def) assoc
+		 (foreign-slotname slot-def) nil))
+	  (t 
+	   (destructuring-bind (classname slotname) (association slot-def)
+	     (setf (foreign-classname slot-def) classname)
+	     (setf (foreign-slotname slot-def) slotname)
+	     (if (many-to-many-p slot-def)
+		 (setf (association-type slot-def) :m2m)
+		 (setf (association-type slot-def) :m21)))))))
+
+(defun association-end-p (slot-def)
+  (eq (association-type slot-def) :end))
 
 (defun association-slot-defs (class)
   (find-slot-defs-by-type class 'association-effective-slot-definition nil))
 
 (defun association-slot-names (class)
   (find-slot-def-names-by-type class 'association-effective-slot-definition nil))
+
+
+(defun get-association-slot-index (slot-def sc)
+  (awhen (assoc sc (association-slot-indices slot-def))
+    (cdr it)))
+
+(defun add-association-slot-index (idx slot-def sc)
+  (setf (association-slot-indices slot-def)
+	(acons sc idx (association-slot-indices slot-def))))
+
+(defun remove-association-slot-index (slot-def sc)
+  (setf (association-slot-indices slot-def)
+	(delete sc (association-slot-indices slot-def) :key #'car)))
 
 ;;
 ;; Class MOP support:
@@ -286,7 +328,7 @@
                    set-valued and associated"))
 	  ((and set-valued-p has-initarg-p)
 	   (error "Cannot specify initargs for set-valued slots"))
-	  ((and associate-p has-initarg-p)
+	  ((and associate-p has-initarg-p (not (eq associate-p t)))
 	   (error "Cannot specify initargs for association slots"))
 	  (indexed-p 
 	   (find-class 'indexed-direct-slot-definition))
@@ -331,7 +373,10 @@ definition class depending on the keyword."
     (when (eq (type-of parent-direct-slot) 'cached-direct-slot-definition)
       (setf (getf initargs :cached) t))
     (when (eq (type-of parent-direct-slot) 'association-direct-slot-definition)
-      (setf (getf initargs :associate) t))
+      (setf (getf initargs :associate) (association parent-direct-slot))
+      (setf (getf initargs :many-to-many) (many-to-many-p parent-direct-slot))
+      (setf (getf initargs :base-class)
+	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
     (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
       (setf (getf initargs :indexed) t)
       (setf (getf initargs :base-class)

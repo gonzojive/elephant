@@ -406,7 +406,8 @@
     (when update-cache
       (ele-with-fast-lock ((controller-schema-cache-lock sc))
 	(setf (get-cache schema-id (controller-schema-cache sc)) db-schema))
-      (add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema))))
+      (awhen (find-class (schema-classname db-schema) nil)
+	(add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema)))))
 
 (defmethod remove-controller-schema ((sc store-controller) schema-id)
   "Remove a schema from the controller table; uncache separately"
@@ -418,8 +419,8 @@
 	(ele-with-fast-lock ((controller-schema-cache-lock sc))
 	  (remcache schema-id (controller-schema-cache sc)))
 	(remove-class-controller-schema sc (get-schema-id-class sc schema-id)))
-    (program-error (e) ;; in case the class is gone for some reason
-      (format t "Error ~A in uncache-controller-schema , ignoring" e)
+    (program-error () ;; in case the class is gone for some reason
+;;      (format t "Error ~A in uncache-controller-schema , ignoring" e)
       nil)))
 
 (defun get-current-db-schema (sc name)
