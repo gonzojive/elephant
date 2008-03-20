@@ -139,3 +139,22 @@
 	 (slotname (slot-definition-name slot-def)))
     (get-value (cons base slotname) master)))
 
+;; ===============================
+;;  Association-specific slot API
+;; ===============================
+
+;; (defgeneric insert-item (instance slotname item))
+
+;; (defgeneric delete-item (instance slotname item))
+
+;; (defgeneric find-item (class slotname item))
+
+;; (defgeneric get-associations (class slotname))
+
+;; (defgeneric get-association-oids (class slotname))
+
+;; (defgeneric get-association-pset (class slotname))
+
+;; (defgeneric (setf get-associations) (list class slotname))
+
+;; (defgeneric size (class slotname))
