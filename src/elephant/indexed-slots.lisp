@@ -191,7 +191,10 @@
    function of one argument, a class instance."
   (flet ((map-fn (cidx pcidx oid)
 	   (declare (ignore cidx pcidx))
-	   (funcall fn (controller-recreate-instance sc oid))))
+	   (funcall fn (controller-recreate-instance sc oid)))
+	 (map-oid-fn (cidx pcidx oid)
+	   (declare (ignore cidx pcidx))
+	   (funcall fn oid)))
     (declare (dynamic-extent map-fn))
     (let* ((classname (if (symbolp class) class (class-name class)))
 	   (db-schemas (get-db-schemas sc classname))
@@ -200,7 +203,7 @@
 			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
 ;;      (dump-schema-status sc classname)
       (loop for schema-id in schema-ids appending
-	   (map-index (if oids fn #'map-fn)
+	   (map-index (if oids #'map-oid-fn #'map-fn)
 		      (controller-instance-class-index sc)
 		      :value schema-id
 		      :collect collect)))))
