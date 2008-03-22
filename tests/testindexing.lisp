@@ -46,8 +46,8 @@
   (handler-case 
       (when (find-class name nil)
 	(when (elephant::persistent-p (find-class name))
-	  (drop-instances (get-instances-by-class (find-class name))))
-	(setf (find-class name nil) nil))
+	  (drop-instances (get-instances-by-class (find-class name)))))
+;;	(setf (find-class name nil) nil))
     (program-error ()
       nil)))
 
@@ -73,12 +73,8 @@
       (defclass idx-one-a ()
 	((slot1 :initarg :slot1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))
-  
-      (wipe-class 'idx-one-a)
 
-      (defclass idx-one-a ()
-	((slot1 :initarg :slot1 :accessor slot1 :index t))
-	(:metaclass persistent-metaclass))
+      (wipe-class 'idx-one-a)
 
       (with-transaction (:store-controller *store-controller*)
 	(setq inst1 (make-instance 'idx-one-a :slot1 101 :sc *store-controller*))
@@ -86,11 +82,11 @@
       
       ;; The real problem is that this call doesn't seem to see it, and the make-instance
       ;; doesn't seem to think it needs to write anything!
-      (length (get-instances-by-class 'idx-one-a))
-      (wipe-class 'idx-one-a)
-      (signals-error (get-instances-by-class 'idx-one-a))
-      )
-  t)
+      (values (prog1 
+		  (length (get-instances-by-class 'idx-one-a))
+		(wipe-class 'idx-one-a))
+	      (null (get-instances-by-class 'idx-one-a))))
+  2 0)
 
 ;; put list of objects, retrieve on value, range and by class
 (test (indexing-basic :depends-on index-reset)
@@ -397,8 +393,7 @@
 
       (defclass idx-five-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
-	(:metaclass persistent-metaclass
-	 :index t))
+	(:metaclass persistent-metaclass))
 
       (with-transaction (:store-controller *store-controller*)
 	(drop-instances (get-instances-by-class 'idx-five-del))
@@ -408,8 +403,7 @@
 
 	(defclass idx-five-del ()
 	  ((slot1 :initarg :slot1 :initform 1 :accessor slot1))
-	  (:metaclass persistent-metaclass)
-	  (:index nil))
+	  (:metaclass persistent-metaclass))
 	(values 
 	 (eq (length r1) 1)
 	 (signals-error (get-instances-by-value 'idx-five-del 'slot1 1))
@@ -482,30 +476,30 @@
 	   (slot8 :accessor slot8 :initarg :slot8 :initform 15 :transient t))
 	  (:metaclass persistent-metaclass))
 	      (format t "indexing redef-class d~%")
-	(let ((
+	(let* ((
 	       v1
 	       (and (eq (slot1 o1) 1)
 		    (signals-error (get-instances-by-value 'idx-eight 'slot1 1))))
-	      ;; (v1x       (format t "indexing redef-class v1x~%"))
+;;	      (v1x       (format t "indexing redef-class v1: ~A~%" v1))
 	      (v2 (and (eq (slot2 o1) 2)
 		       (eq (length (get-instances-by-value 'idx-eight 'slot2 2)) 1)))
-	      ;; (v2x       (format t "indexing redef-class v2x~%"))
+;;	      (v2x       (format t "indexing redef-class v2: ~A~%" v2))
 	      (v3 (eq (slot3 o1) 13)) ;; transient values not preserved (would be inconsistent)
-	      ;; (v3x       (format t "indexing redef-class v3x~%"))
+;;	      (v3x       (format t "indexing redef-class v3: ~A~%" v3))
 	      (v4 (and (not (slot-exists-p o1 'slot4))
 		       (not (slot-exists-p o1 'slot5))
 		       (signals-error (get-instances-by-value 'idx-eight 'slot4 4))))
-	      ;; (v4x       (format t "indexing redef-class v4x~%"))
+;;	      (v4x       (format t "indexing redef-class v4: ~A~%" v4))
 	      (v5 (eq (slot6 o1) 14))
-	      ;; (v5x       (format t "indexing redef-class v5x~%"))
+;;	      (v5x       (format t "indexing redef-class v5: ~A~%" v5))
 	      (v6 (eq (length (get-instances-by-value 'idx-eight 'slot6 14)) 2))
-	      ;; (v6x       (format t "indexing redef-class v6x~%"))
+;;	      (v6x       (format t "indexing redef-class v6: ~A~%" v6))
 	      (v7 (and ;;(slot-exists-p o1 'slot7)
 		   (not (slot-boundp o1 'slot7))))
-	      ;; (v7x       (format t "indexing redef-class v7x~%"))
+;;	      (v7x       (format t "indexing redef-class v7: ~A~%" v7))
 	      (v8 (and ;;(slot-exists-p o2 'slot7)
 		   (not (slot-boundp o2 'slot7))))
-	      ;; (v8x       (format t "indexing redef-class v8x~%"))
+;;	      (v8x       (format t "indexing redef-class v8: ~A~%" v8))
 	      )
 	      (values 
 	       v1 v2 v3 v4 v5 v6 v7 v8))))

@@ -107,6 +107,8 @@
 		     #'symbol<))
        (equal (sorted-slots :indexed sch1)
 	      (sorted-slots :indexed sch2))
+       (equal (sorted-slots :derived sch1)
+	      (sorted-slots :derived sch2))
        (equal (sorted-slots :set-valued sch1)
 	      (sorted-slots :set-valued sch2))
        (equal (sorted-slots :association sch1)

@@ -88,12 +88,29 @@
   "Constructs the metaclass schema when the class hierarchy is valid"
   (let* ((old-schema (%class-schema instance))
 	 (new-schema (compute-schema instance)))
+    ;; Update schema chain
     (setf (schema-predecessor new-schema) old-schema)
     (setf (%class-schema instance) new-schema)
+    ;; Cleanup some slot values
+    (let ((idx-state (%class-indexing instance)))
+      (when (consp idx-state)
+	(setf (%class-indexing instance) (first idx-state))))
+    ;; Compute derived index triggers
+    (awhen (derived-index-slot-defs instance)
+      (compute-derived-index-triggers instance it))
+    ;; Synchronize instances to new schemas
     (when (and old-schema (not (match-schemas new-schema old-schema)))
       (synchronize-stores-for-class instance))))
 
-
+(defun compute-derived-index-triggers (class derived-slot-defs)
+  (let* ((sdefs (all-single-valued-slot-defs class))
+	 (sdef-names (mapcar #'slot-definition-name sdefs)))
+    (dolist (ddef derived-slot-defs)
+      (dolist (sname (ifret (derived-slot-deps ddef) sdef-names))
+	(unless (member sname sdef-names)
+	  (error "Finalization error: derived index dependency hint ~A not a valid slot name"
+		 sname))
+	(push ddef (derived-slot-triggers (find-slot-def-by-name class sname)))))))
 
 (defmethod reinitialize-instance :around ((instance persistent-metaclass) &rest initargs 
 					  &key direct-slots &allow-other-keys)
@@ -101,8 +118,8 @@
   ;; Warnings at class def time:
   ;; - set-valued/assoc (warn!)
   ;; - persistent/indexed/cached (warn?)
+  ;; - derived hints?
   (call-next-method))
-
 
 
 ;; ===============================================
@@ -148,10 +165,11 @@ slots."
     ((transient-slots transient-slot-names)
      (cached-slots cached-slot-names)
      (indexed-slots indexed-slot-names)
+     (derived-slots derived-index-slot-names)
      (persistent-slots persistent-slot-names))
     (let* ((class (class-of instance))
 	   (persistent-initializable-slots 
-	   (union persistent-slots indexed-slots))
+	    (union persistent-slots indexed-slots))
 	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
       (cond (from-oid ;; If re-starting, make sure we read the cached values
 	     (initialize-cached-slots instance cached-slots))
@@ -162,7 +180,9 @@ slots."
       (apply #'call-next-method instance transient-slots initargs)
       ;; Initialize set slots after transient initialization
       (unless from-oid
-	(initialize-set-slots class instance set-slots)))))
+	(initialize-set-slots class instance set-slots))
+      (loop for dslotname in derived-slots do
+	   (derived-index-updater class instance (find-slot-def-by-name class dslotname))))))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (dolist (slotname persistent-slot-inits)
@@ -251,8 +271,7 @@ slots."
 ;;  CLASS REDEFINITION PROTOCOL
 ;; ================================
 
-(defmethod update-instance-for-redefined-class :around ((instance persistent-object) added-slots 
-							discarded-slots property-list &rest initargs)
+(defmethod update-instance-for-redefined-class :around ((instance persistent-object) added-slots discarded-slots property-list &rest initargs)
   (declare (ignore discarded-slots added-slots initargs))
   (let* ((sc (get-con instance))
 	 (class (class-of instance))
@@ -264,7 +283,6 @@ slots."
 				 (get-controller-schema sc it)
 				 (error "If the schemas mismatch, a derived controller schema should have been computed"))))
 	  (assert (and current-schema prior-schema))
-	  (break)
 	  (upgrade-db-instance instance current-schema prior-schema property-list)))))
 
 
@@ -309,7 +327,9 @@ slots."
 (defmethod (setf slot-value-using-class) (new-value (class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Set the slot value in the database."
   (let ((name (slot-definition-name slot-def)))
-    (persistent-slot-writer (get-con instance) new-value instance name)))
+    (persistent-slot-writer (get-con instance) new-value instance name)
+    (derived-index-updater class instance slot-def))
+  new-value)
 
 (defmethod slot-boundp-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Checks if the slot exists in the database."

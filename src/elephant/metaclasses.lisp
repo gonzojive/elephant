@@ -39,7 +39,8 @@
 (defclass persistent-metaclass (standard-class)
   ((%class-schema :accessor %class-schema :initarg :schemas :initform nil
 		   :documentation "The code master schema")
-   (%store-schemas :accessor %store-schemas :initarg :store-schemas :initform nil))
+   (%store-schemas :accessor %store-schemas :initarg :store-schemas :initform nil)
+   (%class-indexing :accessor %class-indexing :initarg :index :initform t)) ;; or nil or weak
   (:documentation 
    "Metaclass for persistent classes.  Use this metaclass to
     define persistent classes.  All slots are persistent by
@@ -69,6 +70,12 @@
   (setf (%store-schemas class)
 	(remove (controller-spec sc) (%store-schemas class) :key #'car :test #'equalp)))
 
+(defun class-indexing-enabled-p (class)
+  (when (%class-indexing class) t))
+
+(defun migrate-class-index-p (class)
+  (when (eq (%class-indexing class) t) t))
+
 ;;
 ;; Top level defclass form - hide metaclass option
 ;;
@@ -96,7 +103,7 @@
   ())
 
 (defclass persistent-effective-slot-definition (standard-effective-slot-definition persistent-slot-definition)
-  ())
+  ((triggers :accessor derived-slot-triggers :initarg :trigger :initform nil)))
 
 (defgeneric persistent-p (class)
   (:method ((class t)) nil)
@@ -113,6 +120,12 @@
   (append (find-slot-def-names-by-type class 'persistent-effective-slot-definition t)
 	  (find-slot-def-names-by-type class 'cached-effective-slot-definition t)))
 
+(defun all-single-valued-slot-defs (class)
+  (append (persistent-slot-defs class)
+	  (cached-slot-defs class)
+	  (indexed-slot-defs class)))
+	  ;; transient, set-valued and assoc?
+
 ;;
 ;; Cached slots (a placeholder for future development)
 ;;
@@ -124,7 +137,7 @@
   ())
 
 (defclass cached-effective-slot-definition (standard-effective-slot-definition cached-slot-definition)
-  ())
+  ((triggers :accessor derived-slot-triggers :initarg :trigger :initform nil)))
 
 (defun cached-slot-defs (class)
   (find-slot-defs-by-type class 'cached-effective-slot-definition nil))
@@ -189,11 +202,68 @@
   (setf (indexed-slot-indices def)
 	(acons sc idx (indexed-slot-indices def))))
 
-(defun indexed-slot-defs (class)
+(defmethod indexed-slot-defs (class)
   (find-slot-defs-by-type class 'indexed-effective-slot-definition nil))
 
-(defun indexed-slot-names (class)
+(defmethod indexed-slot-names (class)
   (find-slot-def-names-by-type class 'indexed-effective-slot-definition nil))
+
+
+;;
+;; Indexed slots
+;;
+
+(defclass derived-index-slot-definition (indexed-slot-definition)
+  ((derived-fn-ref :accessor derived-fn-ref :initarg :derived-fn)
+   (slot-deps :accessor derived-slot-deps :initarg :slot-deps :initarg :slot-dependencies :initform nil)))
+
+(defclass derived-index-direct-slot-definition (indexed-direct-slot-definition derived-index-slot-definition)
+  ())
+
+(defclass derived-index-effective-slot-definition (indexed-effective-slot-definition derived-index-slot-definition)
+  ((fn :accessor derived-fn :initarg :fn)))
+
+(defmethod derived-index-slot-defs (class)
+  (find-slot-defs-by-type class 'derived-index-effective-slot-definition nil))
+
+(defmethod derived-index-slot-names (class)
+  (find-slot-def-names-by-type class 'derived-index-effective-slot-definition nil))
+
+(defun compile-derived-fn (ref)
+  (if (symbolp ref)
+      (if (functionp (symbol-function ref))
+	  (gen-derived-fn-wrapper (compile ref))
+	  (error "~A does not appear to be a valid function reference" ref))
+      (if (listp ref)
+	  (gen-derived-fn-wrapper (compile nil (eval ref)))
+	  (error "~A does not appear to be a valid function expression" ref))))
+
+(defun gen-derived-sym-wrapper (symbol-fn)
+  "Return a closure to handle errors in the derived index function"
+  (lambda (inst)
+    (handler-case 
+	(funcall (symbol-function symbol-fn) inst)
+      (unbound-slot ()
+	(values nil nil))
+      (error (e)
+	(cerror "Ignoring?"
+		"error ~A while computing derived value for ~A" 
+		e inst)
+	(values nil nil)))))
+ 
+
+(defun gen-derived-fn-wrapper (compiled)
+  "Return a closure to handle errors in the derived index function"
+  (lambda (inst)
+    (handler-case 
+	(funcall compiled inst)
+      (unbound-slot ()
+	(values nil nil))
+      (error (e)
+	(cerror "Ignoring?"
+		"error ~A while computing derived value for ~A" 
+		e inst)
+	(values nil nil)))))
 
 ;;
 ;; Set-valued slots
@@ -306,12 +376,15 @@
 	 (transient-p (getf ,initargs :transient))
 	 (indexed-p (or (getf ,initargs :indexed)
 			(getf ,initargs :index)))
+	 (derived-p (or (getf ,initargs :derived-fn)
+			(getf ,initargs :fn)))
 	 (cached-p (getf ,initargs :cached))
 	 (set-valued-p (getf ,initargs :set-valued))
 	 (associate-p (getf ,initargs :associate)))
      (declare (ignorable allocation-key has-initarg-p))
      (when (consp transient-p) (setq transient-p (car transient-p)))
      (when (consp indexed-p) (setq indexed-p (car indexed-p)))
+     (when (consp derived-p) (setq derived-p (car derived-p)))
      (when (consp cached-p) (setq cached-p (car cached-p)))
      (when (consp set-valued-p) (setq set-valued-p (car set-valued-p)))
      (when (consp associate-p) (setq associate-p (car associate-p)))
@@ -323,7 +396,7 @@
   (bind-standard-init-arguments (initargs)
     (cond ((and (eq allocation-key :class) (not transient-p))
 	   (error "Persistent class slots are not supported, try :transient t."))
-	  ((> (count-true indexed-p transient-p set-valued-p associate-p) 1)
+	  ((> (count-true (or indexed-p derived-p) transient-p set-valued-p associate-p) 1)
 	   (error "Cannot declare a slot to be more than one of transient, indexed, 
                    set-valued and associated"))
 	  ((and set-valued-p has-initarg-p)
@@ -332,6 +405,8 @@
 	   (error "Cannot specify initargs for association slots"))
 	  (indexed-p 
 	   (find-class 'indexed-direct-slot-definition))
+	  (derived-p
+	   (find-class 'derived-index-direct-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-direct-slot-definition))
 	  (cached-p
@@ -349,6 +424,8 @@ definition class depending on the keyword."
   (bind-standard-init-arguments (initargs)
     (cond (indexed-p 
 	   (find-class 'indexed-effective-slot-definition))
+	  (derived-p
+	   (find-class 'derived-index-effective-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-effective-slot-definition))
 	  (cached-p
@@ -379,6 +456,15 @@ definition class depending on the keyword."
 	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
     (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
       (setf (getf initargs :indexed) t)
+      (setf (getf initargs :base-class)
+	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
+    (when (eq (type-of parent-direct-slot) 'derived-index-direct-slot-definition)
+      (setf (getf initargs :derived-fn)
+	    (derived-fn-ref parent-direct-slot))
+      (setf (getf initargs :slot-deps)
+	    (derived-slot-deps parent-direct-slot))
+      (setf (getf initargs :fn)
+	    (compile-derived-fn (derived-fn-ref parent-direct-slot)))
       (setf (getf initargs :base-class)
 	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
     initargs))

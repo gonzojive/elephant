@@ -46,6 +46,45 @@
 	  (remove-kv-pair old-value oid idx)))
       (call-next-method))))
 
+;; ===================================
+;;  Derived Slot index accesses
+;; ===================================
+
+(defmethod (setf slot-value-using-class)
+    (new-value (class persistent-metaclass) (instance persistent-object) (slot-def derived-index-slot-definition))
+  "Derived slot values are always set in response to a slot write"
+  (declare (ignore new-value))
+  (error "Cannot write computed (derived) slot ~A in ~A for class ~A; for read/index retrieval only"
+	 (slot-definition-name slot-def) instance (class-name class)))
+
+(defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def derived-index-slot-definition))
+  "Unbinding cannot be performed explicitly.  It is effectively 
+   inhibited when the derived fn says 'no'"
+  (error "Cannot unbind derived slot values for ~A in class ~A" 
+	 (slot-definition-name slot-def) (class-name class)))
+
+(defun derived-index-updater (class instance written-slot-def)
+  "Compute the derived indices to update from the slot-def that is
+   being written to"
+  (awhen (derived-slot-triggers written-slot-def)
+    (ensure-transaction (:store-controller (get-con instance))
+      (dolist (derived-slot-def it)
+	(update-derived-slot class instance derived-slot-def)))))
+
+(defun update-derived-slot (class instance derived-slot-def)
+  "Make a copy of the functionality here to be more efficient"
+  (let ((sc (get-con instance)))
+    (multiple-value-bind (new-value index?)
+	(funcall (derived-fn derived-slot-def) instance)
+      (when index?
+	(update-slot-index sc class instance derived-slot-def new-value)
+	(persistent-slot-writer sc new-value instance 
+				(slot-definition-name derived-slot-def))))))
+
+;; =================================
+;;  Index update/create functions
+;; =================================
+	   
 (defun update-slot-index (sc class instance slot-def new-value)
   "Update an index value when written"
   (let ((oid (oid instance)))
@@ -97,8 +136,9 @@
 		   "Inverted slot index ~A not found for class ~A with indexed slots: ~A" 
 		   slot (class-name class) (indexed-slot-names class))))
     (let ((slot-def (find-slot-def-by-name class slot)))
-      (when (or (not slot-def) 
-		(not (eq (type-of slot-def) 'indexed-effective-slot-definition)))
+      (unless (and slot-def
+		   (or (eq (type-of slot-def) 'indexed-effective-slot-definition)
+		       (eq (type-of slot-def) 'derived-index-effective-slot-definition)))
 	(assert-error))
       (let ((idx (get-slot-def-index slot-def sc)))
 	(unless idx
@@ -196,11 +236,16 @@
 	   (declare (ignore cidx pcidx))
 	   (funcall fn oid)))
     (declare (dynamic-extent map-fn))
-    (let* ((classname (if (symbolp class) class (class-name class)))
+    (let* ((classobj (if (symbolp class) (find-class class) class))
+	   (classname (if (symbolp class) class (class-name class)))
 	   (db-schemas (get-db-schemas sc classname))
 	   (schema-ids (if db-schemas 
 			   (mapcar #'schema-id (reverse db-schemas))
 			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
+      (unless (class-indexing-enabled-p classobj)
+	(cerror "Ignore and return nil"
+		"Class ~A is not indexed" classname)
+	(return-from map-class nil))
 ;;      (dump-schema-status sc classname)
       (loop for schema-id in schema-ids appending
 	   (map-index (if oids #'map-oid-fn #'map-fn)

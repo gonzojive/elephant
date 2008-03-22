@@ -433,12 +433,11 @@
 
 (defun get-db-schemas (sc classname)
   "Return schemas ordered oldest to youngest (ascending cids)"
-  (map-btree #'(lambda (cid schema)
-		 (declare (ignore cid))
+  (map-btree #'(lambda (cname schema)
+		 (declare (ignore cname))
 		 schema)
 	     (controller-schema-name-index sc)
 	     :value classname :collect t))
-
 
 ;;
 ;; Database versioning
@@ -477,9 +476,9 @@
 ;;
 
 (defparameter *elephant-upgrade-table*
-  '( ((0 6 0) (0 5 0))
-     ((0 9 0) (0 6 0))
-     ((0 9 1) (0 9 0))
+  '( ((0 9 2) (0 6 0))
+     ((0 9 2) (0 9 0))
+     ((0 9 2) (0 9 1))
    ))
 
 (defmethod up-to-date-p ((sc store-controller))

@@ -3,8 +3,8 @@
 (in-suite* testassociations :in elephant-tests)
 
 (defparameter NUM_JOBS 100)
-(defparameter NUM_PERSONS 10000)
-(defparameter PERSONS_PER_JOB 100)
+(defparameter NUM_PERSONS 1000)
+(defparameter PERSONS_PER_JOB 10)
 
 ;; Create a one-to-many association from job to person...
 ;; one job can have up to 10 persons, in any order.  
@@ -61,6 +61,7 @@
       (is (= (count-explicit-persons) (* NUM_JOBS PERSONS_PER_JOB))))
 
 
+(defgeneric holders (instance))
 
 (test simple-slot-assoc-setup
   (when (find-class 'person nil)
@@ -104,7 +105,7 @@
 
 (defun count-persons ()
   (let ((total 0))
-    (map-class #'(lambda (person) (incf total)) 
+    (map-class #'(lambda (person) (declare (ignore person)) (incf total))
 	       'person :oids t)
     total))
 
@@ -113,6 +114,7 @@
   
 
 (defun assoc-timing-comparison ()
+  "For manual use to compare timing.  It helps to jack up the # of persons to 10k +"
   (when (find-class 'person nil)
     (drop-instances (get-instances-by-class 'person) :txn-size 500))
   (when (find-class 'job nil)
