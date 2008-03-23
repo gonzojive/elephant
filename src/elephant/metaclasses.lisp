@@ -311,7 +311,8 @@
   (let ((assoc (association slot-def)))
     (cond ((symbolp (association slot-def))
 	   (when (many-to-many-p slot-def)
-	     (error "Cannot specify ~A in a many-to-many association, must be of form (class slotname)"))
+	     (error "Cannot specify ~A in a many-to-many association, must be of form (class slotname)"
+		    (association slot-def)))
 	   (setf (association-type slot-def) :end
 		 (foreign-classname slot-def) assoc
 		 (foreign-slotname slot-def) nil))

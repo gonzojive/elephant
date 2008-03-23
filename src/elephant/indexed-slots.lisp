@@ -241,7 +241,7 @@
 	   (db-schemas (get-db-schemas sc classname))
 	   (schema-ids (if db-schemas 
 			   (mapcar #'schema-id (reverse db-schemas))
-			   (list (lookup-schema sc (if (symbolp class) (find-class class) class))))))
+			   (list (schema-id (lookup-schema sc (if (symbolp class) (find-class class) class)))))))
       (unless (class-indexing-enabled-p classobj)
 	(cerror "Ignore and return nil"
 		"Class ~A is not indexed" classname)

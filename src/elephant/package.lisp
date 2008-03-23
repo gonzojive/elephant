@@ -42,6 +42,7 @@
 		compute-effective-slot-definition
 		compute-effective-slot-definition-initargs
 		class-slots
+                class-direct-slots
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -81,6 +82,7 @@
 		slot-definition-initfunction
 		compute-effective-slot-definition
 		class-slots
+                class-direct-slots
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -123,6 +125,7 @@
 		slot-definition-initfunction
 		compute-effective-slot-definition
 		class-slots
+                class-direct-slots
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -134,7 +137,6 @@
 		compute-slots
 		slot-definition-readers
                 slot-definition-writers
-                class-direct-slots
 		)
   #+allegro
   (:import-from :excl
@@ -156,6 +158,7 @@
 		slot-definition-initfunction
 		compute-effective-slot-definition
 		class-slots
+                class-direct-slots
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -191,6 +194,7 @@
 		compute-effective-slot-definition
 		compute-effective-slot-definition-initargs
 		class-slots
+                class-direct-slots
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class

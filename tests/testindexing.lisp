@@ -8,46 +8,32 @@
   (progn
     (setf regression-test::*debug* t)
     (setf regression-test::*catch-errors* nil))
-;;  (trace elephant::indexed-slot-writer)
+  #+use-fiveam
+  (setf fiveam::*debug-on-error* t)
+  (trace elephant::indexed-slot-writer)
   (trace ((method initialize-instance :before (persistent))))
-;;  (trace ((method initialize-instance (persistent-object))))
-;;  (trace ((method shared-initialize :around (persistent-object t))))
-;;  (trace ((method shared-initialize :around (persistent-metaclass t))))
+  (trace ((method initialize-instance (persistent-object))))
+  (trace ((method shared-initialize :around (persistent-object t))))
+  (trace ((method shared-initialize :around (persistent-metaclass t))))
   (trace elephant::find-class-index)
-;;  (trace get-instances-by-class)
-;;  (trace get-instances-by-value)  
-  (trace enable-class-indexing)
+  (trace get-instances-by-class)
+  (trace get-instances-by-value)  
   (trace get-instances-by-range)
   (trace elephant::cache-instance)
   (trace elephant::get-cached-instance)
   (trace elephant::get-cache)
-;;  (trace elephant::db-transaction-commit)
+  (trace elephant::db-transaction-commit)
   )
 
 (defvar inst1)
 (defvar inst2)
 (defvar inst3)
 
-;; (test disable-class-indexing-test 
-;;   (5am:finishes
-;;     (when (find-class 'idx-one nil)
-;;       (disable-class-indexing 'idx-one  :errorp nil)
-;;       (setf (find-class 'idx-one) nil))
-      
-;;     (defclass idx-one ()
-;;       ((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
-;;       (:metaclass persistent-metaclass))
-
-;;     (disable-class-indexing 'idx-one  :errorp nil)
-;;     (disable-class-indexing 'idx-one  :errorp nil)
-;;     (setf (find-class 'idx-one) nil)))
-
 (defun wipe-class (name)
   (handler-case 
       (when (find-class name nil)
 	(when (elephant::persistent-p (find-class name))
 	  (drop-instances (get-instances-by-class (find-class name)))))
-;;	(setf (find-class name nil) nil))
     (program-error ()
       nil)))
 
@@ -86,19 +72,15 @@
 		  (length (get-instances-by-class 'idx-one-a))
 		(wipe-class 'idx-one-a))
 	      (null (get-instances-by-class 'idx-one-a))))
-  2 0)
+  2 t)
 
 ;; put list of objects, retrieve on value, range and by class
 (test (indexing-basic :depends-on index-reset)
   (defclass idx-one-f ()
     ((slot1 :initarg :slot1 :accessor slot1 :index t))
     (:metaclass persistent-metaclass))
-  
-  (wipe-class 'idx-one-f)
 
-  (defclass idx-one-f ()
-    ((slot1 :initarg :slot1 :accessor slot1 :index t))
-    (:metaclass persistent-metaclass))
+  (wipe-class 'idx-one-f)
 
     (let ((n 105))
       (with-transaction (:store-controller *store-controller*)

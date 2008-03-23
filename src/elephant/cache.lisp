@@ -62,9 +62,7 @@ collected, so are the keys."
   (let ((wrap (gethash key cache)))
     (if wrap (values (value wrap) t)
 	(values nil nil)))
-  #+(or allegro lispworks)
-  (gethash key cache)
-  #-(or allegro lispworks openmcl cmu sbcl scl)
+  #-(or openmcl cmu sbcl scl)
   (gethash key cache)
   )
 
@@ -111,7 +109,10 @@ collected, so are the keys."
        (multiple-value-bind (valid? key value) (nextfn)
 	 (when (not valid?)
 	   (return-from map-cache))
-	 (funcall fn key value)))))
+	 (funcall fn key 
+		  #+(or cmu sbcl) (weak-pointer-value value)
+		  #+openmcl (value value)
+		  #-(or cmu sbcl openmcl) value)))))
 
 (defun dump-cache (cache)
   (format t "Dumping cache: ~A~%" cache)

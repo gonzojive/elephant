@@ -21,6 +21,7 @@
 ;; Putting this in to make the test work; I have no idea what it means...
 (deftype array-or-pointer-char () '(or array t))
 
+
 (defvar *bdb-spec* 
   `(:bdb . ,(namestring
 	     (merge-pathnames 
@@ -87,8 +88,9 @@
   '(:clsql (:sqlite3 :memory))
   "Using :memory: as a file name will get you an completely in-memory system")
 
-
-
+;; special vars for migration tests
+(defparameter *test-spec-primary* nil)
+(defparameter *test-spec-secondary* nil)
 
 
 ;;
@@ -154,7 +156,7 @@
     (if oid-spec
 	(set-oid-spec oid-spec)
 	(set-oid-spec nil))
-    (do-test 'migrate-ipclass)
+    (run! 'testmigration)
     (when oid-spec
       (set-oid-spec nil))))
     

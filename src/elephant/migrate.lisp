@@ -256,7 +256,7 @@
 	 (dst (make-instance class :sc dstsc)))
     (register-copied-object src dst)
 ;;    (unless (inhibit-indexed-slot-copy? dstsc class)
-      (copy-persistent-slots dstsc dst (class-of src) src)
+    (copy-persistent-slots dstsc dst (class-of src) src)
     dst))
 
 ;;(defun inhibit-indexed-slot-copy? (sc class)
@@ -271,8 +271,9 @@
 (defun copy-persistent-slots (dstsc dst class src)
   "Copy only persistent slots from src to dst"
   (ensure-transaction (:store-controller dstsc)
-    (loop for slot-def in (persistent-slot-defs class) do
-	 (when (slot-boundp-using-class class src slot-def)
+    (loop for slot-def in (class-slots class) do
+      	 (when (and (not (transient-p slot-def))
+		    (slot-boundp-using-class class src slot-def))
 ;;	   (format t "Slotname: ~A  value: ~A~%" (elephant::slot-definition-name slot-def) 
 ;;		   (slot-value-using-class class src slot-def))
 	   (let ((value (migrate dstsc (slot-value-using-class class src slot-def))))

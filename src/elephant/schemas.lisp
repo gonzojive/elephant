@@ -44,6 +44,46 @@
 		   (eq (slot-rec-type rec) type))
 		 (schema-slot-recs schema)))
 
+;; =========================================
+;;  Compute a schema from a slot definition
+;; =========================================
+
+(defun compute-schema (class-obj)
+  "Compute a schema representation from an instance of persistent-metaclass"
+  (make-instance 'schema
+		 :name (class-name class-obj)
+		 :slot-recs (compute-slot-recs class-obj)))
+
+(defparameter *slot-def-type-tags*
+  '((:persistent   persistent-effective-slot-definition)
+    (:indexed      indexed-effective-slot-definition)
+    (:derived      derived-index-effective-slot-definition)
+    (:cached       cached-effective-slot-definition)
+    (:set-valued   set-valued-effective-slot-definition)
+    (:association  association-effective-slot-definition)))
+
+(defun compute-slot-recs (class-obj)
+  "For each slot, compute a serializable record of the important info 
+   in that slot"
+  (mapcan (lambda (tagrec)
+	    (destructuring-bind (type slot-def-type) tagrec
+	      (compute-slot-recs-by-type type slot-def-type class-obj)))
+	  *slot-def-type-tags*))
+
+(defmethod compute-slot-recs-by-type (type slot-def-type class-obj)
+  "Default slot computation.  Capture the name and type tag for the definition"
+  (mapcar (lambda (slotname)
+	    (make-slot-rec :type type :name slotname :args nil))
+	  (find-slot-def-names-by-type class-obj slot-def-type nil)))
+
+(defmethod compute-slot-recs-by-type ((type (eql :indexed)) slot-def-type class-obj)
+  "Special handling for hierarchical indexing, capture the base class name of the index"
+  (mapcar (lambda (slot-def)
+	    (make-slot-rec :type type :name (slot-definition-name slot-def) 
+			   :args `(:base ,(indexed-slot-base slot-def))))
+	  (find-slot-defs-by-type class-obj slot-def-type nil)))
+
+
 ;;
 ;; For schemas stored in a database
 ;;
@@ -156,7 +196,7 @@
   (when (subtypep (type-of schema) 'db-schema)
     (format stream "id: ~A~%" (schema-id schema))
     (awhen (schema-upgrade-fn schema)
-      (format stream "upgrade-fn:~%~A~%") it))
+      (format stream "upgrade-fn:~%~A~%" it)))
   (format stream "Successor: ~A   Predecessor: ~A~%" 
 	  (schema-successor schema) (schema-predecessor schema))
   (dump-slots schema))
