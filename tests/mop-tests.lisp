@@ -181,6 +181,21 @@
       (is-not-null (subtypep 'redef 'persistent-object)))
   t)
 
+(deftest slot-unbound
+    (progn
+      (defclass class-one ()
+       (slot1 slot2)
+       (:metaclass persistent-metaclass))
+      (defmethod slot-unbound (class (instance class-one)
+                              (slot-name (eql 'slot2)))
+       t)
+      (let ((inst (make-instance 'class-one)))
+       (values
+        (signals-specific-condition (unbound-slot)
+          (slot-value inst 'slot1))
+        (is-not-null (eq t (slot-value inst 'slot2))))))
+  t t)
+
 (deftest (makunbound :depends-on class-definers)
     (let ((p (make-instance 'p-class :sc *store-controller*)))
       (with-transaction (:store-controller *store-controller*)
