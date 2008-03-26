@@ -53,24 +53,37 @@
     ,@body))
 
 (defmethod execute-transaction ((sc postmodern-store-controller) txn-fn
-				&key (always-rollback nil) &allow-other-keys)
-  ;; SQL doesn't support nested transaction
+				&key (always-rollback nil) 
+				(retry-cleanup-fn nil)
+				(retries 10) &allow-other-keys)
   (with-postmodern-conn ((controller-connection-for-thread sc))
     (if (> (tran-count-of sc) 0)
-        (funcall txn-fn)
-        (let (tran 
-	      commited
-	      (*txn-value-cache* (make-value-cache sc)))
-          (incf (tran-count-of sc))
-          (unwind-protect
-	       (prog2 
-		   (setf tran (controller-start-transaction sc))
-		   (funcall txn-fn) ;;this gets returned
-		 (unless always-rollback ;;automatically commit unless always rollback
-		   (controller-commit-transaction sc tran)
-		   (setf commited t)))
-	    (unless commited (controller-abort-transaction sc tran))
-	    (decf (tran-count-of sc)))))))
+
+	;; SQL doesn't support nested transaction
+	;; TODO: perhaps it's worth detecting abnormal exit here 
+	;; and abort parent transaction too.	
+	(with-concurrency-errors-handler (funcall txn-fn))
+
+	(loop named txn-retry-loop
+	  ;; NB: it does (1+ retries) attempts, 1 try + retries.
+	  for try from retries downto 0 
+	  do (block txn-block
+	       (restart-bind ((retry-transaction
+			       (lambda (&optional condition) 
+				 (when (and retry-cleanup-fn 
+					    (not (= try 0))) ; cleanup is skipped when we are exiting
+				   (funcall retry-cleanup-fn condition sc))
+				 (return-from txn-block))
+			       :report-function (lambda (s) (princ "retry db-postmodern transaction" s)))
+			      (abort-transaction 
+			       (lambda () (return-from txn-retry-loop))))
+			     (with-concurrency-errors-handler 
+			       (return-from txn-retry-loop
+				 (execute-transaction-one-try sc txn-fn always-rollback)))))
+	  finally (error 'transaction-retry-count-exceeded
+			 :format-control "Transaction exceeded the ~A retries limit"
+			 :format-arguments (list retries)
+			 :count retries)))))
 
 (defmethod controller-start-transaction ((sc postmodern-store-controller) &key &allow-other-keys)
   (with-postmodern-conn ((controller-connection-for-thread sc))
