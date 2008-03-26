@@ -101,7 +101,13 @@
 (defmethod cache-get-value ((cache hash-table) (id integer) key)
   (gethash (cons id key) cache))
 
-(defmethod cache-set-value ((cache hash-table) (id integer) key value)
+;; only string or integer can act as key. rest is ignored for now to avoid difficulties 
+;; with type handling.
+
+(defmethod cache-set-value ((cache hash-table) (id integer) (key string) value)
+  (setf (gethash (cons id key) cache) value))
+
+(defmethod cache-set-value ((cache hash-table) (id integer) (key integer) value)
   (setf (gethash (cons id key) cache) value))
 
 (defmethod cache-clear-value ((cache hash-table) (id integer) key)
@@ -245,7 +251,15 @@ WHERE commit_time > ~f LIMIT ~a"
 	      (if (>= (length rows) (max-cache-updates cache)) 
 		  (cache-clear-all (parent-cache cache)) ;; too much updates
 		  (loop for (utime id key) in rows
-			do (cache-clear-value (parent-cache cache) id key))))))
+			;; information about type was lost, so if key _looks like_ number,
+                        ;; try converting it to number and deleting that key too.
+			for int-key = (when (and (digit-char-p (char key 0))
+						 (digit-char-p (char key (1- (length key)))))
+					(ignore-errors (parse-integer key)))					  
+			do (cache-clear-value (parent-cache cache) id key)
+			when int-key
+			do (cache-clear-value (parent-cache cache) id int-key))))))
+
       (setf (last-update-of cache) 
 	    (if (and (not (eq last-commited-time :null))
 		     (< (- transaction-start-time last-commited-time)
