@@ -88,7 +88,6 @@
 	       (return-from ,block-name error))
 	(pass))))
 
-#-sbcl
 (test threaded-idx-access
   "test verifies that reads and writes of indexed slots does not yield errors and are consistent.
  aditionally verifies transactional consistency of threaded operations."
@@ -215,10 +214,11 @@ should yield deadlock which should be retried."
 (defun test-threaded-object-creation (stable-bootstrap indexed) 
   (block check-block
 
-(test provoke-deadlock ;; sometimes throws a 23505 (primary key constraint violation)
-                       ;; I have not tracked this down, yet.
-  (dotimes (i 10)
-    (make-instance 'zork :slot1 i :slot2 i))
+    (setup-zork :zork-count (if stable-bootstrap 1 0) :initially-zero t)
+    
+    (maybe-report-failure check-block
+      (do-threaded-tests (:thread-count 10)
+	(make-instance 'zork :slot1 (1+ thread-id) :slot2 (1+ thread-id))))
 
     (is (= (if stable-bootstrap 11 10)
 	   (length (get-instances-by-class 'zork))))
