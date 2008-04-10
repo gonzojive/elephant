@@ -60,7 +60,6 @@
              #+use-fiveam
              (:file "fiveam-rt")
              (:file "elephant-tests")
-	     (:file "testconcurrency")
              (:file "testperformance")
 	     (:file "testserializer")
 	     (:file "testconditions")
@@ -69,6 +68,7 @@
 	     (:file "testindexing")
 	     (:file "testassociations")
 	     (:file "testmigration")
+	     (:file "testconcurrency")
 	     )
 	    :serial t)))
 

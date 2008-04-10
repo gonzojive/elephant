@@ -25,6 +25,7 @@
 ; This is also a test showing whether database connections get cleaned up
 ; correctly.
 
+#-sbcl
 (test threaded-idx-access
   (dotimes (i 10)
     (make-instance 'zork :slot1 i :slot2 i))
@@ -47,6 +48,7 @@
   (drop-instances (get-instances-by-class 'zork))
   (format t "test finished!~%"))
 
+#-sbcl
 (test provoke-deadlock ;; sometimes throws a 23505 (primary key constraint violation)
                        ;; I have not tracked this down, yet.
   (dotimes (i 10)
