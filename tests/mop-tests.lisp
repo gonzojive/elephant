@@ -155,6 +155,17 @@
       )
   t)
       
+(deftest redefinition-initform
+    (progn
+      (defclass pineapple () ()
+        (:metaclass persistent-metaclass))
+      (let ((fruit (make-instance 'pineapple)))
+        (defclass pineapple ()
+          ((tree :initform 1))
+            (:metaclass persistent-metaclass))
+        (values (slot-value fruit 'tree))))
+    1)
+
 (deftest (initform-test :depends-on initform-classes)
     (slot-value (make-instance 'p-initform-test :sc *store-controller*) 'slot1)
   10)

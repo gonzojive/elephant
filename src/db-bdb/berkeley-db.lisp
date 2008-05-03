@@ -203,7 +203,7 @@
 		 after before keyfirst keylast freelist-only free-space
 		 no-dup-data no-overwrite nosync position 
 		 seq-dec seq-inc seq-wrap set-lock-timeout
-		 set-transaction-timeout)
+		 set-transaction-timeout multiple multiple-key)
   (let ((flags (gensym)))
     `(let ((,flags 0))
       (declare (type fixnum ,flags))
@@ -227,6 +227,8 @@
       ,@(when read-committed `((when ,read-committed (setq ,flags (logior ,flags DB_READ_COMMITTED)))))
       ,@(when dirty-read `((when ,dirty-read (setq ,flags (logior ,flags DB_DIRTY_READ)))))
       ,@(when read-uncommitted `((when ,read-uncommitted (setq ,flags (logior ,flags DB_READ_UNCOMMITTED)))))
+      ,@(when multiple `((when ,multiple (setq ,flags (logior ,flags DB_MULTIPLE)))))
+      ,@(when multiple-key `((when ,multiple-key (setq ,flags (logior ,flags DB_MULTIPLE_KEY)))))
       ,@(when create `((when ,create (setq ,flags (logior ,flags DB_CREATE)))))
       ,@(when excl `((when ,excl (setq ,flags (logior ,flags DB_EXCL)))))
       ,@(when nommap `((when ,nommap (setq ,flags (logior ,flags DB_NOMMAP)))))
@@ -523,14 +525,15 @@ and DUP-SORT.")
 (defun db-get-key-buffered (db key-buffer-stream value-buffer-stream
 			    &key (transaction (txn-default *current-transaction*))
 			    get-both degree-2 read-committed
-			    dirty-read read-uncommitted)
+			    dirty-read read-uncommitted multiple multiple-key)
   "Get a key / value pair from a DB.  The key is encoded in
 a buffer-stream.  Space for the value is passed in as a
 buffer-stream.  On success the buffer-stream is returned for
 decoding, or NIL if nothing was found."
   (declare (type pointer-void db transaction)
 	   (type buffer-stream key-buffer-stream value-buffer-stream)
-	   (type boolean get-both degree-2 read-committed dirty-read read-uncommitted))
+	   (type boolean get-both degree-2 read-committed dirty-read 
+		 read-uncommitted multiple multiple-key))
   (loop 
    for value-length fixnum = (buffer-stream-length value-buffer-stream)
    do
@@ -542,7 +545,9 @@ decoding, or NIL if nothing was found."
 			     value-length
 			     (flags :get-both get-both
 				    :degree-2 (or degree-2 read-committed)
-				    :dirty-read (or dirty-read read-uncommitted)))
+				    :dirty-read (or dirty-read read-uncommitted)
+				    :multiple multiple
+				    :multiple-key multiple-key))
      (declare (type fixnum result-size errno))
      (cond 
        ((= errno 0)
@@ -572,7 +577,7 @@ decoding, or NIL if nothing was found."
 			(key-size (length key))
 			(transaction (txn-default *current-transaction*))
 			get-both degree-2 read-committed
-			dirty-read read-uncommitted)
+			dirty-read read-uncommitted multiple multiple-key)
   "Get a key / value pair from a DB.  The key is passed as a
 string.  Space for the value is passed in as a
 buffer-stream.  On success the buffer-stream is returned for
@@ -582,7 +587,7 @@ decoding, or NIL if nothing was found."
 	   (type buffer-stream value-buffer-stream)
 	   (type fixnum key-size)
 	   (type boolean get-both degree-2 read-committed 
-		 dirty-read read-uncommitted))
+		 dirty-read read-uncommitted multiple multiple-key))
   (with-cstring (k key)
     (loop 
      for value-length fixnum = (buffer-stream-length value-buffer-stream)
@@ -593,7 +598,9 @@ decoding, or NIL if nothing was found."
 			   value-length
 			   (flags :get-both get-both
 				  :degree-2 (or degree-2 read-committed)
-				  :dirty-read (or dirty-read read-uncommitted)))
+				  :dirty-read (or dirty-read read-uncommitted)
+				  :multiple multiple
+				  :multiple-key multiple-key))
        (declare (type fixnum result-size errno))
        (cond 
 	 ((= errno 0)
@@ -611,7 +618,7 @@ decoding, or NIL if nothing was found."
 (defun db-get (db key &key (key-size (length key))
 	       (transaction (txn-default *current-transaction*))
 	       get-both degree-2 read-committed
-	       dirty-read read-uncommitted)
+	       dirty-read read-uncommitted multiple multiple-key)
   "Get a key / value pair from a DB.  The key is passed as a
 string, and the value is returned as a string.  If nothing
 is found, NIL is returned."
@@ -619,7 +626,7 @@ is found, NIL is returned."
 	   (type string key)
 	   (type fixnum key-size)
 	   (type boolean get-both degree-2 read-committed
-		 dirty-read read-uncommitted))
+		 dirty-read read-uncommitted multiple multiple-key))
   (with-cstring (k key)
     (with-buffer-streams (value-buffer-stream)
       (loop 
@@ -631,7 +638,9 @@ is found, NIL is returned."
 			     value-length
 			     (flags :get-both get-both
 				    :degree-2 (or degree-2 read-committed)
-				    :dirty-read (or dirty-read read-uncommitted)))
+				    :dirty-read (or dirty-read read-uncommitted)
+				    :multiple multiple
+				    :multiple-key multiple-key))
 	 (declare (type fixnum result-size errno))
 	 (cond
 	   ((= errno 0)

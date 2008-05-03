@@ -357,7 +357,7 @@
 (defmethod slot-definition-allocation ((slot-definition persistent-slot-definition))
   :database)
 
-#+lispworks
+#+(or :lispworks3 :lispworks4 (and :lispworks5 :lispworks5.0))
 (defmethod (setf slot-definition-allocation) (allocation (slot-def persistent-slot-definition))
   (unless (eq allocation :database)
     (error "Invalid allocation type ~A for slot-definition-allocation" allocation))
@@ -435,10 +435,10 @@
 	   (error "Cannot specify initargs for set-valued slots"))
 	  ((and associate-p has-initarg-p (not (eq associate-p t)))
 	   (error "Cannot specify initargs for association slots"))
-	  (indexed-p 
-	   (find-class 'indexed-direct-slot-definition))
 	  (derived-p
 	   (find-class 'derived-index-direct-slot-definition))
+	  (indexed-p 
+	   (find-class 'indexed-direct-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-direct-slot-definition))
 	  (cached-p
@@ -454,10 +454,10 @@
   "Chooses the persistent or transient effective slot
 definition class depending on the keyword."
   (bind-standard-init-arguments (initargs)
-    (cond (indexed-p 
-	   (find-class 'indexed-effective-slot-definition))
-	  (derived-p
+    (cond (derived-p
 	   (find-class 'derived-index-effective-slot-definition))
+	  (indexed-p 
+	   (find-class 'indexed-effective-slot-definition))
 	  (set-valued-p
 	   (find-class 'set-valued-effective-slot-definition))
 	  (cached-p

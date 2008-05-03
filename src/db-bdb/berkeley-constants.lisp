@@ -40,6 +40,8 @@
 (defconstant DB_TXN_NOSYNC    #x00000200)
 (defconstant DB_TXN_NOT_DURABLE #x00000400)
 (defconstant DB_TXN_WRITE_NOSYNC #x00000800)
+(defconstant DB_MULTIPLE      #x10000000)
+(defconstant DB_MULTIPLE_KEY  #x20000000)
 
 (defconstant DB_EXCL          #x00004000)
 

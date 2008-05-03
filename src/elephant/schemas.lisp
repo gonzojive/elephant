@@ -54,6 +54,12 @@
 		 :name (class-name class-obj)
 		 :slot-recs (compute-slot-recs class-obj)))
 
+(defun compute-transient-schema (class-obj)
+  (make-instance 'schema
+		 :name (class-name class-obj)
+		 :slot-recs (append (compute-slot-recs class-obj)
+				    (compute-transient-slot-recs class-obj))))
+
 (defparameter *slot-def-type-tags*
   '((:persistent   persistent-effective-slot-definition)
     (:indexed      indexed-effective-slot-definition)
@@ -62,13 +68,16 @@
     (:set-valued   set-valued-effective-slot-definition)
     (:association  association-effective-slot-definition)))
 
-(defun compute-slot-recs (class-obj)
+(defun compute-slot-recs (class-obj &optional (slot-tag-map *slot-def-type-tags*))
   "For each slot, compute a serializable record of the important info 
    in that slot"
   (mapcan (lambda (tagrec)
 	    (destructuring-bind (type slot-def-type) tagrec
 	      (compute-slot-recs-by-type type slot-def-type class-obj)))
-	  *slot-def-type-tags*))
+	  slot-tag-map))
+
+(defun compute-transient-slot-recs (class-obj)
+  (compute-slot-recs class-obj '((:transient transient-effective-slot-definition))))
 
 (defmethod compute-slot-recs-by-type (type slot-def-type class-obj)
   "Default slot computation.  Capture the name and type tag for the definition"

@@ -234,7 +234,7 @@
 ;;  Change class support
 ;; ===========================
 
-(defmethod change-db-instance ((current persistent-object) (previous persistent-object)
+(defmethod change-db-instance ((current persistent-object) previous
 			       new-schema old-schema)
   "Change a database instance from one schema & class to another
    These are different objects with the same oid"

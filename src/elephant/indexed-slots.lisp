@@ -289,5 +289,20 @@
 	  (map-btree (if oids fn #'map-obj) index :start start :end end :from-end from-end :collect collect)))))
 
 
+(defun get-unique-values (index &aux values)
+  (ensure-transaction (:store-controller (get-con index))
+    (with-btree-cursor (cur index)
+      (multiple-value-bind (valid? value oid)
+	  (cursor-first cur)
+	(when valid?
+	  (push value values)
+	  (loop 
+	       (multiple-value-bind (valid? value oid)
+		   (cursor-next-nodup cur)
+		 (unless valid?
+		   (return-from get-unique-values (nreverse values)))
+		 (push value values))))))))
+		   
+	       
 
 
