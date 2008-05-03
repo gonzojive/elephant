@@ -274,7 +274,7 @@ slots."
 (defmethod update-instance-for-redefined-class :around ((instance persistent-object) added-slots discarded-slots property-list &rest initargs)
   (declare (ignore discarded-slots added-slots initargs))
   (let* ((sc (get-con instance))
-	 (class (class-of instance))
+;;	 (class (class-of instance))
 	 (current-schema (get-current-db-schema sc (type-of instance))))
 ;;    (unless (match-schemas (%class-schema class) current-schema))
       (prog1 
@@ -290,32 +290,12 @@ slots."
 ;;  CLASS CHANGE PROTOCOL   
 ;; =================================
 
+;; Persistent objects
+
 (defmethod change-class :before ((previous persistent) (new-class standard-class) &rest initargs)
   (declare (ignorable initargs))
   (unless (subtypep (type-of new-class) 'persistent-metaclass)
     (error "Persistent instances cannot be changed to standard classes via change-class")))
-
-(defmethod change-class :before ((previous standard-object) (new-class persistent-metaclass) &rest initargs)
-  (declare (ignorable initargs)) 
-  (warn "We have not thought through persistent to standard class conversions, so you get what you deserve converting standard class ~A to persistent class ~A" (class-of previous) new-class)
-  nil)
-;;  (unless (subtypep (type-of previous) 'persistent)
-;;    (error "Standard classes cannot be changed to persistent classes in change-class")))
-
-(defmethod update-instance-for-different-class :after ((previous standard-object) (current persistent-object) 
-							&rest initargs &key (sc *store-controller*) 
-						       &allow-other-keys)
-  (let* ((sc (or sc *store-controller*))
-	 (current-schema (lookup-schema sc (class-of current)))
-	 (previous-schema (make-transient-schema (type-of current))))
-    (break)
-    (setf (oid current) (next-oid sc))
-    (setf (db-spec current) (controller-spec sc))
-    (change-db-instance current previous current-schema previous-schema)
-    (let* ((diff-entries (schema-diff current-schema previous-schema))
-	   (add-entries (remove-if-not (lambda (entry) (eq :add (diff-type entry))) diff-entries))
-	   (add-names (when add-entries (mapcar #'slot-rec-name (mapcan #'diff-recs add-entries)))))
-      (apply #'shared-initialize current add-names initargs))))
 
 (defmethod update-instance-for-different-class :after ((previous persistent-object) (current persistent-object) 
 							&rest initargs &key)
@@ -327,6 +307,32 @@ slots."
     (assert (eq sc (get-con previous)))
     (change-db-instance current previous current-schema previous-schema)
     ;; Deal with new persistent slot, cached and transient initialization
+    (let* ((diff-entries (schema-diff current-schema previous-schema))
+	   (add-entries (remove-if-not (lambda (entry) (eq :add (diff-type entry))) diff-entries))
+	   (add-names (when add-entries (mapcar #'slot-rec-name (mapcan #'diff-recs add-entries)))))
+      (apply #'shared-initialize current add-names initargs))))
+
+;; Standard objects
+
+(defmethod change-class :before ((previous standard-object) (new-class persistent-metaclass) &rest initargs)
+  (declare (ignorable initargs)) 
+  (unless (subtypep (type-of previous) 'persistent)
+    (error "Cannot convert standard objects to persistent objects")))
+;;  (warn "We have not thought through persistent to standard class conversions, so you get what you deserve converting standard class ~A to persistent class ~A" (class-of previous) new-class)
+;;  nil)
+;;  (unless (subtypep (type-of previous) 'persistent)
+;;    (error "Standard classes cannot be changed to persistent classes in change-class")))
+
+#+nil
+(defmethod update-instance-for-different-class :after ((previous standard-object) (current persistent-object) 
+							&rest initargs &key (sc *store-controller*) 
+						       &allow-other-keys)
+  (let* ((sc (or sc *store-controller*))
+	 (current-schema (lookup-schema sc (class-of current)))
+	 (previous-schema (compute-transient-schema (type-of current))))
+    (setf (oid current) (next-oid sc))
+    (setf (db-spec current) (controller-spec sc))
+    (change-db-instance current previous current-schema previous-schema)
     (let* ((diff-entries (schema-diff current-schema previous-schema))
 	   (add-entries (remove-if-not (lambda (entry) (eq :add (diff-type entry))) diff-entries))
 	   (add-names (when add-entries (mapcar #'slot-rec-name (mapcan #'diff-recs add-entries)))))
