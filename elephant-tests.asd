@@ -51,8 +51,8 @@
   :description "Object database for Common Lisp"
   :long-description "An object-oriented database based on Berkeley DB, for CMUCL/SBCL, OpenMCL, Lispworks, and Allegro."
   
-  :depends-on #-use-fiveam (:elephant :rt)
-              #+use-fiveam (:elephant :fiveam)
+  :depends-on #-use-fiveam (:elephant :rt :bordeaux-threads)
+              #+use-fiveam (:elephant :fiveam  :bordeaux-threads)
   :components
   ((:module :tests
 	    :components

@@ -329,4 +329,4 @@ directory to my-config.sexp and edit it appropriately."))
 		      :serial t
 		      :depends-on (memutil utils)))))
   :serial t
-  :depends-on (:uffi :cl-base64 :bordeaux-threads))
+  :depends-on (:uffi :cl-base64))
