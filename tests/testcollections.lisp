@@ -234,12 +234,29 @@
 			       :start 20 :from-end t :collect t)
 		    '(6 5)))))
 
-    
+(test (dup-btree-simple)
+  (let ((bt (make-dup-btree)))
+    (setf (get-value 10 bt) 2)    
+    (setf (get-value 10 bt) 3)
+    (setf (get-value 10 bt) 4)    
+    (setf (get-value 10 bt) 5)
 
-    
-
-
-	     
+    (with-btree-cursor (cur bt)
+      (multiple-value-bind (has k v)
+	  (cursor-first cur)
+	(is (= v 2)))
+      (multiple-value-bind (has k v)
+	  (cursor-next cur)
+	(is (= v 3)))
+      (multiple-value-bind (has k v)
+	  (cursor-next cur)
+	(is (= v 4)))
+      (multiple-value-bind (has k v)
+	  (cursor-next cur)
+	(is (= v 5)))
+      )
+    )
+  )
 
 (test (btree-cursor :depends-on (and remove-kv map-btree))
   (with-transaction (:store-controller *store-controller*)

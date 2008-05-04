@@ -438,7 +438,6 @@
 		 schema)
 	     (controller-schema-name-index sc)
 	     :value classname :collect t))
-
 ;;
 ;; Database versioning
 ;;

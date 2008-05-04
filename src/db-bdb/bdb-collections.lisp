@@ -771,7 +771,8 @@
 	(if buf t
 	    nil)))))
 
-
+;; This is the only difference with the bdb-btree -- I think that means 
+;; the other methods can be removed.
 (defmethod (setf get-value) (value key (bt bdb-dup-btree))
     (let ((sc (get-con bt)))
       (with-buffer-streams (key-buf value-buf)

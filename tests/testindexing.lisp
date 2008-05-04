@@ -89,17 +89,31 @@
 	(setq inst3 (make-instance 'idx-one-f :slot1 (+ 1 n) :sc *store-controller*)))
     
       (is (= 3 (length (get-instances-by-class 'idx-one-f))))
+
+      (format t "READY FOR ACTION~%")
       (is (= 2 (length (get-instances-by-value 'idx-one-f 'slot1 n))))
       (is (= 1 (length (get-instances-by-value 'idx-one-f 'slot1 (+ 1 n)))))
       (is (equal (first (get-instances-by-value 'idx-one-f 'slot1 (+ 1 n))) inst3))
       (is (= 3 (length (get-instances-by-range 'idx-one-f 'slot1 n (+ 1 n)))))))
 
+(test (indexing-with-dupstuff-basic :depends-on index-reset)
+  (defclass idx-one-f ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+  (wipe-class 'idx-one-f)
+    (let ((n 105))
+      (with-transaction (:store-controller *store-controller*)
+	(setq inst1 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	(setq inst2 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	)
+      (is (= 2 (length (get-instances-by-value 'idx-one-f 'slot1 n))))))
+
+
 (test (indexing-basic-with-string :depends-on index-reset)
     (defclass idx-one-b ()
       ((slot1 :initarg :slot1 :accessor slot1 :index t))
       (:metaclass persistent-metaclass))
-  
-    (wipe-class 'idx-one-b)
+      (wipe-class 'idx-one-b)
 
     (defclass idx-one-b ()
       ((slot1 :initarg :slot1 :accessor slot1 :index t))
@@ -308,6 +322,31 @@
   (1 2 3) (1 2 3) (1 2 4) (2 3) (4))
 
 
+(deftest (indexing-range-simnple :depends-on index-reset)
+    (progn
+
+       (defclass idx-four ()
+ 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
+ 	(:metaclass persistent-metaclass))
+       (wipe-class 'idx-four)
+
+      (defclass idx-four ()
+	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
+	(:metaclass persistent-metaclass))
+
+      (defun make-idx-four (val)
+	(make-instance 'idx-four :slot1 val))
+
+      (let ((first (make-idx-four 2))
+	    (second (make-idx-four 2)))
+      (let ((x (get-instances-by-range 'idx-four 'slot1 0 9))
+	    )
+	(is (= (elephant::oid first) (elephant::oid (car x))))
+	(is (= (elephant::oid second) (elephant::oid (cadr x))))
+	)
+      )))
+
+
 (deftest (indexing-range :depends-on index-reset)
     (progn
 ;;       (format t "range store: ~A  ~A~%" *store-controller* (elephant::controller-spec *store-controller*))
@@ -332,9 +371,6 @@
 	    (x2 (get-instances-by-range 'idx-four 'slot1 0 2))
 	    (x3 (get-instances-by-range 'idx-four 'slot1 6 15))
 	    )
-	;;	(format t " x1 = ~A~%" (mapcar #'slot1 x1))
-	;;	(format t " x2 = ~A~%" (mapcar #'slot1 x2))
-	;;	(format t " x3 = ~A~%" (mapcar #'slot1 x3))
 	(values (equal (mapcar #'slot1 x1)
 		       '(2 2 4 5 5 5 6)) ;; interior range
 		(equal (mapcar #'slot1 x2)
@@ -433,7 +469,6 @@
 
 (deftest (indexing-redef-class :depends-on index-reset)
     (progn
-
       (wipe-class 'idx-eight)
 
       (defclass idx-eight ()

@@ -60,7 +60,9 @@
 		      ((:file "package")
 		       (:file "sql-controller")
 		       (:file "sql-transaction")
-		       (:file "sql-collections"))
+		       (:file "sql-collections")
+		       (:file "sql-dupbtree")
+		       )
 		      :serial t
 		      ))))
   :depends-on (:elephant :clsql :cl-base64))

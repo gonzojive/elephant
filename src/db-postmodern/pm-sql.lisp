@@ -283,3 +283,6 @@ $$ LANGUAGE plpgsql;"
   (cl-postgres:exec-query 
    connection 
    "INSERT INTO transaction_log (txn_id, commit_time) VALUES (nextval('txn_id'), 0.0);"))
+v v v v v v v
+
+^ ^ ^ ^ ^ ^ ^
