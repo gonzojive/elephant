@@ -295,17 +295,20 @@
       (mapcar #'wipe-class '(idx-two-base idx-two-sub1 idx-two-sub1-1 idx-two-sub2))
 
       (defpclass idx-two-base ()
-	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t)
-	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t)))
+	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t :inherit t)
+	 (slot2 :initarg :slot2 :initform 2 :accessor slot2 :index t :inherit t)))
 
+      ;; Subclass creates a new inherited slot
       (defpclass idx-two-sub1 (idx-two-base)
-	((slot3 :initarg :slot3 :initform 30 :accessor slot3 :index t)))
+	((slot3 :initarg :slot3 :initform 30 :accessor slot3 :index t :inherit t)))
 
+      ;; Shadow, but not index
       (defpclass idx-two-sub1-1 (idx-two-sub1)
 	((slot2 :initarg :slot3 :initform 31 :accessor slot3)))
 
+      ;; Shadow, but index
       (defpclass idx-two-sub2 (idx-two-base)
-	((slot1 :initarg :slot1 :initform 100 :accessor slot1 :index t)))
+	((slot1 :initarg :slot1 :initform 32 :accessor slot1 :index t)))
 
       (with-transaction ()
 	(make-instance 'idx-two-base :slot1 1)

@@ -183,7 +183,8 @@
 ;;
 
 (defclass indexed-slot-definition (persistent-slot-definition)
-  ((indexed :accessor indexed-p :initarg :indexed :initarg :index :initform nil :allocation :instance)))
+  ((indexed :accessor indexed-p :initarg :indexed :initarg :index :initform nil :allocation :instance)
+   (inherit :accessor inherit-p :initarg :inherit :initform nil :allocation :instance)))
 
 (defclass indexed-direct-slot-definition (persistent-direct-slot-definition indexed-slot-definition)
   ())
@@ -290,6 +291,7 @@
 
 (defclass association-slot-definition (persistent-slot-definition)
   ((assoc :accessor association :initarg :associate :allocation :instance)
+   (inherit :accessor inherit-p :initarg :inherit :initform nil :allocation :instance)
    (m2m :accessor many-to-many-p :initarg :many-to-many :initform nil :allocation :instance)))
 
 (defclass association-direct-slot-definition (persistent-direct-slot-definition association-slot-definition) 
@@ -350,37 +352,11 @@
 ;; Class MOP support:
 ;;
 
-#+allegro
-(defmethod excl::valid-slot-allocation-list ((class persistent-metaclass))
-  '(:instance :class :database))
-
-(defmethod slot-definition-allocation ((slot-definition persistent-slot-definition))
-  :database)
-
 #+(or :lispworks3 :lispworks4 (and :lispworks5 :lispworks5.0))
 (defmethod (setf slot-definition-allocation) (allocation (slot-def persistent-slot-definition))
   (unless (eq allocation :database)
     (error "Invalid allocation type ~A for slot-definition-allocation" allocation))
   allocation)
-
-(defmethod direct-slot-definition-class ((class persistent-metaclass) &rest initargs)
-  "Checks for the transient tag (and the allocation type)
-   and chooses persistent or transient slot definitions."
-  (let ((allocation-key (getf initargs :allocation))
-	(transient-p (getf initargs :transient))
-	(indexed-p (getf initargs :index)))
-    (when (consp transient-p) (setq transient-p (car transient-p)))
-    (when (consp indexed-p) (setq indexed-p (car indexed-p)))
-    (cond ((and (eq allocation-key :class) transient-p)
-	   (find-class 'transient-direct-slot-definition))
-	  ((and (eq allocation-key :class) (not transient-p))
-	   (error "Persistent class slots are not supported, try :transient t."))
-	  ((and indexed-p transient-p)
-	   (error "Cannot declare slots to be both transient and indexed"))
-	  (transient-p
-	   (find-class 'transient-direct-slot-definition))
-	  (t
-	   (find-class 'persistent-direct-slot-definition)))))
 
 (defmethod validate-superclass ((class persistent-metaclass) (super standard-class))
   "Persistent classes may inherit from ordinary classes."
@@ -483,22 +459,34 @@ definition class depending on the keyword."
       (setf (getf initargs :cached) t))
     (when (eq (type-of parent-direct-slot) 'association-direct-slot-definition)
       (setf (getf initargs :associate) (association parent-direct-slot))
+      (setf (getf initargs :inherit) 
+	    (inherit-p parent-direct-slot))
       (setf (getf initargs :many-to-many) (many-to-many-p parent-direct-slot))
       (setf (getf initargs :base-class)
-	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
+	    (if (inherit-p parent-direct-slot)
+		(find-class-for-direct-slot class parent-direct-slot)
+		(class-name class))))
     (when (eq (type-of parent-direct-slot) 'indexed-direct-slot-definition)
       (setf (getf initargs :indexed) t)
+      (setf (getf initargs :inherit) 
+	    (inherit-p parent-direct-slot))
       (setf (getf initargs :base-class)
-	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
+	    (if (inherit-p parent-direct-slot)
+		(find-class-for-direct-slot class parent-direct-slot)
+		(class-name class))))
     (when (eq (type-of parent-direct-slot) 'derived-index-direct-slot-definition)
       (setf (getf initargs :derived-fn)
 	    (derived-fn-ref parent-direct-slot))
+      (setf (getf initargs :inherit) 
+	    (inherit-p parent-direct-slot))
       (setf (getf initargs :slot-deps)
 	    (derived-slot-deps parent-direct-slot))
       (setf (getf initargs :fn)
 	    (compile-derived-fn (derived-fn-ref parent-direct-slot)))
       (setf (getf initargs :base-class)
-	    (find-class-for-direct-slot class (slot-definition-name (first slot-definitions)))))
+	    (if (inherit-p parent-direct-slot)
+		(find-class-for-direct-slot class parent-direct-slot)
+		(class-name class))))
     initargs))
 
 (defun find-class-for-direct-slot (class name)

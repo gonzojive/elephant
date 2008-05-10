@@ -19,6 +19,8 @@
 
 (in-package :elephant)
 
+(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1)))
+
 ;; ======================================================
 ;; Indexed slot accesses
 ;; ======================================================
@@ -301,11 +303,13 @@ v v v v v v v
     (with-btree-cursor (cur index)
       (multiple-value-bind (valid? value oid)
 	  (cursor-first cur)
+	(declare (ignore oid))
 	(when valid?
 	  (push value values)
 	  (loop 
 	       (multiple-value-bind (valid? value oid)
 		   (cursor-next-nodup cur)
+		 (declare (ignore oid))
 		 (unless valid?
 		   (return-from get-unique-values (nreverse values)))
 		 (push value values))))))))

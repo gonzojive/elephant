@@ -330,3 +330,7 @@ directory to my-config.sexp and edit it appropriately."))
 		      :depends-on (memutil utils)))))
   :serial t
   :depends-on (:uffi :cl-base64))
+
+
+(defmethod asdf:perform :after ((op load-op) (system (eql (find-system :elephant))))
+  (pushnew :elephant cl:*features*))
