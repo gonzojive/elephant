@@ -563,7 +563,7 @@ not), evaluates the forms, then closes the cursor."
 	      ,continue))
      (handler-case 
 	 (with-cursor-values ,start
-	   (when exists?
+	   (when (and exists? (continue-p skey))
 	     (funcall fn skey val)
 	     (loop  
 		(handler-case
