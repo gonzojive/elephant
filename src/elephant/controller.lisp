@@ -791,14 +791,16 @@ true."))
    as it implements the proper behavior for indexed classes"))
 
 (defmethod drop-pobject ((inst persistent-object))
+  ;; NOTE: Does this do the right thing with indexing?
   (let ((sc (get-con inst))
 	(pslots (set-difference (all-persistent-slot-names (class-of inst))
 				(derived-index-slot-names (class-of inst)))))
-    (dolist (slot pslots)
-      (slot-makunbound inst slot))
-    (ele-with-fast-lock ((controller-instance-cache-lock sc))
-      (remcache (oid inst) (controller-instance-cache sc)))
-    (remove-kv (oid inst) (controller-instance-table sc))))
+    (ensure-transaction (:store-controller sc)
+      (dolist (slot pslots)
+	(slot-makunbound inst slot))
+      (ele-with-fast-lock ((controller-instance-cache-lock sc))
+	(remcache (oid inst) (controller-instance-cache sc)))
+      (remove-kv (oid inst) (controller-instance-table sc)))))
 
 ;;
 ;; DATABASE PROPERTY INTERFACE (Not used by system as of 0.6.1, but supported)

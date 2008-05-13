@@ -92,6 +92,10 @@
 (defvar *current-transaction* nil
   "The transaction which is currently in effect.")
 
+(defvar *default-retries* 200
+  "The number of times the with-transaction macros should retry a
+   transaction before the expression passes the error up the stack")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Enables warnings of various kinds
 

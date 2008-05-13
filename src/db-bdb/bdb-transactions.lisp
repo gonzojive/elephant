@@ -24,7 +24,7 @@
 (defmethod execute-transaction ((sc bdb-store-controller) txn-fn
 				&key 
 				transaction parent environment
-				(retries 100) 
+				(retries *default-retries*)
 				degree-2 read-uncommitted txn-nosync txn-nowait txn-sync)
   (declare (ignorable transaction))
   (let ((env (if environment environment (controller-environment sc))))

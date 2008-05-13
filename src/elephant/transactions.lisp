@@ -111,7 +111,7 @@
 (defmacro with-transaction ((&rest keyargs &key 
 				   (store-controller '*store-controller*)
 				   (parent '*current-transaction*)
-				   (retries 200)
+				   (retries '*default-retries*)
 				   &allow-other-keys)
 			    &body body)
   "Execute a body with a transaction in place.  On success,
@@ -133,7 +133,7 @@
 (defmacro ensure-transaction ((&rest keyargs &key
 				     (store-controller '*store-controller*)
 				     (parent '*current-transaction*)
-				     (retries 200)
+				     (retries '*default-retries*)
 				     &allow-other-keys)
 			      &body body)
   "Execute the body with the existing transaction, or a new transaction if
