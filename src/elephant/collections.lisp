@@ -660,7 +660,7 @@ not), evaluates the forms, then closes the cursor."
 	      (declare (ignorable key))
 	      ,continue))
      (with-cursor-values ,start
-       (when exists?
+       (when (and exists? (continue-p skey))
 	 (funcall fn skey val pkey)
 	 (loop  
 	    (with-cursor-values ,step
