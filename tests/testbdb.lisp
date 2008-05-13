@@ -44,6 +44,24 @@
 	    t)))
   t)
 
+(test elephant-db-path-test
+  (is (typep (db-bdb::elephant-db-path "/tmp/") 'pathname))
+  (is (typep (db-bdb::elephant-db-path #P"/tmp") 'pathname))
+
+
+  ;; if there's no trailing slash, merge-pathname assume that the name
+  ;; part of the pathname is already filled.
+  (is (equal (db-bdb::elephant-db-path #P"/tmp") #P "/tmp/%ELEPHANT"))
+
+  ;; I assume that calling elephant-db-path with a string and a
+  ;; pathname made form that string should yield an EQUAL result.
+
+  ;; multiple subsequent slashes are treated as one by POSIX. I am not
+  ;; sure whether this is true eg. for Windows.
+  (is (equal (db-bdb::elephant-db-path #P"/tmp/") (db-bdb::elephant-db-path "/tmp/")))
+
+  (is (equal (db-bdb::elephant-db-path #P"/tmp/") (db-bdb::elephant-db-path "/tmp/"))))
+
 #|
 (deftest put-alot
     (finishes
