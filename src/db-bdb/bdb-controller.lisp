@@ -105,8 +105,7 @@ et cetera."))
 			    (recover-fatal nil) (thread t) 
 			    (deadlock-detect nil))
   (let ((env (db-env-create))
-	(new-p (not (probe-file (make-pathname :directory (second (controller-spec sc))
-					       :name "%ELEPHANT")))))
+	(new-p (not (probe-file (elephant-db-path (second (controller-spec sc)))))))
     (setf (controller-environment sc) env)
     (db-env-set-flags env 0 :auto-commit t)
     (db-env-set-cachesize env 0 elephant::*berkeley-db-cachesize* 1)
@@ -218,6 +217,13 @@ et cetera."))
 	(start-deadlock-detector sc))
 	
       sc)))
+
+(defun elephant-db-path (directory)
+  (ctypecase directory
+    (pathname
+     (merge-pathnames directory (make-pathname :name "%ELEPHANT")))
+    ((or cons (vector character) (vector nil) base-string (member :wild nil))
+     (make-pathname :directory directory :name "%ELEPHANT"))))
 
 (defmethod close-controller ((sc bdb-store-controller))
   (when (slot-value sc 'root)
