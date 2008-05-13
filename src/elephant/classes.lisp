@@ -70,18 +70,24 @@
 (defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses index)
   "Ensures we inherit from persistent-object prior to initializing."
   (declare (ignorable index))
-  (let* ((persistent-object (find-class 'persistent-object))
-	 (has-persistent-object (superclass-member-p direct-superclasses persistent-object)))
-    (if (not (or (eq class persistent-object)
-		 has-persistent-object))
-	(apply #'call-next-method class slot-names
-	       :direct-superclasses (append direct-superclasses (list persistent-object)) args)
-	(call-next-method))))
+  (let ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
+    (apply #'call-next-method class slot-names
+	   :direct-superclasses new-direct-superclasses args)))
 
-(defun superclass-member-p (superclasses class)
+(defun ensure-class-inherits-from (class from-classname direct-superclasses)
+  (let* ((from-class (find-class from-classname))
+	 (has-persistent-object (superclass-member-p from-class direct-superclasses)))
+    (if (not (or (eq class from-class) has-persistent-object))
+	(append direct-superclasses (list from-class))
+	direct-superclasses)))
+
+(defun superclass-member-p (class superclasses)
   "Searches superclass list for class"
   (some #'(lambda (superclass)
-	    (eq (class-of superclass) class))
+	    (or (eq class superclass)
+		(let ((supers (class-direct-superclasses superclass)))
+		  (when supers
+		    (superclass-member-p class supers)))))
 	superclasses))
 
 (defmethod finalize-inheritance :after ((instance persistent-metaclass))

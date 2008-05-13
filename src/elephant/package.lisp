@@ -43,6 +43,7 @@
 		compute-effective-slot-definition-initargs
 		class-slots
                 class-direct-slots
+                class-direct-superclasses
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -83,6 +84,7 @@
 		compute-effective-slot-definition
 		class-slots
                 class-direct-slots
+                class-direct-superclasses
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -126,6 +128,7 @@
 		compute-effective-slot-definition
 		class-slots
                 class-direct-slots
+                class-direct-superclasses
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -159,6 +162,7 @@
 		compute-effective-slot-definition
 		class-slots
                 class-direct-slots
+                class-direct-superclasses
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
@@ -195,6 +199,7 @@
 		compute-effective-slot-definition-initargs
 		class-slots
                 class-direct-slots
+                class-direct-superclasses
 		slot-value-using-class
 		slot-boundp-using-class
 		slot-makunbound-using-class
