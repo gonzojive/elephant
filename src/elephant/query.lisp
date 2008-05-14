@@ -204,6 +204,37 @@
 		    (reference-value (second expr) bindings)))))
 
 
+;; Some hacks for doing join-sorts where we extract an ordered set
+;; of objects
+
+
+(defun sort-tuples (seq order-by &optional (key-fn #'car))
+  "Orders elements in the sequence using values returned by key-fn"
+  (if order-by
+      (stable-sort seq
+		   (if (equalp (cdr order-by) :asc)
+		       #'elephant::lisp-compare<
+		       (lambda (a b)
+			 (not (elephant::lisp-compare<= a b))))
+		   :key #'key-fn)
+      seq))
+
+(defun map-tuple-range (seq range &optional (map-fn #'cdr))
+  "Returns a list of elements from tuples returned by map-fn 
+   on the sequence elements that are within the range on seq"
+  (typecase seq
+    (list (loop
+	     for i from 0 upto (- (cdr range) (car range))
+	     for tuple in (nthcdr (car range) seq) 
+	     until (null tuple) 
+	     collect
+	       (funcall map-fn tuple)))
+    (vector (loop
+	       for i from (car range) upto (min (cdr range) (1- (length seq)))
+	       collect
+		 (funcall map-fn (aref seq i))))))
+
+
 #|
 
 (query

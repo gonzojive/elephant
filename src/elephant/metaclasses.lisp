@@ -195,6 +195,10 @@
    (base-class :accessor indexed-slot-base :initarg :base-class :allocation :instance
 	       :documentation "The base class to use as an index")))
 
+(defmethod indexed-p (def)
+  (declare (ignore def sc))
+  nil)
+
 (defmethod get-slot-def-index ((def indexed-effective-slot-definition) sc)
   (awhen (assoc sc (indexed-slot-indices def))
     (cdr it)))
