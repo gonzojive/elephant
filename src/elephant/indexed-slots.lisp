@@ -86,7 +86,6 @@
 ;; =================================
 ;;  Index update/create functions
 ;; =================================
-
 	   
 (defun update-slot-index (sc class instance slot-def new-value)
   "Update an index value when written"
@@ -97,11 +96,9 @@
 			 (slot-value-using-class class instance slot-def))))
 	(unless idx
 	  (setf idx (ensure-slot-def-index slot-def sc)))
-	(when old-value
+	(when old-value 
   	  (remove-kv-pair old-value oid idx))
-	(let ((rv (setf (get-value new-value idx) oid)))
-	  rv)
-	))))
+	(setf (get-value new-value idx) oid)))))
 
 (defun get-controller-index (slot-def sc)
   "Get the slot-def's index from the store"
@@ -196,8 +193,7 @@
 
 (defmethod get-instances-by-value ((class persistent-metaclass) slot-name value)
   (declare (type (or string symbol) slot-name))
-  (map-inverted-index #'identity2 class slot-name :value value :collect t)
-  )
+  (map-inverted-index #'identity2 class slot-name :value value :collect t))
 
 (defmethod get-instance-by-value ((class persistent-metaclass) slot-name value)
   (awhen (find-inverted-index class slot-name)
@@ -254,11 +250,10 @@
 	(return-from map-class nil))
 ;;      (dump-schema-status sc classname)
       (loop for schema-id in schema-ids appending
-	    (progn
-	      (map-index (if oids #'map-oid-fn #'map-fn)
-			 (controller-instance-class-index sc)
-			 :value schema-id
-			 :collect collect))))))
+	   (map-index (if oids #'map-oid-fn #'map-fn)
+		      (controller-instance-class-index sc)
+		      :value schema-id
+		      :collect collect)))))
 
 (defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect oids)
   "map-inverted-index maps a function of two variables, taking key
@@ -290,7 +285,7 @@
 		    index))
 	 (sc (get-con index)))
     (flet ((map-obj (value oid)
-	       (funcall fn value (controller-recreate-instance sc oid))))
+	     (funcall fn value (controller-recreate-instance sc oid))))
       (if value-p
 	  (map-btree (if oids fn #'map-obj) index :value value :collect collect)
 	  (map-btree (if oids fn #'map-obj) index :start start :end end :from-end from-end :collect collect)))))
@@ -310,4 +305,3 @@
 		 (unless valid?
 		   (return-from get-unique-values (nreverse values)))
 		 (push value values))))))))
-
