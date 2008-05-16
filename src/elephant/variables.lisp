@@ -44,6 +44,8 @@
 (defvar *user-configurable-parameters*
   '((:berkeley-db-map-degree2 *map-using-degree2*)
     (:berkeley-db-cachesize *berkeley-db-cachesize*)
+    (:berkeley-db-max-locks *berkeley-db-max-locks*)
+    (:berkeley-db-max-objects *berkeley-db-max-objects*)
     (:berkeley-db-version *bdb-version*)
     (:enable-multi-store-indexing *enable-multi-store-indexing*)))
 
@@ -75,6 +77,17 @@
    The default is 20 megabytes specified in bytes.  If you need to specify
    Gigbyte + cache sizes, talk to the developers!  This is ignored for
    existing databases that were created with different parameters")
+
+(defvar *berkeley-db-max-locks* 2000
+  "Controls the number of locks allocated for berkeley db.  It helps to increase
+   it to enable transactions to be larger.  Typically for bulk loads or large
+   transactions.")
+
+(defvar *berkeley-db-max-objects* 2000
+  "Controls the number of locks allocated for berkeley db.  It helps to increase
+   it to enable transactions to be larger.  Typically for bulk loads or large
+   transactions.  See berkeley db docs 'Configuring Locking: sizing the system' 
+   for more detail")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Legacy Thread-local specials

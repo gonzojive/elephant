@@ -669,6 +669,22 @@ int db_env_get_cachesize(DB_ENV *env, u_int32_t *gbytes, u_int32_t *bytes, int *
   return env->get_cachesize(env, gbytes, bytes, ncache);
 }
 
+int db_env_set_lk_max_locks(DB_ENV *env, u_int32_t max) {
+  return env->set_lk_max_locks(env, max);
+}
+
+int db_env_get_lk_max_locks(DB_ENV *env, u_int32_t *lk_maxp) {
+  return env->get_lk_max_locks(env, lk_maxp);
+}
+
+int db_env_set_lk_max_objects(DB_ENV *env, u_int32_t max) {
+  return env->set_lk_max_objects(env, max);
+}
+
+int db_env_get_lk_max_objects(DB_ENV *env, u_int32_t *lk_maxp) {
+  return env->get_lk_max_objects(env, lk_maxp);
+}
+
 int db_env_set_lk_detect(DB_ENV *env, u_int32_t detect) {
     return env->set_lk_detect(env, detect);
 }

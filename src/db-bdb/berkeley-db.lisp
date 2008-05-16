@@ -1443,6 +1443,46 @@ be prepared to handle deadlock / lock no granted errors.")
 	    :documentation "Return the current cache size of
             the BDB environment buffer pool")
 
+;; locks
+
+(def-function ("db_env_set_lk_max_locks" %db-env-set-max-locks)
+    ((env :pointer-void)
+     (max :int))
+  :returning :int)
+
+(wrap-errno db-env-set-max-locks (env max)
+	    :documentation "Sets the size of the buffer pool cache
+            for elephant database data.  Set large if you can!")
+
+(def-function ("db_env_get_lk_max_locks" %db-env-get-max-locks)
+    ((env :pointer-void)
+     (max :int :out))
+  :returning :int)
+
+(wrap-errno db-env-get-max-locks (env) :outs 1
+	    :documentation "Return the current cache size of
+            the BDB environment buffer pool")
+
+(def-function ("db_env_set_lk_max_objects" %db-env-set-max-objects)
+    ((env :pointer-void)
+     (max :int))
+  :returning :int)
+
+(wrap-errno db-env-set-max-objects (env max)
+	    :documentation "Sets the size of the buffer pool cache
+            for elephant database data.  Set large if you can!")
+
+(def-function ("db_env_get_max_objects" %db-env-get-max-objects)
+    ((env :pointer-void)
+     (max :int :out))
+  :returning :int)
+
+(wrap-errno db-env-get-max-objects (env) :outs 1
+	    :documentation "Return the current cache size of
+            the BDB environment buffer pool")
+
+;; --------
+
 (def-function ("db_env_set_lk_detect" %db-env-set-lock-detect)
     ((env :pointer-void)
      (detect :unsigned-int))
