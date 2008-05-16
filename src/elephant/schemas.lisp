@@ -203,10 +203,11 @@
 				      &key superclasses &allow-other-keys)
   "Given a schema, construct a class overriding information as necessary
    :subclasses - a list of subclasses for this schema"
-  (aclmop::ensure-class (schema-classname schema)
+  (let ((classname (schema-classname schema)))
+    (ensure-class-using-class (find-class classname :errorp nil) classname
 		:direct-superclasses superclasses
 		:direct-slots (slot-defs-from-schema schema args)
-		:metaclass 'persistent-metaclass))
+		:metaclass 'persistent-metaclass)))
 
 (defun slot-defs-from-schema (schema args)
   "Need to handle default-initargs and other options to defclass"
