@@ -196,6 +196,47 @@
 (defun diff-recs (diff-entry) (cdr diff-entry))
 
 ;;
+;; Construct classes from schemas
+;;
+
+(defmethod default-class-constructor ((schema db-schema) &rest args
+				      &key superclasses &allow-other-keys)
+  "Given a schema, construct a class overriding information as necessary
+   :subclasses - a list of subclasses for this schema"
+  (aclmop::ensure-class (schema-classname schema)
+		:direct-superclasses superclasses
+		:direct-slots (slot-defs-from-schema schema args)
+		:metaclass 'persistent-metaclass))
+
+(defun slot-defs-from-schema (schema args)
+  "Need to handle default-initargs and other options to defclass"
+  (destructuring-bind (&key (accessor-template #'default-template)
+			    accessor-override &allow-other-keys) args
+    (loop for rec in (schema-slot-recs schema) do
+	  (list :name (slot-rec-name rec)
+		:readers (compute-reader (schema-classname schema) (slot-rec-name rec)
+					 accessor-override accessor-template)
+		:writers (compute-writer (slot-rec-name rec)
+					 (schema-classname schema) 
+					 accessor-override accessor-template )))))
+		
+(defun compute-reader (classname name override-fn template-fn)
+  (or (and override-fn
+	   (funcall override-fn classname name :reader))
+      (funcall template-fn classname name :reader)))
+
+(defun compute-writer (classname name override-fn template-fn)	
+  (or (and override-fn
+	   (funcall override-fn classname name :writer))
+      (funcall template-fn classname name :writer)))
+
+(defun default-template (classname name type)
+  (ecase type
+    (:reader (list (intern (format nil "~A-~A" classname name))))
+    (:writer `((setf ,(intern (format nil "~A-~A" classname name)))))))
+	   
+
+;;
 ;; Debugging tools
 ;;
 
