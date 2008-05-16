@@ -8,6 +8,8 @@
  (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.so")
  (:berkeley-db-deadlock . "/usr/local/BerkeleyDB.4.5/bin/db_deadlock")
  (:berkeley-db-cachesize . 20971520)
+ (:berkeley-db-max-locks . 2000)
+ (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
@@ -21,6 +23,8 @@
  (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.dylib")
  (:berkeley-db-deadlock . "/usr/local/BerkeleyDB.4.5/bin/db_deadlock")
  (:berkeley-db-cachesize . 20971520)
+ (:berkeley-db-max-locks . 2000)
+ (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
@@ -34,6 +38,8 @@
  (:berkeley-db-lib . "C:/Program Files/Oracle/Berkeley DB 4.5.20/bin/libdb45.dll")
  (:berkeley-db-deadlock . "C:/Program Files/Oracle/Berkeley DB 4.5.20/bin/db_deadlock.exe")
  (:berkeley-db-cachesize . 20971520)
+ (:berkeley-db-max-locks . 2000)
+ (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . t))
@@ -86,3 +92,10 @@
 ;;          map operation remains stable and any writes
 ;;          are kept transactional, see user manual as
 ;;          well as berkeley DB docs for more details.
+;;
+;; :berkeley-db-max-locks 
+;;          Number of locks to reserve in the transaction environment
+;;
+;; :berkeley-db-max-objects
+;;          Number of locked objects to reserve in the transaction environment
+;;          Can be set to less, memory impact is pretty small though.
