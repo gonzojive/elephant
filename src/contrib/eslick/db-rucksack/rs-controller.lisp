@@ -17,8 +17,9 @@
 (in-package #:db-rucksack)
 
 (defclass rs-store-controller (store-controller) 
-  ((rucksack :accessor rs-store-db :initform nil)
-   (slot-btree :accessor 
+  ((directory :initarg :directory :reader controller-directory)
+   (cache :reader controller-cache)
+   (
 
 (defun rs-test-and-construct (spec)
   (if (rs-store-spec-p spec)
