@@ -28,6 +28,13 @@
 
 (in-package :ele-clsql-system)
 
+;;
+;; Make sure asdf is loaded prior to evaluating the rest of the file (tacky)
+;;
+(eval-when (:compile-toplevel :load-toplevel  :execute)
+  (unless (find-package 'clsql)
+    (asdf:operate 'asdf:load-op 'clsql)))
+
 (defmethod asdf:perform :after ((o asdf:load-op)
 				(c (eql (asdf:find-system 'clsql))))
   (let ((paths (get-config-option :clsql-lib-paths (find-system :elephant)))
@@ -53,9 +60,7 @@
 		      ((:file "package")
 		       (:file "sql-controller")
 		       (:file "sql-transaction")
-		       (:file "sql-collections")
-		       (:file "sql-dupbtree")
-		       )
+		       (:file "sql-collections"))
 		      :serial t
 		      ))))
   :depends-on (:elephant :clsql :cl-base64))

@@ -32,10 +32,9 @@
 
 (defclass sql-store-controller (store-controller)
   (
+;;   (db :accessor controller-db :initarg :db :initform nil)
    (dbcons :accessor controller-db-table :initarg :db :initform nil)
    (uses-pk :accessor uses-pk-of :initarg :uses-pk)
-   ;; I'm not sure of this...possibly it could go in store-controller...
-   (dup-btrees :accessor dup-btrees-of)
    )
   (:documentation  "Class of objects responsible for the
     book-keeping of holding DB handles, the cache, table
@@ -47,7 +46,7 @@
 	(car (cadr (controller-spec sc)))
 	:sqlite3)
        )
-  )
+)
 
 ;; This should be much more elegant --- but as of Feb. 6, SBCL 1.0.2 has a weird,
 ;; unpleasant bug when ASDF tries to load this stuff.
@@ -58,34 +57,34 @@
 
 (defun insure-thread-table-lock ()
   (if (null *thread-table-lock*)
-      ;;      nil
-      ;;  (setq *thread-table-lock* (sb-thread::make-mutex :name "thread-table-lock"))
+;;      nil
+;;  (setq *thread-table-lock* (sb-thread::make-mutex :name "thread-table-lock"))
       (setq *thread-table-lock* (elephant-utils::ele-make-lock))
       )
-  )
+)
 
 
 (defun thread-hash ()
   (elephant-utils::ele-thread-hash-key)
-  )
+)
 
 
 (defmethod controller-db ((sc sql-store-controller))
   (elephant::ele-with-lock (*thread-table-lock*)
-    (let ((curcon (gethash (thread-hash) (controller-db-table sc))))
-      (if curcon
-	  curcon
-	  (let* ((dbtype (car (second (controller-spec sc))))
-		 (con (clsql:connect (cdr (second (controller-spec sc)))
-				     :database-type dbtype
-				     :pool t
-				     :if-exists :new)))
-	    (setf (gethash (thread-hash) (controller-db-table sc))
-		  con)
-	    con)
-	  )
-      )
-    ))
+  (let ((curcon (gethash (thread-hash) (controller-db-table sc))))
+    (if curcon
+        curcon
+        (let* ((dbtype (car (second (controller-spec sc))))
+               (con (clsql:connect (cdr (second (controller-spec sc)))
+                               :database-type dbtype
+                               :pool t
+                               :if-exists :new)))
+          (setf (gethash (thread-hash) (controller-db-table sc))
+                con)
+          con)
+        )
+    )
+  ))
 
 
 (eval-when (:compile-toplevel :load-toplevel)
@@ -154,13 +153,9 @@
   (:documentation "A SQL-based BTree that supports secondary indices."))
 
 (defmethod shared-initialize :after ((instance sql-indexed-btree) slot-names
- 				     &rest rest)
+				     &rest rest)
   (declare (ignore slot-names rest))
-  (unless (slot-boundp instance 'indices)
-    (setf (indices instance) (make-hash-table)))
   (setf (indices-cache instance) (indices instance)))
-
-;;   (setf (indices-cache instance) (indices instance)))
 
 (defmethod build-indexed-btree ((sc sql-store-controller))
   (make-instance 'sql-indexed-btree :sc sc))
@@ -208,11 +203,10 @@
 		       (when index?
 			 (unless (sql-from-clcn-key-and-value-existsp 
 				  (oid index) secondary-key k sc)
-			   (progn
-			     (sql-add-to-clcn (oid index)
-					      secondary-key
-					      k
-					      sc :insert-only t)))
+			   (sql-add-to-clcn (oid index)
+					    secondary-key
+					    k
+					    sc :insert-only t))
 			 )))
 		 bt))))
 	  index)
@@ -230,11 +224,12 @@
 	       (funcall (key-fn index) index key value)
 	     (when index?
 	       ;; This duplicates values that are already there...
-	       (sql-add-to-clcn (oid index)
-				secondary-key
-				key
-				sc :insert-only t)
-	       ;;		 )
+	       (unless (sql-from-clcn-key-and-value-existsp 
+			(oid index) secondary-key key sc)
+		 (sql-add-to-clcn (oid index)
+				  secondary-key
+				  key
+				  sc :insert-only t))
 	       )))
        indices)
       ;; Now we place the actual value
@@ -370,7 +365,7 @@
 
   ;; ALL OF THIS needs to be inside a transaction.
   (let* ((con (controller-db sc)))
-    ;; At one time this was conditional, but all NEW repositories should have this.
+;; At one time this was conditional, but all NEW repositories should have this.
     (if (supports-sequence sc) 
 	(progn
 	  (clsql::create-sequence [serial] :database con)
@@ -382,50 +377,46 @@
  key varchar NOT NULL,
  value varchar
  )")
-	   :database con)
+	 :database con)
 	  )
 	(clsql::create-table [keyvalue]
-			     ;; This is most likely to work with any database system..
-			     '(
-			       ([clctn_id] integer :not-null)
-			       ([key] text :not-null)
-			       ([value] text)
-			       ) 
-			     :database con)
-	)
+			   ;; This is most likely to work with any database system..
+			   '(
+			     ([clctn_id] integer :not-null)
+			     ([key] text :not-null)
+			     ([value] text)
+			     ) 
+			   :database con)
+      )
     (sqlite3-harmless-read sc)
-    ;;   	      :constraints '("PRIMARY KEY (clctn_id key)"
-    ;;   				     "UNIQUE (clctn_id,key)")
+;;   	      :constraints '("PRIMARY KEY (clctn_id key)"
+;;   				     "UNIQUE (clctn_id,key)")
 
-    ;; apparently in postgres this is failing pretty awfully because 
-    ;; sequence-exists-p return nil and then we get an error that the sequence exists!
-    ;;    (unless (sequence-exists-p [persistent_seq])
-    (clsql::create-sequence [persistent_seq] :database con)
-
-    ;;    (clsql::set-sequence-position [persistent_seq] 100 :database con)
-
-    (clsql::create-sequence [class_seq] :database con)
-
-    (clsql::set-sequence-position [class_seq] 100 :database con)
-    ;;)
-    ;;    (unless (index-exists-p [idx_clctn_id])
-    (clsql::create-index [idx_clctn_id] :on [keyvalue]
-			 :attributes '([clctn_id])
-			 :database con)
-    ;; )
-    ;;    (unless (index-exists-p [idx_key])
-    (clsql::create-index [idx_key] :on [keyvalue]
-			 :attributes '([key])
-			 :database con)
-    ;;)
-    ;; This is actually unique
-    ;;    (unless (index-exists-p [idx_both])
-    (clsql:create-index [idx_both] :on [keyvalue]
-			:attributes '([clctn_id] [key])
-			:database con)
+  ;; apparently in postgres this is failing pretty awfully because 
+  ;; sequence-exists-p return nil and then we get an error that the sequence exists!
+  ;;    (unless (sequence-exists-p [persistent_seq])
+  (clsql::create-sequence [persistent_seq] :database con)
+  ;; Leave room for root and class-root
+  (clsql::set-sequence-position [persistent_seq] 2 :database con)
+  ;;)
+  ;;    (unless (index-exists-p [idx_clctn_id])
+  (clsql::create-index [idx_clctn_id] :on [keyvalue]
+		       :attributes '([clctn_id])
+		       :database con)
+  ;; )
+  ;;    (unless (index-exists-p [idx_key])
+  (clsql::create-index [idx_key] :on [keyvalue]
+		       :attributes '([key])
+		       :database con)
+  ;;)
+  ;; This is actually unique
+  ;;    (unless (index-exists-p [idx_both])
+  (clsql:create-index [idx_both] :on [keyvalue]
+		      :attributes '([clctn_id] [key])
+		      :database con)
     (sqlite3-harmless-read sc)
-    ;;)
-    ))
+  ;;)
+  ))
 
 (defmethod database-version ((sc sql-store-controller))
   "A version determination for a given store
@@ -450,88 +441,39 @@
   (the sql-store-controller
     (let* ((dbtype (car (second (controller-spec sc))))
 	   (path (cadr (second (controller-spec sc))))
-	   ;;	   (new-p (or (eq :memory path)
-	   ;;		      (not (probe-file path))))
-	   (new-p nil)
+	   (new-p (or (eq :memory path)
+		      (not (probe-file path))))
 	   (con (clsql:connect (cdr (second (controller-spec sc)))
 			       :database-type dbtype
 			       :pool t
 			       :if-exists :old)))
-      (setf (controller-db-table sc) (make-hash-table :test 'equal))
-      (setf (gethash (thread-hash) (controller-db-table sc)) con)
-      ;;      (setf (slot-value sc 'db) con)
+     (setf (controller-db-table sc) (make-hash-table :test 'equal))
+     (setf (gethash (thread-hash) (controller-db-table sc)) con)
+;;      (setf (slot-value sc 'db) con)
       ;; Now we should make sure that the KEYVALUE table exists, and, if 
       ;; it does not, we need to create it..
       (unless (keyvalue-table-exists con)
-	(with-transaction (:store-controller sc)
-	  (progn
-	    (setf new-p t)
+	  (with-transaction (:store-controller sc)
 	    (create-keyvalue-table sc)))
-	)
       (setf (uses-pk-of sc) (query-uses-pk con))
       (unless (version-table-exists con)
 	(with-transaction (:store-controller sc)
 	  (create-version-table sc)))
       (initialize-serializer sc)
       ;; These should get oid 0 and 1 respectively 
-      (with-transaction (:store-controller sc)
-	(setf (slot-value sc 'root)
-	      (make-instance 'sql-btree :from-oid -1 :sc sc))
-
-	(setf (slot-value sc 'index-table)
-	      (make-instance 'sql-btree :from-oid -2 :sc sc))
-
-	(setf (slot-value sc 'instance-table)
-	      (if new-p
-		  (make-instance 'sql-indexed-btree :from-oid -3 :sc sc :indices (make-hash-table))
-		  (make-instance 'sql-indexed-btree :from-oid -3 :sc sc)))
-
-	(setf (slot-value sc 'schema-table)
-	      (if new-p
-		  (make-instance 'sql-indexed-btree :from-oid -4 :sc sc :indices (make-hash-table))
-		  (make-instance 'sql-indexed-btree :from-oid -4 :sc sc))))
+      (setf (slot-value sc 'root) (make-instance 'sql-btree :sc sc :from-oid 0))
+      (setf (slot-value sc 'class-root) (make-instance 'sql-btree :sc sc :from-oid 1))
       sc)
     )
   )
 
-
-(defmethod default-class-id (type (sc sql-store-controller))
-  (ecase type
-    ('sql-btree 1)
-    ('sql-dup-btree 2)
-    ('sql-indexed-btree 3)
-    ('sql-btree-index 4)))
-
-(defmethod default-class-id-type (cid (sc sql-store-controller))
-  (case cid
-    (1 'sql-btree)
-    (2 'sql-dup-btree)
-    (3 'sql-indexed-btree)
-    (4 'sql-btree-index)))
-
-;; This is just a little different than BDB because we can't start at 0...
-(defmethod oid->schema-id (oid (sc sql-store-controller))
-  "For default data structures, provide a fixed mapping to class IDs based
-   on the known startup order.  It's ugly, it's sad, but it works."
-  (if (< oid 3)
-      (case oid
-	(2 4) ;; this is the index for the instance table
-	(1 4) ;; this is the index for the schema table
-	(-1 1) ;; the root
-	(-2 1) ;; the index-table
-	(-3 3) ;; the instance-table
-	(-4 3))	;; the schema-table
-      (call-next-method)
-      ;;      )
-      )
-  )
 (defmethod connection-ok-p ((sc sql-store-controller))
   (connection-ok-p-con (controller-db sc)))
 
 (defun connection-ok-p-con (con)
   (let ((str (format nil "~A" con)))
     (search "OPEN" str)
-    ))
+  ))
 
 (defmethod connection-really-ok-p ((sc sql-store-controller))
   ;; I don't really have a good way of doing this, but
@@ -540,8 +482,8 @@
   )
 
 (defmethod controller-status ((sc sql-store-controller))
-  ;; This is a crummy way to deal with status; we really want
-  ;; to return something we can compute against.
+;; This is a crummy way to deal with status; we really want
+;; to return something we can compute against.
   (clsql:status)
   )
 
@@ -556,12 +498,12 @@
                  (if (connection-ok-p-con v)
                      (clsql:disconnect :database v)
                      )
-		 )
+               )
                )
            (controller-db-table sc)
            )
-  (setf (slot-value sc 'root) nil)
-  )
+    (setf (slot-value sc 'root) nil)
+    )
 
 ;; Because this is part of the public
 ;; interface that I'm tied to, it has to accept a store-controller...
@@ -570,14 +512,6 @@
     (clsql:sequence-next [persistent_seq]
 			 :database con))
   )
-
-(defmethod next-cid ((sc sql-store-controller))
-  "Get the next class id"
-  (declare (type sql-store-controller sc))
-  (let ((con (controller-db sc)))
-    (clsql:sequence-next [class_seq]
-			 :database con)))
-
 
 ;; if add-to-root is a method, then we can make it class dependent...
 ;; otherwise we have to change the original code.  There is 
@@ -588,22 +522,8 @@
 ;; conflict with 'add-to-root.  'add-to-root can remain a convenience symbol,
 ;; that will end up calling this routine!
 (defun sql-add-to-root (key value sc)
-  (sql-add-to-clcn (oid (controller-root sc)) key value sc)
+  (sql-add-to-clcn 0 key value sc)
   )
-
-
-(defun get-number (clcn key value sc) 
-  (let* ((con (controller-db sc))
-	 (kbs (serialize-to-base64-string key sc))
-	 (vbs (serialize-to-base64-string value sc))
-	 (tuples
-	  (clsql::select [clctn_id] [key] [value]
-			 :from [keyvalue]
-			 :where [and [= [clctn_id] clcn] [= [key] kbs]
-			 [= [value] vbs]]
-			 :database con
-			 )))
-    (length tuples)))
 
 (defun sql-add-to-clcn (clcn key value sc
 			&key (insert-only nil))
@@ -615,25 +535,24 @@
 	 (serialize-to-base64-string key sc))
 	)
     (if (and (not insert-only) (sql-from-clcn-existsp clcn key sc))
-	(progn
-	  (clsql::update-records [keyvalue]
-				 :av-pairs `((key ,kbs)
-					     (clctn_id ,clcn)
-					     (value ,vbs))
-				 :where [and [= [clctn_id] clcn] [= [key] kbs]]
-				 :database con))
-	(progn
-	  (clsql::execute-command
-	   (format nil "insert into keyvalue (key,clctn_id,value) values ('~A',~A,'~A');" 
-		   kbs clcn vbs))
-	  )
-	)
-    value
+	(clsql::update-records [keyvalue]
+			       :av-pairs `((key ,kbs)
+					   (clctn_id ,clcn)
+					   (value ,vbs))
+			       :where [and [= [clctn_id] clcn] [= [key] kbs]]
+			       :database con)
+	(clsql::insert-records :into [keyvalue]
+			       :attributes '(key clctn_id value)
+			       :values (list kbs clcn vbs)
+			       :database con
+			       ))
     )
+  value
   )
 
+
 (defun sql-get-from-root (key sc)
-  (sql-get-from-clcn (oid (controller-root sc)) key sc)
+  (sql-get-from-clcn 0 key sc)
   )
 
 ;; This is a major difference betwen SQL and BDB:
@@ -722,24 +641,24 @@
   (let* ((con (controller-db sc))
 	 (tuples
 	  (if (uses-pk-of sc)
-	      (clsql::select [pk] [key] [value]
-			     :from [keyvalue]
-			     :where [and [= [clctn_id] clcn]]
-			     :database con
-			     )
-	      (clsql::select [key] [value]
-			     :from [keyvalue]
-			     :where [and [= [clctn_id] clcn]]
-			     :database con
-			     )
-	      )
+	   (clsql::select [pk] [key] [value]
+			 :from [keyvalue]
+			 :where [and [= [clctn_id] clcn]]
+			 :database con
+			 )
+ 	   (clsql::select [key] [value]
+ 			 :from [keyvalue]
+ 			 :where [and [= [clctn_id] clcn]]
+ 			 :database con
+ 			 )
+	   )
 	   )
 	 )
     (mapcar #'(lambda (x) (mapcar #'(lambda (q) (deserialize-from-base64-string q sc)) x))
 	    tuples)))
 
 (defun sql-from-root-existsp (key sc)
-  (sql-from-clcn-existsp (oid (controller-root sc)) key sc)
+  (sql-from-clcn-existsp 0 key sc)
   )
 
 (defun sql-from-clcn-existsp (clcn key sc)
@@ -775,7 +694,7 @@
 	nil)))
 
 (defun sql-remove-from-root (key sc)
-  (sql-remove-from-clcn (oid (controller-root sc)) key sc)
+  (sql-remove-from-clcn 0 key sc)
   )
 
 
@@ -803,6 +722,7 @@
 			 :database con
 			 ))
 	 (n (length tuples)))
+    ;;    (format t "num tuples = ~A~%" n)
     (if (< n 1)
 	nil
 	(let ((to-remove nil))
@@ -831,28 +751,6 @@
 			   :database con
 			   )
     ))
-
-(defun sql-remove-one-key-and-value-from-clcn (clcn key value sc)
-  (assert (integerp clcn))
-  (let* ((con (controller-db sc))
-	 (kbs (serialize-to-base64-string key sc))
-	 (vbs (serialize-to-base64-string value sc))
-	 (tuples
-	  (clsql::select [pk] 
-			 :from [keyvalue]
-			 :where [and [= [clctn_id] clcn] [= [key] kbs]
-			 [= [value] vbs]]
-			 :database con
-			 ))
-	 (n (length tuples)))
-    ;; This is really awful --- bad enough to make me think we should
-    ;; implement these things as ba
-    (let ((pk (caar tuples)))
-      (clsql::delete-records :from [keyvalue]
-			     :where [and [= [clctn_id] clcn] [= [pk] pk]]
-			     :database con
-			     )
-      )))
 	
 (clsql::restore-sql-reader-syntax-state) 
 

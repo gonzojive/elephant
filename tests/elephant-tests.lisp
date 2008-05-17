@@ -185,14 +185,6 @@
     (print (do-test 'indexing-timing))
     ))
 
-(defun do-basic-indexing-tests (&optional (spec *default-spec*))
-  "Just test indexing"
-  (with-open-store (spec) 
-    (make-stress-classes)
-    (print (do-test 'indexing-basic))
-))
-
-
 (defun do-collection-tests (&optional (spec *default-spec*))
   "Just test indexing"
   (with-open-store (spec) 

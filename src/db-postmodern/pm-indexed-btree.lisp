@@ -74,8 +74,8 @@
 (defmethod remove-kv (key (bt pm-indexed-btree))
   "Remove a key / value pair, and update secondary indices."
   (with-trans-and-vars (bt)
-    (multiple-value-bind (value found) (get-value key bt)
-      (when found
+    (let ((value (get-value key bt)))
+      (when value
         (let ((indices (indices bt)))
           (loop for index being the hash-value of indices do
                 (multiple-value-bind (index? secondary-key)

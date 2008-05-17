@@ -108,7 +108,13 @@ et cetera."))
 			    (max-locks elephant::*berkeley-db-max-locks*)
 			    (max-objects elephant::*berkeley-db-max-objects*))
   (let ((env (db-env-create))
-	(new-p (not (probe-file (elephant-db-path (second (controller-spec sc)))))))
+	(new-p (not (probe-file (let ((dir-spec (second (controller-spec sc))))
+				  (ctypecase dir-spec
+				    (pathname 
+				     (merge-pathnames (make-pathname :name "%ELEPHANT") dir-spec))
+				    ((or cons (vector character) (vector nil) base-string (member :wild nil))
+				     (make-pathname :directory dir-spec
+						    :name "%ELEPHANT"))))))))
     (setf (controller-environment sc) env)
     (db-env-set-flags env 0 :auto-commit t)
     (db-env-set-cachesize env 0 cache-size 1)
