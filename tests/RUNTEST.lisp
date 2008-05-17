@@ -17,7 +17,7 @@
 (asdf:operate 'asdf:load-op :ele-clsql)
 (asdf:operate 'asdf:load-op :ele-bdb)
 (asdf:operate 'asdf:load-op :ele-sqlite3)
-;; (asdf:operate 'asdf:load-op :postmodern)
+(asdf:operate 'asdf:load-op :postmodern)
 
 (asdf:operate 'asdf:load-op :elephant-tests)
 
