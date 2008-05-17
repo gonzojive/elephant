@@ -69,10 +69,10 @@
 
 (defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses index)
   "Ensures we inherit from persistent-object prior to initializing."
-  (declare (ignorable index))
-  (let ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
+  (let* ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
+    (declare (ignorable index))
     (apply #'call-next-method class slot-names
-	   :direct-superclasses new-direct-superclasses args)))
+ 	   :direct-superclasses new-direct-superclasses args)))
 
 (defun ensure-class-inherits-from (class from-classname direct-superclasses)
   (let* ((from-class (find-class from-classname))
@@ -159,7 +159,7 @@
   (ensure-transaction (:store-controller sc)
     (call-next-method)))
 
-(defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid &allow-other-keys)
+(defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid cache-mode &allow-other-keys)
   "Initializes the persistent slots via initargs or forms.
 This seems to be necessary because it is typical for
 implementations to optimize setting the slots via initforms
@@ -173,12 +173,16 @@ slots."
      (indexed-slots indexed-slot-names)
      (derived-slots derived-index-slot-names)
      (persistent-slots persistent-slot-names))
+    ;; Set caching mode to default
+    (setf (cache-mode instance) 
+	  (or cache-mode *cached-instance-default-mode*))
+    ;; Slot initialization
     (let* ((class (class-of instance))
 	   (persistent-initializable-slots 
 	    (union persistent-slots indexed-slots))
 	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
       (cond (from-oid ;; If re-starting, make sure we read the cached values
-	     (initialize-cached-slots instance cached-slots))
+	     (refresh-cached-slots instance cached-slots))
 	    (t        ;; If new instance, initialize all slots
 	     (setq transient-slots (union transient-slots cached-slots))
 	     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)))
@@ -427,17 +431,17 @@ slots."
 			 (slot-makunbound-using-class class instance slot)
 			 (call-next-method)))))
 
-#+allegro
+#+nil
 (defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
-;;  (ensure-finalized class)
-;;  (loop with persistent-slots = (union (persistent-slot-names class)
-;;				       (cached-slot-names class)
-;;				       (indexed-slot-names class))
-;;     for slot-def in (class-direct-slots instance)
-;;     when (member (slot-definition-name slot-def) persistent-slots)
-;;     do (initialize-accessors slot-def class))
-;;  (make-instances-obsolete class))
-  )
+  (declare (ignore initargs))
+  (ensure-finalized class)
+  (loop with persistent-slots = (union (persistent-slot-names class)
+				       (union (cached-slot-names class)
+					      (indexed-slot-names class)))
+     for slot-def in (class-direct-slots class)
+     when (member (slot-definition-name slot-def) persistent-slots)
+     do (initialize-accessors slot-def class))
+  (make-instances-obsolete class))
 
 #+allegro
 (defmethod initialize-accessors ((slot-definition persistent-slot-definition) class)
@@ -451,10 +455,13 @@ slots."
 
 #+allegro
 (defmethod initialize-accessors ((slot-definition cached-slot-definition) class)
-  (let ((writers (slot-definition-writers slot-definition))
-	(class-name (class-name class)))
-    (loop for writer in writers
-	  do (make-persistent-writer writer slot-definition class class-name))))
+   (let ((readers (slot-definition-readers slot-definition))
+	 (writers (slot-definition-writers slot-definition))
+	 (class-name (class-name class)))
+    (loop for reader in readers
+	  do (make-persistent-reader reader slot-definition class class-name))
+     (loop for writer in writers
+ 	  do (make-persistent-writer writer slot-definition class class-name))))
 
 #+allegro
 (defun make-persistent-reader (name slot-definition class class-name)

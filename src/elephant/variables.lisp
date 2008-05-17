@@ -58,6 +58,15 @@
    the class to cache multiple index controllers.  Set by
    a user configurable parameter.")
 
+(defconstant +none-cached+ 0)
+(defconstant +all-cached+ 1)
+(defconstant +all-write-through+ 2)
+(defconstant +index-write-through+ 3)
+
+(defparameter *cached-instance-default-mode* +none-cached+
+   "Determines the global default for cache mode on
+    instances.  Override with instance initarg :cache-mode")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Optimization parameters 
 

@@ -325,7 +325,7 @@
   (1 2 3) (1 2 3) (1 2 4) (2 3) (4))
 
 
-(deftest (indexing-range-simnple :depends-on index-reset)
+(deftest (indexing-range-simple :depends-on index-reset)
     (progn
 
        (defclass idx-four ()

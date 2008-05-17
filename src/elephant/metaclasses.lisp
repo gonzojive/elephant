@@ -28,7 +28,8 @@
 	 :documentation "All persistent objects have an oid")
    (spec :type (or list string) :accessor db-spec :initarg :db-spec
 	 :documentation "Persistent objects use a spec pointer to identify which store
-                         they are connected to"))
+                         they are connected to")
+   (cache-mode :type fixnum :initarg :cache-mode :initform *cached-instance-default-mode*))
   (:documentation "Abstract superclass for all persistent classes (common
     to both user-defined classes and Elephant-defined objects such as collections.)"))
 
@@ -40,7 +41,7 @@
   ((%class-schema :accessor %class-schema :initarg :schemas :initform nil
 		   :documentation "The code master schema")
    (%store-schemas :accessor %store-schemas :initarg :store-schemas :initform nil)
-   (%class-indexing :accessor %class-indexing :initarg :index :initform t)) ;; or nil or weak
+   (%class-indexing :accessor %class-indexing :initarg :index :initform t))
   (:documentation 
    "Metaclass for persistent classes.  Use this metaclass to
     define persistent classes.  All slots are persistent by

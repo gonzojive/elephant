@@ -94,7 +94,7 @@
 ;;  Handling updates
 ;; ==========================
 
-tion(defun update-association-end (class instance slot-def target)
+(defun update-association-end (class instance slot-def target)
   "Get the association index and add the target object as a key that
    refers back to this instance so we can get the set of referrers to target"
   (let ((index (get-association-index slot-def (get-con instance))))

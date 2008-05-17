@@ -218,10 +218,19 @@
    #:persistent-collection #:drop-pobject
    #:*oid-only* #:*default-retries*
 
+   ;; Cached slots
+   #:cache-mode #:refresh #:save #:with-cached-instances
+
+   ;; PSets 
    #:pset #:make-pset #:insert-item #:remove-item #:map-pset #:find-item #:pset-list #:drop-pset
 
+   ;; Set-valued slots
    #:slot-set #:make-slot-set #:map-slot-set #:slot-set-list #:drop-slot-set
 
+   ;; Associations - low level access to association dup-btree
+   #:get-association-index
+
+   ;; BTrees
    #:btree #:make-btree
    #:dup-btree #:make-dup-btree
    #:get-value #:remove-kv #:remove-kv-pair #:existsp
