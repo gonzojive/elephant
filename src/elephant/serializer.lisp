@@ -25,13 +25,13 @@
 (defun serialize (frob bs sc)
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
-  (check-valid-store-controller sc)
+;;  (check-valid-store-controller sc)
   (funcall (symbol-function (controller-serialize sc)) frob bs sc))
 
 (defun deserialize (bs sc &optional oid-only)
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
-  (check-valid-store-controller sc)
+;;  (check-valid-store-controller sc)
   (handler-case 
       (funcall (symbol-function (controller-deserialize sc)) bs sc oid-only)
 ;;    (unbound-slot (u)
