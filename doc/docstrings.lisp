@@ -669,6 +669,7 @@ followed another tabulation label or a tabulation body."
   (when (member (get-kind doc) '(class structure condition))
     (let ((name (get-name doc)))
       ;; class precedence list
+      (sb-mop:finalize-inheritance (find-class name))
       (format *texinfo-output* "Class precedence list: @code{~(~{@w{~A}~^, ~}~)}~%~%"
 	      (remove-if (lambda (class)  (hide-superclass-p name class))
 			 (mapcar #'class-name (class-precedence-list (find-class name)))))
