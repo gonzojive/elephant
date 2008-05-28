@@ -82,12 +82,12 @@
 ;; Cache mode and instance-level operations
 ;;
 
-(defmethod refresh ((object persistent-object))
+(defmethod refresh-slots ((object persistent-object))
   "Ensures that all memory slots are up-to-date with the repository,
    also creates read locks on all slots for transaction conflict detection"
   (refresh-cached-slots object (cached-slot-names (class-of object))))
 
-(defmethod save ((object persistent-object))
+(defmethod save-slots ((object persistent-object))
   "Ensures that all cached values are flushed to the store, issues write
    locks on the object for transaction conflict detection"
   (flush-cached-slots object (cached-slot-names (class-of object))))
@@ -129,5 +129,3 @@
        (mapcar #'(lambda (old-mode inst)
 		   (setf (slot-value inst 'cache-mode) old-mode))
 	       old-modes ,insts)))))
-
-				

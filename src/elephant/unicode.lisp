@@ -31,7 +31,7 @@
 
 (in-package :elephant-serializer2)
 
-(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 2)))
+(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 1)))
 
 ;; 
 ;; Serialize string: simplify store by discovering utf8/utf16 and utf32; trade off
@@ -62,9 +62,11 @@
 					(size buffer-stream-size)
 					(allocated buffer-stream-length))
       bstream
-    (let* ((saved-size (buffer-stream-size bstream))
-	   (saved-pos (elephant-memutil::buffer-stream-position bstream))
-	   (characters (length string)))
+    (declare (type array-or-pointer-char buffer)
+	     (type fixnum size allocated))
+    (let* ((saved-size (the fixnum (buffer-stream-size bstream)))
+	   (saved-pos (the fixnum (elephant-memutil::buffer-stream-position bstream)))
+	   (characters (the fixnum (length string))))
       (labels ((fail () 
 		 (setf (buffer-stream-size bstream) saved-size)
 		 (setf (elephant-memutil::buffer-stream-position bstream) saved-pos)
@@ -73,23 +75,27 @@
 		 (return-from serialize-to-utf8 t)))
 	(buffer-write-byte +utf8-string+ bstream)
 	(buffer-write-int32 characters bstream)
-	(let ((needed (+ size characters)))
-	    (declare (type fixnum needed))
-	    (when (> needed allocated)
-	      (resize-buffer-stream bstream needed))
-	    (etypecase string
-	      (simple-string
-	       (loop for i fixnum from 0 below characters do
-		    (let ((code (char-code (schar string i))))
-		      (declare (type fixnum code))
-		      (when (> code #xFF) (fail))
-		      (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ i size)) code))))
-	      (string
-	       (loop for i fixnum from 0 below characters do 
-		    (let ((code (char-code (char string i))))
-		      (declare (type fixnum code))
-		      (when (> code #xFF) (fail))
-		      (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ i size)) code)))))
+	(let ((needed (the fixnum (+ size characters))))
+	  (when (the boolean (> needed allocated))
+	    (resize-buffer-stream bstream needed))
+	  (etypecase string
+	    (simple-string
+	     (loop for i fixnum from 0 below characters do
+		  (let ((code (the fixnum 
+				(char-code 
+				 (the character (schar string i))))))
+		    (declare (type fixnum code))
+		    (when (the boolean (> code #xFF)) (fail))
+		    (setf (uffi:deref-array buffer '(:array :unsigned-char) 
+					    (+ i size)) code))))
+	    (string
+	     (loop for i fixnum from 0 below characters do 
+		  (let ((code (the fixnum
+				(char-code 
+				 (the character (char string i))))))
+		    (declare (type fixnum code))
+		    (when (> code #xFF) (fail))
+		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ i size)) code)))))
 	    (setf (buffer-stream-size bstream) needed)
 	    (succeed))))))
 
@@ -188,24 +194,29 @@
 
 (defgeneric deserialize-string (type bstream &optional temp-string))
 
+
+#+lispworks 
 (defmethod deserialize-string :around ((type t) bstream &optional temp-string)
-  #+lispworks (coerce (call-next-method) 'lispworks:simple-text-string)
-  #-lispworks (call-next-method))
+  (coerce (call-next-method) 'lispworks:simple-text-string))
 
 (defmethod deserialize-string ((type (eql :utf8)) bstream &optional temp-string)
-  (declare (type buffer-stream bstream))
+  (declare (type buffer-stream bstream)
+	   (type string temp-string)
+	   (type symbol type))
   ;; Default char-code method
-  (let* ((length (buffer-read-int32 bstream))
-	 (pos (elephant-memutil::buffer-stream-position bstream)))
+  (let* ((length (the fixnum (buffer-read-int32 bstream)))
+	 (pos (the fixnum (elephant-memutil::buffer-stream-position bstream))))
     (incf (elephant-memutil::buffer-stream-position bstream) length)
     (progn
-      (let ((string (or temp-string (make-string length :element-type 'character))))
+      (let ((string (the string (or temp-string (make-string length :element-type 'character)))))
 	(loop for i fixnum from 0 below length do
 	     (setf (char string i)
-		   (code-char (uffi:deref-array (buffer-stream-buffer bstream) 
-						'(:array :unsigned-byte) 
-						(+ pos i)))))
-	(the simple-string string)))))
+		   (the character 
+		     (code-char 
+		      (the fixnum (uffi:deref-array (buffer-stream-buffer bstream) 
+						    '(:array :unsigned-byte) 
+						    (+ pos i)))))))
+	string))))
 
 (defmethod deserialize-string ((type (eql :utf16le)) bstream &optional temp-string)
   "All returned strings are simple-strings for, uh, simplicity"

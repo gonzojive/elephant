@@ -119,10 +119,11 @@
 (defun get-circularity-hash ()
   "Get a clean hash for object serialization"
   (declare (type fixnum *circularity-initial-hash-size*))
-  (if (= 0 (length *circularity-hash-queue*))
-      (make-hash-table :test 'eq :size *circularity-initial-hash-size*)
-      (ele-with-fast-lock (*serializer-fast-lock*)
-	(vector-pop *circularity-hash-queue*))))
+  (or
+     (ele-with-fast-lock (*serializer-fast-lock*)
+       (and (plusp (length *circularity-hash-queue*))
+            (vector-pop *circularity-hash-queue*)))
+     (make-hash-table :test 'eq :size *circularity-initial-hash-size*)))
 
 (defun release-circularity-hash (hash)
   "Return the hash to the queue for reuse"
@@ -174,7 +175,9 @@
   (declare (type buffer-stream bs)
 	   (ignorable sc))
   (let ((lisp-obj-id -1)
-	(circularity-hash (get-circularity-hash)))
+	(circularity-hash 
+	 (unless (or (stringp frob) (symbolp frob) (numberp frob))
+	   (get-circularity-hash))))
     (labels 
 	((%next-object-id ()
 	   (incf lisp-obj-id))
@@ -325,7 +328,8 @@
 			   do (%serialize item)))))))
  	     (t (format t "Can't serialize a object: ~A of type ~A~%" frob (type-of frob))))))
       (%serialize frob)
-      (release-circularity-hash circularity-hash)
+      (when circularity-hash
+	(release-circularity-hash circularity-hash))
       bs)))
 
 (defun serialize-bignum (frob bs)

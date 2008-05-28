@@ -56,14 +56,14 @@
   (:documentation "Construct an empty default pset or backend specific pset.
                    This is an internal function used by make-pset"))
 
-(defgeneric insert-item (item slot-set)
-  (:documentation "Insert a new item into the pset"))
+;;(defgeneric insert-item (item slot-set)
+;;  (:documentation "Insert a new item into the pset"))
 
-(defgeneric remove-item (item slot-set)
-  (:documentation "Remove specified item from pset"))
+;;(defgeneric remove-item (item slot-set)
+;;  (:documentation "Remove specified item from pset"))
 
-(defgeneric find-item (item slot-set &key key test)
-  (:documentation "Find a an item in the pset using key and test"))
+;;(defgeneric find-item (item slot-set &key key test)
+;;  (:documentation "Find a an item in the pset using key and test"))
 
 (defgeneric slot-set-list (slot-set)
   (:documentation "Convert items of pset into a list for processing"))

@@ -605,8 +605,10 @@
 	    (index-check nil)
 	    (normal-time 0)
 	    (index-time 0))
+
 	(when insts
-	  (drop-instances insts :sc *store-controller*))
+	  (with-transaction ()
+	    (drop-instances insts :sc *store-controller*)))
 
 	(with-transaction ()
 	  (normal-stress-setup *stress-count* 'stress-normal :stress2 10))
