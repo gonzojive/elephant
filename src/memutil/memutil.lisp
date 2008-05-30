@@ -149,10 +149,10 @@
 
 (defun grab-buffer-stream ()
   "Grab a buffer-stream from the *buffer-streams* resource pool."
-  (if (= (length *buffer-streams*) 0)
-      (make-buffer-stream)
-      (ele-with-fast-lock (*buffer-streams-lock*)
-	(vector-pop *buffer-streams*))))
+  (or (ele-with-fast-lock (*buffer-streams-lock*)
+        (and (plusp (length *buffer-streams*))
+             (vector-pop *buffer-streams*)))
+      (make-buffer-stream)))
 
 (defun return-buffer-stream (bs)
   "Return a buffer-stream to the *buffer-streams* resource pool."
