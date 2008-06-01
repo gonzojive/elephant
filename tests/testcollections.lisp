@@ -1108,7 +1108,7 @@
        :accessor k)))
 
 (defclass managed-object ()
-  ((mid :type key
+  ((mid :type (or null key)
 	:initform nil
 	:initarg :mid
 	:accessor mid)
@@ -1116,7 +1116,7 @@
   )
 
 (defclass Message (managed-object)
-  ((msgid :type list :initform "" :accessor msgd :initarg :msgid)
+  ((msgid :type (or list string) :initform "" :accessor msgd :initarg :msgid)
    (value :type (or list string) :initform "" :accessor vl :initarg :value)))
 
 (deftest unicodepositiontest

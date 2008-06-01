@@ -52,10 +52,11 @@
 				 :name "config"
 				 :type "sexp")))
     (unless (probe-file filespec)
-      (with-simple-restart (accept-default "Create default settings for my-config.sexp and proceed: ~A")
+      (with-simple-restart (accept-default "Create default settings for my-config.sexp and proceed.")
 	(error "Missing configuration file: my-config.sexp.  Please copy config.sexp to my-config.sexp and customize for your local environment."))
+      (with-open-file (src orig-filespec :direction :input)
 	(with-open-file (dest filespec :direction :output)
-	  (write defaults :stream dest)))
+	  (write (read src) :stream dest))))
     (with-open-file (config filespec)
       (cdr (assoc option (read config))))))
 

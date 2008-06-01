@@ -742,7 +742,7 @@
 ;; Duplicated btrees
 
 (defclass bdb-dup-btree (dup-btree bdb-btree) ()
-  (:metaclass persistent-metaclass)
+;;  (:metaclass persistent-metaclass)
   (:documentation "A Berkeley Implementation of the duplicate btree"))
 
 (defmethod build-dup-btree ((sc bdb-store-controller))
