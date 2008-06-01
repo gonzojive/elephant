@@ -47,10 +47,15 @@
 (defun get-config-option (option component)
   (let ((filespec (make-pathname :defaults (asdf:component-pathname (asdf:component-system component))
 				 :name "my-config"
+				 :type "sexp"))
+	(orig-filespec (make-pathname :defaults (asdf:component-pathname (asdf:component-system component))
+				 :name "config"
 				 :type "sexp")))
     (unless (probe-file filespec)
-      (error "Missing file. Copy config.sexp in elephant root
-directory to my-config.sexp and edit it appropriately."))
+      (with-simple-restart (accept-default "Create default settings for my-config.sexp and proceed: ~A")
+	(error "Missing configuration file: my-config.sexp.  Please copy config.sexp to my-config.sexp and customize for your local environment."))
+	(with-open-file (dest filespec :direction :output)
+	  (write defaults :stream dest)))
     (with-open-file (config filespec)
       (cdr (assoc option (read config))))))
 
