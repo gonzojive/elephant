@@ -23,8 +23,7 @@
 (in-package "ELEPHANT")
 
 #-elephant-without-optimize
-(eval-when (:compile-toplevel)
-  (declaim (optimize (speed 3) (safety 1) (space 1))))
+(declaim (optimize speed (safety 0) (space 0) (debug 0)))
 
 ;;; collection types
 ;;; we're slot-less

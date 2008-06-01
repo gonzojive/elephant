@@ -33,7 +33,7 @@
    Elephant, but with some magic for Elephant.  In general there
    is a 1-1 mapping from functions here and functions in
    Berkeley DB, so refer to their documentation for details.")
-  (:use common-lisp uffi elephant-memutil elephant elephant-data-store elephant-utils)
+  (:use common-lisp elephant-memutil elephant elephant-data-store elephant-utils uffi)
   #+cmu
   (:use alien)
   #+sbcl
@@ -43,7 +43,7 @@
 		#:sap+)
   #+sbcl
   (:import-from :sb-sys
-		#:sap+)  
+		#:sap+)
   #+openmcl
   (:import-from :ccl
 		#:byte-length)

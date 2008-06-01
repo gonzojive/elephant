@@ -39,6 +39,21 @@
 ;; go for simplicity and portability for now.
 ;;
 
+;; #+allegro
+;; (defun serialize-string (string bstream)
+;;   (elephant-memutil::with-struct-slots ((buffer buffer-stream-buffer)
+;; 					(size buffer-stream-size)
+;; 					(allocated buffer-stream-length))
+;;       bstream
+;;     (declare (type array-or-pointer-char buffer)
+;; 	     (type fixnum size allocated)
+;; 	     (ignorable allocated))
+;;     (buffer-write-byte +utf8-string+ bstream)
+;;     (buffer-write-int32
+;;      (the fixnum (excl:native-string-sizeof string :external-format :utf8)) bstream)
+;;     (excl:string-to-native string :address (+ buffer size) :external-format :utf8)))
+
+;; #-allegro
 (defun serialize-string (string bstream)
   "Try to write each format type and bail if code is too big"
   (declare (type buffer-stream bstream)
@@ -199,9 +214,33 @@
 (defmethod deserialize-string :around ((type t) bstream &optional temp-string)
   (coerce (call-next-method) 'lispworks:simple-text-string))
 
+;; #+allegro
+;; (defmethod deserialize-string ((type (eql :utf8)) bstream &optional temp-string)
+;;   (declare (type buffer-stream bstream)
+;; 	   (type string temp-string)
+;; 	   (type symbol type))
+;;   (elephant-memutil::with-struct-slots ((buffer buffer-stream-buffer)
+;; 					(size buffer-stream-size)
+;; 					(allocated buffer-stream-length))
+;;       bstream
+;;     (declare (type array-or-pointer-char buffer)
+;; 	     (type fixnum size allocated))
+;;     (let* ((length (the fixnum (buffer-read-int32 bstream)))
+;; 	   (pos (the fixnum (elephant-memutil::buffer-stream-position bstream))))
+;;       (multiple-value-bind (string chars octets)
+;; 	  (if temp-string
+;; 	      (excl:native-to-string (+ buffer pos)
+;; 				     :string temp-string :make-string? nil
+;; 				     :length length)
+;; 	      (excl:native-to-string (+ buffer pos) :length length))
+;; 	(declare (ignorable chars))
+;; 	(incf (elephant-memutil::buffer-stream-position bstream) octets)
+;; 	string))))
+ 
+;; #-allegro
 (defmethod deserialize-string ((type (eql :utf8)) bstream &optional temp-string)
   (declare (type buffer-stream bstream)
-	   (type string temp-string)
+	   (type (or null string) temp-string)
 	   (type symbol type))
   ;; Default char-code method
   (let* ((length (the fixnum (buffer-read-int32 bstream)))
