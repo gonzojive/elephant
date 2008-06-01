@@ -215,7 +215,8 @@
    #:optimize-layout 
 
    #:persistent #:persistent-object #:persistent-metaclass #:defpclass
-   #:persistent-collection #:drop-pobject
+   #:persistent-collection 
+   #:drop-instance #:drop-instances #:drop-instance-slots
    #:*oid-only* #:*default-retries*
 
    ;; Cached slots

@@ -243,12 +243,6 @@ slots."
 	    :class class
 	    :slotnames names)))
 
-(defun drop-slots (class instance slotnames)
-  (when slotnames
-    (loop for slot-def in (class-slots class)
-       when (member (slot-definition-name slot-def) slotnames)
-       do (slot-makunbound-using-class class instance slot-def))))
-
 ;; ================================================
 ;;  RECREATING A PERSISTENT INSTANCE FROM THE DB
 ;; ================================================

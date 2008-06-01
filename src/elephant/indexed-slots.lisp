@@ -213,17 +213,6 @@
 	   (type symbol idx-name))
   (map-inverted-index #'identity2 class idx-name :start start :end end :collect t))
 
-(defun drop-instances (instances &key (sc *store-controller*) (txn-size 500))
-  "Removes a list of persistent objects from all class indices
-   and unbinds any slot values"
-  (when instances
-    (assert (consp instances))
-    (do-subsets (subset txn-size instances)
-      (ensure-transaction (:store-controller sc)
-	(mapc (lambda (instance)
-		(drop-pobject instance))
-	      subset)))))
-
 ;; ======================
 ;;    USER MAPPING API 
 ;; ======================

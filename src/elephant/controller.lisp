@@ -781,8 +781,8 @@ true."))
 ;; Explicit storage reclamation
 ;;
 
-(defgeneric drop-pobject (persistent-object)
-  (:documentation   "drop-pobject reclaims persistent object storage by unbinding
+(defgeneric drop-instance (persistent-object)
+  (:documentation   "drop-instance reclaims persistent object storage by unbinding
    all persistent slot values.  It can also helps catch errors
    where an object should be unreachable, but a reference still
    exists elsewhere in the DB.  On access, the unbound slots
@@ -791,17 +791,30 @@ true."))
    Need a migration or GC for that!  drop-instances is the user-facing call 
    as it implements the proper behavior for indexed classes"))
 
-(defmethod drop-pobject ((inst persistent-object))
-  ;; NOTE: Does this do the right thing with indexing?
-  (let ((sc (get-con inst))
-	(pslots (set-difference (all-persistent-slot-names (class-of inst))
-				(derived-index-slot-names (class-of inst)))))
+(defmethod drop-instance ((inst persistent-object))
+  (let ((sc (get-con inst)))
     (ensure-transaction (:store-controller sc)
-      (dolist (slot pslots)
-	(slot-makunbound inst slot))
+      (drop-instance-slots inst)
       (ele-with-fast-lock ((controller-instance-cache-lock sc))
 	(remcache (oid inst) (controller-instance-cache sc)))
       (remove-kv (oid inst) (controller-instance-table sc)))))
+
+(defun drop-instance-slots (instance)
+  "A helper function for drop-instance, that deletes the storage of 
+   persistent slots of instance from the db"
+  (let ((class (class-of instance)))
+    (loop for slot-def in (class-slots class)
+       when (persistent-p slot-def)
+       do (slot-makunbound-using-class class instance slot-def))))
+
+(defun drop-instances (instances &key (sc *store-controller*) (txn-size 500))
+  "Removes a list of persistent objects from all class indices
+   and unbinds any persistent slot values associated with those instances"
+  (when instances
+    (assert (consp instances))
+    (do-subsets (subset txn-size instances)
+      (ensure-transaction (:store-controller sc)
+	(mapc #'drop-instance subset)))))
 
 ;;
 ;; DATABASE PROPERTY INTERFACE (Not used by system as of 0.6.1, but supported)
