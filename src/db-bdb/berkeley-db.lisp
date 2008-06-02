@@ -23,7 +23,7 @@
 (in-package :db-bdb)
 
 (declaim 
- #-elephant-without-optimize (optimize (speed 3) (safety 0))
+ #-elephant-without-optimize (optimize (speed 3) (safety 1) (debug 1) (space 1))
  #-lispworks
  (inline %db-get-key-buffered db-get-key-buffered 
 		 %db-get-buffered db-get-buffered db-get 
@@ -69,7 +69,7 @@
 ;; EXTERNAL LIBRARY DEPENDENCIES - LOAD DURING LOAD/COMPILATION
 ;;
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :execute)
 
   (def-function ("db_strerr" %db-strerror)
       ((error :int))
@@ -392,7 +392,7 @@
 
 ;; Database
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
   (def-enum DBTYPE ((:BTREE 1) :HASH :QUEUE :RECNO :UNKNOWN)))
 
 (def-function ("db_cr" %db-create)

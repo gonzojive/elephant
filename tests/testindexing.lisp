@@ -17,7 +17,7 @@
   (trace ((method shared-initialize :around (persistent-metaclass t))))
   (trace elephant::find-class-index)
   (trace get-instances-by-class)
-  (trace get-instances-by-value)  
+  (trace get-instances-by-value)
   (trace get-instances-by-range)
   (trace elephant::cache-instance)
   (trace elephant::get-cached-instance)
@@ -30,18 +30,18 @@
 (defvar inst3)
 
 (defun wipe-class (name)
-  (handler-case 
-      (when (find-class name nil)
-	(when (elephant::persistent-p (find-class name))
-	  (drop-instances (get-instances-by-class (find-class name)))))
-    (program-error ()
-      nil)))
+  (let ((class (find-class name nil)))
+    (handler-case 
+	(when (elephant::persistent-p class)
+	  (drop-instances (get-instances-by-class class)))
+      (program-error ()
+	nil))))
 
 (defun wipe-all ()
-  (mapcar #'wipe-class
-	  '(idx-one-a idx-one-b idx-one-c idx-one-d idx-one-e idx-one-f
-	    idx-two idx-cslot idx-three idx-four idx-unbound-del
-	    idx-five-del idx-five idx-six idx-seven idx-eight)))
+  (mapc #'wipe-class
+	'(idx-one-a idx-one-b idx-one-c idx-one-d idx-one-e idx-one-f
+	  idx-two idx-cslot idx-three idx-four idx-unbound-del
+	  idx-five-del idx-five idx-six idx-seven idx-eight)))
 
 (deftest index-reset
     (listp (wipe-all))

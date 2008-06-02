@@ -260,6 +260,7 @@ slots."
     (shared-initialize instance t :from-oid from-oid)))
 
 (defmethod recreate-instance-using-class ((class standard-class) &rest initargs &key &allow-other-keys)
+  (declare (ignore initargs))
   "Simply allocate store, the state of the slots will be filled by the data from the 
    database.  We do not want to call initialize-instance and re-evaluate the initforms;
    we are just fetching the object & values from the store"

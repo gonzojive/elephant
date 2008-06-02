@@ -307,7 +307,11 @@
   (awhen (get-cached-instance sc oid)
     (return-from controller-recreate-instance it))
   (multiple-value-bind (class schema) (get-instance-class sc oid classname)
-    (recreate-instance-using-class class :from-oid oid :sc sc :schema schema)))
+    (let ((instance (recreate-instance-using-class class :from-oid oid :sc sc :schema schema)))
+      (when (subtypep class 'persistent-collection)
+	(initial-persistent-setup instance :from-oid oid :sc sc))
+      instance)))
+    
 
 ;;
 ;; Controller instance caching
