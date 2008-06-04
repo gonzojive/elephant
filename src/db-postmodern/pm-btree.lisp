@@ -8,8 +8,9 @@
 
 (defmethod print-object ((pm-btree pm-btree) stream)
   (print-unreadable-object (pm-btree stream :type t :identity t)
-    (format stream "db-table:~a" (table-of pm-btree))))
-
+    (format stream "db-table:~a"
+	    (when (slot-boundp pm-btree 'dbtable)
+	      (table-of pm-btree)))))
 
 (define-condition db-error (serious-condition) ())
 (define-condition bad-db-parameter (db-error) ())
@@ -66,7 +67,7 @@
       (error "btree is not initialized properly"))
     (while-ignoring-warnings 
       (cl-postgres:exec-query (active-connection)
-                              (format nil "create table ~a (qi ~a ~a not null, value ~a not null) with oids;"
+                              (format nil "create table ~a (qi ~a ~a not null, value ~a not null);"
                                       (table-of bt)
                                       (postgres-type (key-type-of bt))
                                       (if (duplicates-allowed-p bt)
@@ -305,3 +306,21 @@ and make the old instance refer to the new database table"
 			   (list (key-parameter key bt))
                            'cl-postgres:ignore-row-reader))))
 
+;; btree with duplicates
+
+(defclass pm-dup-btree (dup-btree pm-btree)
+  ()
+  (:metaclass persistent-metaclass))
+
+(defmethod duplicates-allowed-p ((bt pm-dup-btree)) t)
+
+(defmethod prepare-local-queries :after ((bt pm-dup-btree))
+  (register-query bt 'delete-both (format nil "delete from ~a where qi=$1 and value=$2" (table-of bt))))
+
+(defmethod remove-kv-pair (k v (bt pm-dup-btree)) ;; TODO: invalidate cache?
+  (when (initialized-p bt)
+    (with-trans-and-vars (bt)
+      (btree-exec-prepared bt 'delete-both
+                           (list (postgres-format k (key-type-of bt))
+                                 (postgres-format v (value-type-of bt)))
+                           'cl-postgres:ignore-row-reader))))

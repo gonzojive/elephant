@@ -16,8 +16,8 @@
 
 (defmethod cursor-duplicate ((cursor pm-cursor))
   (make-instance (type-of cursor)
-		 :btree bt
-		 :oid (oid bt)
+		 :btree (cursor-btree cursor)
+		 :oid (oid (cursor-btree cursor))
 		 :current-row (current-row-of cursor)
 		 :key (current-key-of cursor)
 		 :value (current-value-of cursor)))
@@ -72,7 +72,7 @@
   (or (third (current-row-of cursor)) (second (current-row-of cursor))))
 
 (defmethod cursor-current-query-params-auto ((cursor pm-cursor))
-  (with-slots (btree) cursor (list (ensure-string (current-raw-key-of cursor)))))
+  (list (ensure-string (current-raw-key-of cursor))))
 
 (defmethod cursor-fetch ((cursor pm-cursor) query params &key reset-cache cache-prior)
   "execute query to fetch stuff into cache."
@@ -108,14 +108,13 @@
 	(cached-prior-rows-of cursor) nil)
   nil)
 
-+(defmethod cursor-update-current ((cursor pm-cursor))
+(defmethod cursor-update-current ((cursor pm-cursor))
   (let ((row (current-row-of cursor))
 	(btree (cursor-btree cursor)))
     (assert row)
     (with-vars (btree)
       (setf (current-key-of cursor) (postgres-value-to-lisp (first row) (key-type-of btree))
 	    (current-value-of cursor) (postgres-value-to-lisp (second row) (value-type-of btree))))))
-
 
 (defmethod cursor-fetch-next-from-cache ((cursor pm-cursor))
   (with-slots (rows prior-rows current-row) cursor
@@ -210,3 +209,64 @@
 	value)
       (error "Can't put with uninitialized cursor")))
 
+(defclass pm-dupb-cursor (pm-cursor) ())
+
+(defmethod make-cursor ((bt pm-dup-btree))
+  (make-instance 'pm-dupb-cursor
+		 :btree bt
+		 :oid (oid bt)))
+
+(defmethod cursor-current-query-params-auto ((cursor pm-dupb-cursor))
+  (list (ensure-string (current-raw-key-of cursor))
+	(ensure-string (current-raw-value-of cursor))))
+
+(defmacro def-cursor-dup-mover (myname basename) ; macro just for two functions ain't really good, but..
+  `(defmethod ,myname ((cursor pm-dupb-cursor))
+    (unless (cursor-initialized-p cursor) (return-from ,myname))
+    (let ((ckey (current-raw-key-of cursor)))
+      (multiple-value-bind (found k v)
+	  (,basename cursor)
+	(if (and found (equal ckey (current-raw-key-of cursor)))
+	    (values found k v)
+	    (cursor-close cursor))))))
+
+(def-cursor-dup-mover cursor-next-dup cursor-next)
+(def-cursor-dup-mover cursor-prev-dup cursor-prev)
+
+(defmacro def-cursor-nodup-mover (name from-cache-fetcher cache-filler)
+  `(defmethod ,name ((cursor pm-dupb-cursor))
+    (unless (cursor-initialized-p cursor) (return-from ,name))
+    (let ((okey (current-raw-key-of cursor)))
+      (loop (multiple-value-bind (found k v)
+		(,from-cache-fetcher cursor)
+	      (cond
+		((and found (not (equal (current-raw-key-of cursor) okey)))
+		 (return-from ,name (values t k v)))
+		((not found)
+		 ,cache-filler
+		 (return-from ,name (,from-cache-fetcher cursor)))
+	      (t :continue)))))))
+
+(def-cursor-nodup-mover cursor-next-nodup cursor-fetch-next-from-cache
+  (cursor-fetch-auto cursor 'next-nodup 
+		     (:key-compare '> :value-compare nil)
+		     ((list (ensure-string okey)) :reset-cache t)))
+
+(def-cursor-nodup-mover cursor-prev-nodup cursor-fetch-prev-from-cache
+  (cursor-fetch-auto cursor 'prev-nodup
+		     (:key-compare '< :value-compare nil :key-order "DESC")
+		     ((list (ensure-string okey)) :reset-cache t :cache-prior t)))
+
+(defmethod cursor-get-both-range ((cursor pm-dupb-cursor) key val)
+  (cursor-fetch-auto cursor 'get-both
+		     (:key-compare nil :value-compare '>=)
+		     ((list (key-parameter key btree)
+			    (value-parameter val btree)) :reset-cache t))
+  (cursor-fetch-next-from-cache cursor))
+
+(defmethod cursor-get-both ((cursor pm-dupb-cursor) key val)
+  (multiple-value-bind (found k v)
+      (cursor-get-both-range cursor key val)
+    (if (and found (ele::lisp-compare-equal val (current-value-of cursor)))
+	(values t k v)
+	(cursor-close cursor))))

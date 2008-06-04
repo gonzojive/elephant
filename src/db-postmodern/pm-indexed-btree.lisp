@@ -8,10 +8,10 @@
 (defmethod shared-initialize :after ((instance pm-indexed-btree) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
-  ;; It seems like this is sometimes unbound, but how can it be?
+  ;; questionable workaround to create system tables from oid.
   (unless (slot-boundp instance 'indices)
     (setf (indices instance) (make-hash-table))))
-  
+
 (defmethod build-indexed-btree ((sc postmodern-store-controller))
   (make-instance 'pm-indexed-btree :sc sc))
 
@@ -81,7 +81,7 @@
                 (multiple-value-bind (index? secondary-key)
                     (funcall (key-fn index) index key value)
                   (when index?
-                    (remove-key-and-value-pair secondary-key key index)))))
+                    (remove-kv-pair secondary-key key index)))))
         ;; Now we remove the actual value
         (call-next-method))
       value)))

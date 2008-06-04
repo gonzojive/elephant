@@ -28,6 +28,9 @@
 (defmethod build-btree ((sc postmodern-store-controller))
   (make-instance 'pm-btree :sc sc))
 
+(defmethod build-dup-btree ((sc postmodern-store-controller))
+  (make-instance 'pm-dup-btree :sc sc))
+
 (defmethod supports-sequence ((sc postmodern-store-controller))
   t)
 
