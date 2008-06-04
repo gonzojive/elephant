@@ -146,13 +146,14 @@
    the next one into the array already knowing what the
    ID is")
 
+   
 (defun get-circularity-vector ()
   "Get a fresh vector"
-  (if (= 0 (length *circularity-vector-queue*))
+  (or (ele-with-fast-lock (*serializer-fast-lock*)
+	(and (plusp (length *circularity-vector-queue*))
+	     (vector-pop *circularity-vector-queue*)))
       (make-array 50 :element-type t :initial-element nil 
-		  :fill-pointer 0 :adjustable t)
-      (ele-with-fast-lock (*serializer-fast-lock*)
-	(vector-pop *circularity-vector-queue*))))
+		  :fill-pointer 0 :adjustable t)))
 
 (defun release-circularity-vector (vector)
   "Don't need to erase, just reset fill-pointer as it 
