@@ -257,8 +257,8 @@ tablename text primary key not null,
 keytype text not null,
 valuetype text not null);"
                   "create index idx_blob_bob_md5 on blob (bob_md5);"
-                  ;;  "create index idx_blob_bid on blob (bid);" ;;already made implicitly when defining primary key for table
-                  "create sequence persistent_seq start with 10;")) ;; make room for some system tables
+		  "create sequence class_id_seq start with 50;"
+                  "create sequence persistent_seq start with 50;")) ;; make room for some system tables
     (cl-postgres:exec-query connection stmt)))
 
 (defun create-message-table (connection)

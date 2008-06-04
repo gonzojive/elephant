@@ -166,6 +166,25 @@
   (let ((*cache-mode* nil)) ;;disable caching during initialization
     (call-next-method)))
 
+(defmethod flush-instance-cache ((sc postmodern-store-controller))
+  "Reset the instance cache (flush object lookups). 
+   Need specialized version for postmodern because it relies on
+   system btrees being cached. "
+  (ele-with-fast-lock ((ele::controller-instance-cache-lock sc))
+    ;; cannot call-next-method because fast-locks 
+    ;; are not recursive, and we need atomicity here.
+    (let ((ct (setf (ele::controller-instance-cache sc)
+		    (ele::make-cache-table :test 'eql))))
+      ;; again, can't use cache-instance 
+      ;; because non-recursive locks
+      (setf (ele::get-cache (oid (slot-value sc 'root)) ct) (slot-value sc 'root)
+	    (ele::get-cache (oid (persistent-slot-collection-of sc)) ct) (persistent-slot-collection-of sc)
+	    (ele::get-cache (oid (slot-value sc 'instance-table)) ct) (slot-value sc 'instance-table)
+	    (ele::get-cache (oid (slot-value sc 'schema-table)) ct) (slot-value sc 'schema-table)
+	    (ele::get-cache (oid (slot-value sc 'index-table)) ct) (slot-value sc 'index-table)))))
+
+
+
 (defmethod open-controller ((sc postmodern-store-controller)
 			    ;; At present these three have no meaning
 			    &key 
@@ -173,11 +192,16 @@
 			    (recover-fatal nil)
 			    (thread t))
   (declare (ignore recover recover-fatal thread))  
-  (flet ((init-root ()
-           (setf (slot-value sc 'root) (make-instance 'pm-indexed-btree :sc sc :from-oid 0 :table-name "root"))
-           (setf (key-type-of (slot-value sc 'root)) (data-type t))
-           (setf (slot-value sc 'class-root) (make-instance 'pm-indexed-btree :sc sc :from-oid 1 :table-name "classroot"))
-           (setf (key-type-of (slot-value sc 'class-root)) (data-type t))))
+  (labels ((make-system-btree (oid name &optional (class 'pm-btree) (data-example t))
+	     (let ((bt (make-instance class :sc sc :from-oid oid :table-name name)))
+	       (setf (key-type-of bt) (data-type data-example))
+	       bt))
+	   (init-root ()
+	     (setf (slot-value sc 'root) (make-system-btree 0 "root")
+		   (slot-value sc 'instance-table) (make-system-btree 1 "instances" 'pm-indexed-btree 1)
+		   (slot-value sc 'schema-table) (make-system-btree 3 "schemas" 'pm-indexed-btree 1)
+		   (slot-value sc 'index-table) (make-system-btree 4 "indices"))))
+	     
     (ensure-thread-table-lock)
     (the postmodern-store-controller
       (with-connection-for-thread (sc)
@@ -190,8 +214,8 @@
         
           (initialize-serializer sc)
         
-          (setf (persistent-slot-collection-of sc) (make-instance 'pm-btree :table-name "slots" :from-oid 2 :sc sc))
-          (setf (key-type-of (persistent-slot-collection-of sc)) (data-type (form-slot-key 777 'a-typical-slot)))
+          (setf (persistent-slot-collection-of sc)
+		(make-system-btree 2 "slots" 'pm-btree (form-slot-key 777 'a-typical-slot)))
 
           (if (message-table-existsp con)
 	      (progn
@@ -212,8 +236,10 @@
                     (make-table (persistent-slot-collection-of sc))
                     (init-root)
 
-                    (make-table (slot-value sc 'root))
-                    (make-table (slot-value sc 'class-root))
+		    (dolist (slot '(root instance-table 
+				    schema-table index-table))
+		      (make-table (slot-value sc slot)))
+
                     (create-message-table con))))
           sc)))))
 
@@ -249,6 +275,11 @@
     (with-postmodern-conn ((active-connection))
       (postmodern:sequence-next 'persistent_seq))))
 
+(defmethod next-cid ((sc postmodern-store-controller))
+  (with-connection-for-thread (sc)
+    (with-postmodern-conn ((active-connection))
+      (postmodern:sequence-next 'class_id_seq))))
+
 (defun deserialize-from-database (x sc)
   (with-buffer-streams (other)
     (deserialize
@@ -264,6 +295,34 @@
 		      (sb-impl::quick-integer-to-string oid)
 		      " "
 		      (symbol-name name)))
+
+(defmethod oid->schema-id (oid (sc postmodern-store-controller))
+  "For default data structures, provide a fixed mapping to class IDs based
+   on the known startup order. (ugly)"
+  (if (<= oid 51)
+      (case oid
+	(0 1) ; root
+	(1 3) ; instances
+	(2 1) ; slots
+	(3 3) ; schemas
+	(4 1) ; indices
+	(50 4)   ; btree-indices of
+	(51 4))  ;  instances and schemas
+      (call-next-method)))
+
+(defmethod default-class-id (type (sc postmodern-store-controller))
+  (ecase type
+    ('pm-btree 1)
+    ('pm-dup-btree 2)
+    ('pm-indexed-btree 3)
+    ('pm-btree-index 4)))
+
+(defmethod default-class-id-type (cid (sc postmodern-store-controller))
+  (case cid
+    (1 'pm-btree)
+    (2 'pm-dup-btree)
+    (3 'pm-indexed-btree)
+    (4 'pm-btree-index)))
 
 
 (defmethod persistent-slot-writer ((sc postmodern-store-controller) new-value instance name)
