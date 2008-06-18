@@ -172,6 +172,7 @@ slots."
      (cached-slots cached-slot-names)
      (indexed-slots indexed-slot-names)
      (derived-slots derived-index-slot-names)
+     (association-end-slots association-end-slot-names)
      (persistent-slots persistent-slot-names))
     ;; Set caching mode to default
     (setf (cache-mode instance) 
@@ -179,7 +180,7 @@ slots."
     ;; Slot initialization
     (let* ((class (class-of instance))
 	   (persistent-initializable-slots 
-	    (union persistent-slots indexed-slots))
+	    (union (union persistent-slots indexed-slots) association-end-slots))
 	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
       (cond (from-oid ;; If re-starting, make sure we read the cached values
 	     (refresh-cached-slots instance cached-slots))

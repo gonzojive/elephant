@@ -25,33 +25,24 @@
 
 (defmethod slot-value-using-class 
     ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
-  (case (association-type slot-def)
-    (:end (call-next-method))
-    (:m21 (get-associated instance slot-def))
-    (:m2m (get-associated instance slot-def))))
+  (if (eq (association-type slot-def) :ref)
+      (call-next-method)
+      (get-associated instance slot-def)))
 
 (defmethod (setf slot-value-using-class) 
     (new-value (class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
-  (when (type-check-association instance slot-def new-value)
-    (let ((sc (get-con instance)))
-      (ensure-transaction (:store-controller sc)
-	(case (association-type slot-def)
-	  (:end (update-association-end class instance slot-def new-value)
-		(persistent-slot-writer sc new-value instance (slot-definition-name slot-def)))
-	  (:m21 (update-other-association-end class instance slot-def new-value))
-	  (:m2m (update-association-end class instance slot-def new-value)
-		(update-other-association-end class instance slot-def new-value))))))
+  (add-association instance (slot-definition-name slot-def) new-value)
   new-value)
 
 (defmethod slot-boundp-using-class 
     ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
-  (when (association-end-p slot-def)
+  (when (eq (association-type slot-def) :ref)
     (call-next-method)))
   
 (defmethod slot-makunbound-using-class 
     ((class persistent-metaclass) (instance persistent-object) (slot-def association-slot-definition))
-  (when (eq (association-type slot-def) :end)
-    (remove-association-end class instance slot-def)
+  (when (eq (association-type slot-def) :ref)
+    (remove-association-end class instance slot-def nil)
     (call-next-method))) ;; remove storage
 
 
@@ -98,16 +89,18 @@
   "Get the association index and add the target object as a key that
    refers back to this instance so we can get the set of referrers to target"
   (let ((index (get-association-index slot-def (get-con instance))))
-    (when (and (association-end-p slot-def)
+    (when (and (eq (association-type slot-def) :ref)
 	       (slot-boundp-using-class class instance slot-def))
-      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index))
-    (setf (get-value (oid target) index) (oid instance))))
+      (remove-kv-pair (oid (slot-value-using-class class instance slot-def)) (oid instance) index))
+    (when (not (null instance))
+      (setf (get-value (oid target) index) (oid instance)))))
 
-(defun remove-association-end (class instance slot-def)
+(defun remove-association-end (class instance slot-def associated)
   (let ((index (get-association-index slot-def (get-con instance))))
-    (when (and (association-end-p slot-def)
-	       (slot-boundp-using-class class instance slot-def))
-      (remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index))))
+    (if (and (eq (association-type slot-def) :ref)
+	     (slot-boundp-using-class class instance slot-def))
+	(remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index)
+	(remove-kv-pair (oid associated) (oid instance) index))))
 
 (defun update-other-association-end (class instance slot-def other-instance)
   "Update the association index for the other object so that it maps from
@@ -117,7 +110,8 @@
 	 (fslot (get-foreign-slot fclass slot-def))
 	 (sc (get-con other-instance)))
     (update-association-end fclass other-instance fslot instance)
-    (persistent-slot-writer sc instance other-instance (slot-definition-name fslot))))
+    (when (eq (association-type slot-def) :ref)
+      (persistent-slot-writer sc instance other-instance (slot-definition-name fslot)))))
 
 (defun get-foreign-class (slot-def)
   (find-class (foreign-classname slot-def)))
@@ -148,13 +142,38 @@
 ;;  Association-specific slot API
 ;; ===============================
 
-;; (defgeneric insert-item (instance slotname item))
+(defun add-association (instance slot associated)
+  (let* ((sc (get-con instance))
+	 (class (class-of instance))
+	 (slot-def (if (symbolp slot) (find-slot-def-by-name class slot) slot)))
+    (when (type-check-association instance slot-def associated)
+      (ensure-transaction (:store-controller sc)
+	(case (association-type slot-def)
+	  (:ref (update-association-end class instance slot-def associated)
+		(persistent-slot-writer sc associated instance (slot-definition-name slot-def)))
+	  (:m21 (update-other-association-end class instance slot-def associated))
+	  (:m2m (update-association-end class instance slot-def associated)
+		(update-other-association-end class instance slot-def associated)))))))
 
-;; (defgeneric delete-item (instance slotname item))
+(defun remove-association (instance slotname associated)
+  (let* ((class (class-of instance))
+	 (fclass (class-of associated))
+	 (slot-def (if (symbolp slotname) (find-slot-def-by-name class slotname) slotname))
+	 (fslot (get-foreign-slot fclass slot-def))
+	 (sc (get-con associated)))
+    (when (type-check-association instance slot-def associated)
+      (ensure-transaction (:store-controller sc)
+	(case (association-type slot-def)
+	  (:ref (setf (slot-value instance (if (symbolp slotname) slotname (slot-definition-name slotname))) nil))
+	  (:m21 (remove-association-end fclass associated fslot instance))
+          (:m2m (remove-association-end fclass associated fslot instance)
+		(remove-association-end class instance slot-def associated)))))))
 
-;; (defgeneric find-item (class slotname item))
+(defun get-associations (instance slot)
+  (slot-value instance (if (symbolp slot) slot (slot-definition-name slot))))
 
-;; (defgeneric get-associations (class slotname))
+(defun associatedp (instance slot associated)
+  (find associated (get-associations instance slot)))
 
 ;; (defgeneric get-association-oids (class slotname))
 

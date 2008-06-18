@@ -316,15 +316,15 @@
 (defmethod initialize-instance :after ((slot-def association-effective-slot-definition) &rest args)
   (declare (ignore args))
   (let ((assoc (association slot-def)))
-    (cond ((symbolp (association slot-def))
+    (cond ((symbolp assoc)
 	   (when (many-to-many-p slot-def)
 	     (error "Cannot specify ~A in a many-to-many association, must be of form (class slotname)"
-		    (association slot-def)))
-	   (setf (association-type slot-def) :end
+		    assoc))
+	   (setf (association-type slot-def) :ref
 		 (foreign-classname slot-def) assoc
 		 (foreign-slotname slot-def) nil))
 	  (t 
-	   (destructuring-bind (classname slotname) (association slot-def)
+	   (destructuring-bind (classname slotname) assoc
 	     (setf (foreign-classname slot-def) classname)
 	     (setf (foreign-slotname slot-def) slotname)
 	     (if (many-to-many-p slot-def)
@@ -332,7 +332,7 @@
 		 (setf (association-type slot-def) :m21)))))))
 
 (defun association-end-p (slot-def)
-  (eq (association-type slot-def) :end))
+  (not (eq (association-type slot-def) :m21)))
 
 (defun association-slot-defs (class)
   (find-slot-defs-by-type class 'association-effective-slot-definition nil))
@@ -340,10 +340,22 @@
 (defun association-slot-names (class)
   (find-slot-def-names-by-type class 'association-effective-slot-definition nil))
 
+(defun association-end-slot-names (class)
+  (let ((results nil))
+    (mapc #'(lambda (slot-def)
+	      (when (association-end-p slot-def)
+		(push (slot-definition-name slot-def) results)))
+	  (find-slot-defs-by-type class 'association-effective-slot-definition nil))
+    results))
 
 (defun get-association-slot-index (slot-def sc)
   (awhen (assoc sc (association-slot-indices slot-def))
     (cdr it)))
+
+(defmethod get-slot-def-index ((def association-effective-slot-definition) sc)
+  "Since endpoints of an association implement an index we should be able to perform
+   inverted-index relation functions on them directly"
+  (get-association-index def sc))
 
 (defun add-association-slot-index (idx slot-def sc)
   (setf (association-slot-indices slot-def)
@@ -414,8 +426,10 @@
                    set-valued and associated"))
 	  ((and set-valued-p has-initarg-p)
 	   (error "Cannot specify initargs for set-valued slots"))
-	  ((and associate-p has-initarg-p (not (eq associate-p t)))
-	   (error "Cannot specify initargs for association slots"))
+	  ((and associate-p (or (not (member (type-of associate-p) '(cons symbol))) (eq associate-p t)))
+	   (error "':associate' slot initarg must contain classname or a class / slot reference: (classname slotname)"))
+	  ((and associate-p has-initarg-p (eq (type-of associate-p) 'cons))
+	   (error "Can only specify initargs for association slots storing single instances of another class"))
 	  (derived-p
 	   (find-class 'derived-index-direct-slot-definition))
 	  (indexed-p 

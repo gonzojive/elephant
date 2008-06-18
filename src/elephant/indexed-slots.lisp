@@ -140,7 +140,9 @@
     (let ((slot-def (find-slot-def-by-name class slot)))
       (unless (and slot-def
 		   (or (eq (type-of slot-def) 'indexed-effective-slot-definition)
-		       (eq (type-of slot-def) 'derived-index-effective-slot-definition)))
+		       (eq (type-of slot-def) 'derived-index-effective-slot-definition)
+		       (and (eq (type-of slot-def) 'association-effective-slot-definition)
+			    (association-end-p slot-def))))
 	(assert-error))
       (let ((idx (get-slot-def-index slot-def sc)))
 	(unless idx
@@ -247,8 +249,9 @@
 (defun map-inverted-index (fn class index &rest args &key start end (value nil value-p) from-end collect oids)
   "map-inverted-index maps a function of two variables, taking key
    and instance, over a subset of class instances in the order
-   defined by the index.  Specify the class and index by quoted
-   name.  The index may be a slot index or a derived index.
+   defined by the index.  Specify the class by classname or class object 
+   and index by quoted name.  The index may be a slot index, derived index,
+   or a valued association slot.
 
    To map only a subset of key-value pairs, specify the range
    using the :start and :end keywords; all elements greater than
@@ -269,15 +272,19 @@
    function instead of the recreated instance."
   (declare (dynamic-extent args)
 	   (ignorable args))
-  (let* ((index (if (symbolp index)
+  (let* ((btree (if (symbolp index)
 		    (find-inverted-index class index)
 		    index))
-	 (sc (get-con index)))
+	 (class-obj (etypecase class
+		      (symbol (find-class class))
+		      (persistent-metaclass class)))
+	 (sc (get-con btree)))
     (flet ((map-obj (value oid)
 	     (funcall fn value (controller-recreate-instance sc oid))))
-      (if value-p
-	  (map-btree (if oids fn #'map-obj) index :value value :collect collect)
-	  (map-btree (if oids fn #'map-obj) index :start start :end end :from-end from-end :collect collect)))))
+      (cond ((eq 'association-effective-slot-definition (type-of (find-slot-def-by-name class-obj index)))
+	     (map-btree (if oids fn #'map-obj) btree :value (oid value) :collect collect))
+	    (value-p (map-btree (if oids fn #'map-obj) btree :value value :collect collect))
+	    (t (map-btree (if oids fn #'map-obj) btree :start start :end end :from-end from-end :collect collect))))))
 
 (defun get-unique-values (index &aux values)
   (ensure-transaction (:store-controller (get-con index))
