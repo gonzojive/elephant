@@ -193,6 +193,8 @@
 		      :documentation "Schema name to schema database table")
    (schema-cache :accessor controller-schema-cache :initform (make-cache-table :test 'eq)
 		 :documentation "This is a cache of class schemas stored in the database indexed by classid")
+   (schema-classes :accessor controller-schema-classes :initform nil
+		      :documentation "Maintains a list of all classes that have a cached schema value so we can shutdown cleanly")
    (schema-cache-lock :accessor controller-schema-cache-lock :initform (ele-make-fast-lock)
 			:documentation "Protection for updates to the cache from multiple threads.  
                                         Do not override.")
@@ -437,11 +439,15 @@
 
 (defun get-db-schemas (sc classname)
   "Return schemas ordered oldest to youngest (ascending cids)"
-  (map-btree #'(lambda (cname schema)
-		 (declare (ignore cname))
-		 schema)
-	     (controller-schema-name-index sc)
-	     :value classname :collect t))
+  (sort
+   (map-btree #'(lambda (cname schema)
+		  (declare (ignore cname))
+		  schema)
+	      (controller-schema-name-index sc)
+	      :value classname :collect t)
+   #'<
+   :key #'schema-id))
+
 ;;
 ;; Database versioning
 ;;
@@ -648,6 +654,9 @@ true."))
 	       (declare (ignore schema))
 	       (uncache-controller-schema sc schema-id))
 	     (controller-schema-cache sc))
+  (mapc (lambda (classname)
+	  (remove-class-controller-schema sc (find-class classname)))
+	(controller-schema-classes sc))
   (setf (slot-value sc 'schema-name-index) nil)
   (setf (slot-value sc 'instance-class-index) nil)
   (delete-con-spec (controller-spec sc)))

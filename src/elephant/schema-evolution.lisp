@@ -100,7 +100,6 @@
   "Drop index and association storage on upgrade.  Loss of data for associations should
    be flagged during the redefinition."
   (declare (ignore class))
-
   (with-slots (name type args) (first recs)
     (case type
 ;;      (:indexed (drop-slot-index sc (getf args :base) name))

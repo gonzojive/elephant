@@ -61,8 +61,9 @@
     (cdr it)))
 
 (defmethod add-class-controller-schema (sc (class persistent-metaclass) schema)
-  (remove-class-controller-schema sc class)
   ;; NOTE: Needs to be lock protected
+  (pushnew (class-name class) (controller-schema-classes sc))
+  (remove-class-controller-schema sc class)
   (setf (%store-schemas class)
 	(acons (controller-spec sc) schema (%store-schemas class))))
 
