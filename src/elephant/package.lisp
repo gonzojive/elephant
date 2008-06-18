@@ -228,8 +228,9 @@
    ;; Set-valued slots
    #:slot-set #:make-slot-set #:map-slot-set #:slot-set-list #:drop-slot-set
 
-   ;; Associations - low level access to association dup-btree
-   #:get-association-index
+   ;; Associations 
+   #:get-association-index #:add-association #:remove-association 
+   #:get-associations #:associatedp
 
    ;; BTrees
    #:btree #:make-btree
