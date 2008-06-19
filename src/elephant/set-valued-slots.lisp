@@ -37,7 +37,9 @@
   "Setting a value adds it to the slot set"
   (if (or (null new-value)
 	  (subtypep (type-of new-value) 'slot-set))
-      (call-next-method)
+      (progn
+	(slot-makunbound-using-class class instance slot-def)
+	(call-next-method))
       (insert-item new-value (slot-value-using-class class instance slot-def))))
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def set-valued-slot-definition))
@@ -97,4 +99,3 @@
     (drop-pset set)))
 
 ;; Inherit insert-item, delete-item, etc from default-pset
-

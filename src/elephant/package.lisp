@@ -227,6 +227,7 @@
 
    ;; Set-valued slots
    #:slot-set #:make-slot-set #:map-slot-set #:slot-set-list #:drop-slot-set
+   #:set-list #:set-insert #:set-remove
 
    ;; Associations 
    #:get-association-index #:add-association #:remove-association 
