@@ -48,32 +48,20 @@
   (call-next-method))
 
 ;; ===========================================
-;;  Slot set API
+;;  Slot set helpers
 ;; ===========================================
 
+(defmacro set-list (object slotname)
+  "Sugar for getting a list from a set slot"
+  `(slot-set-list (slot-value ,object ,slotname)))
 
-(defgeneric build-slot-set (sc)
-  (:documentation "Construct an empty default pset or backend specific pset.
-                   This is an internal function used by make-pset"))
+(defmacro set-insert (item object slotname)
+  "Sugar for inserting items under #'equal from the set slot"
+  `(insert-item ,item (slot-value ,object ,slotname)))
 
-;;(defgeneric insert-item (item slot-set)
-;;  (:documentation "Insert a new item into the pset"))
-
-;;(defgeneric remove-item (item slot-set)
-;;  (:documentation "Remove specified item from pset"))
-
-;;(defgeneric find-item (item slot-set &key key test)
-;;  (:documentation "Find a an item in the pset using key and test"))
-
-(defgeneric slot-set-list (slot-set)
-  (:documentation "Convert items of pset into a list for processing"))
-
-(defgeneric map-slot-set (fn slot-set)
-  (:documentation "Map operator for psets"))
-
-(defgeneric drop-slot-set (pset)
-  (:documentation "Release pset storage to database for reuse"))
-
+(defmacro set-remove (item object slotname)
+  "Sugar for removing items via #'equal from the set slot"
+  `(remove-item ,item (slot-value ,object ,slotname)))
 
 ;; ============================================
 ;;  A generic slot set implementation
@@ -85,16 +73,28 @@
 (defpclass default-slot-set (slot-set default-pset) ()
   (:documentation "A default slot-set implementation"))
 
+(defgeneric build-slot-set (sc)
+  (:documentation "Construct an empty default pset or backend specific pset.
+                   This is an internal function used by make-pset"))
+
 (defmethod build-slot-set ((sc store-controller))
-  "Slot-set creation API"
   (let ((btree (make-btree sc)))
     (make-instance 'default-slot-set :btree btree :sc sc)))
 
-(defmethod map-slot-set (fn (set default-slot-set))
-  (map-pset fn set))
+(defgeneric slot-set-list (slot-set)
+  (:documentation "Convert items of pset into a list for processing")
+  (:method ((set default-slot-set))
+    (pset-list set)))
 
-(defmethod slot-set-list ((set default-slot-set))
-  (pset-list set))
+(defgeneric map-slot-set (fn slot-set)
+  (:documentation "Map operator for psets")
+  (:method (fn (set default-slot-set))
+    (map-pset fn set)))
 
-(defmethod drop-slot-set ((set default-slot-set))
-  (drop-pset set))
+(defgeneric drop-slot-set (pset)
+  (:documentation "Release pset storage to database for reuse")
+  (:method ((set default-slot-set))
+    (drop-pset set)))
+
+;; Inherit insert-item, delete-item, etc from default-pset
+
