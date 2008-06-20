@@ -14,6 +14,7 @@
 * Upgrading Berkeley DB Databases:: How to upgrade to a new version of Berkeley DB.
 * CL-SQL:: Install and connecting to the CL-SQL data store.
 * CL-SQL Example:: An example of using the CL-SQL data store.
+* Multiple Versions:: Running multiple versions of Elephant
 * Elephant on Windows:: More details about running Elephant on Windows
 * Test Suites:: How to run and interpret the output of the regression test suite
 * Documentation:: Building documentation from texinfo sources.
@@ -250,6 +251,33 @@ We recommend that you download and build a distribution from Oracle.
 Some problems have been reported with linking to Debian, Cygwin or
 other packages.  This is especially true for Windows users.
 
+The Berkeley DB interface includes a number of defaults that are configured
+in the my-config.sexp file. Some of these defaults can also be overridden
+when opening the store. Below is a list of the BDB related defaults you
+will find in your my-config.sexp along with a short explanation.
+@itemize
+@item @code{:berkeley-db-map-degree2} - Improve the efficiency of cursor traversals
+  in the various mapping functions.  Defaults to true, meaning a value
+you just read while mapping may change before the traversal is done.
+So if you operate only on the current cursor location, you are
+guaranteed that it's value is stable.
+@item @code{:berkeley-db-cachesize} - Change the size of the buffer cache
+for Berkeley DB to match your working set.  Default is 10MB, or about
+twenty thousand indexed class objects, or 50k standard persistent
+objects.  You can save memory by reducing this value.
+@item @code{:berkeley-db-deadlock} - This is the path to the BDB deadlock utility
+(db_deadlock). For more information on using this utility please consult the BDB
+documentation.
+@item @code{:berkeley-db-max-objects} - Configures the maximum number of objects that
+can be locked at any one time (see set_lk_max_objects in the BDB documentation).
+@item @code{:berkeley-db-max-locks} - Configures the number of locks that can
+be allocated at any given time in the lock table (see set_lk_max_locks in the BDB
+documentation). This parameter along with the preceding parameter will control how
+many transactions you can group together. For optimal performance you will need to
+configure this parameter and the berkeley-db-max-objects parameter to ensure your
+application doesn't run out of locks.
+@end itemize
+
 Beyond ensuring that the file ``my-config.sexp'' points to your BDB
 installation directories and files, nothing else should be required to
 configure the example that uses a local ``testdb'' directory as a
@@ -258,13 +286,18 @@ dabase (under ``tests'') in the top-level Elephant directory.
 On one Fedora based system, the ``my-config.sexp'' file looked like this:
 
 @lisp
-((:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include")
- (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib")
- (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb.so")
+((:compiler . :gcc)
+ (:berkeley-db-version . "4.5")
+ (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
+ (:berkeley-db-lib-dir . "/usr/local/BerkeleyDB.4.5/lib/")
+ (:berkeley-db-lib . "/usr/local/BerkeleyDB.4.5/lib/libdb-4.5.so")
  (:berkeley-db-deadlock . "/usr/local/BerkeleyDB.4.5/bin/db_deadlock")
- (:pthread-lib . nil)
- (:clsql-lib . "/usr/local/share/common-lisp/")
- (:compiler . :gcc))
+ (:berkeley-db-cachesize . 20971520)
+ (:berkeley-db-max-locks . 2000)
+ (:berkeley-db-max-objects . 2000)
+ (:berkeley-db-map-degree2 . t)
+ (:clsql-lib-paths . nil)
+ (:prebuilt-libraries . nil))
 @end lisp
 
 The @ref{Test Suites} give a nice example of using BDB by running the test using 
@@ -427,6 +460,35 @@ it needs.
 Upon first opening a CL-SQL based store controller, the tables, indexes,
 sequences, and so on needed by the Elephant system will be created in the 
 schema named ``test'' automatically.
+
+@node Multiple Versions
+@comment node-name, next, previous, up
+@section Using Multiple Versions of Elephant
+
+New version of Elephant aren't always backward compatible with older versions.
+Migrating to a newer release may require moving your data over to a new format
+data store. You can easily run multiple versions of Elephant in one environment.
+This allows you to keep your current production system while simultaneously
+testing out the newest release of Elephant.
+
+While not an Elephant feature, ASDF allows you to control which environment
+is loaded. Changing the version of Elephant that is loaded simply requires
+telling ASDF to load Elephant from a different path. You can do this manually
+in your code, or in a startup file for your Lisp environment. For example
+if you are using SBCL you can modify the .sbclrc file to load different
+versions of Elephant.
+
+The following example demonstrates the ASDF commands needed to switch
+Elephant load paths:
+
+@lisp
+(setf asdf:*central-registry*
+   '(*default-pathname-defaults*
+     #p"/usr/local/new-elephant-version"))
+@end lisp
+
+Changing the ASDF @code{*central-registry*} allows you to choose
+the version of Elephant to load and use in your environment.
 
 @node Elephant on Windows
 @comment node-name, next, previous, up

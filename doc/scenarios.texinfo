@@ -109,10 +109,10 @@ the cached value is restored whenever the object is loaded.
    (state :accessor system-state :initarg :state :transient t)
   (:metaclass persistent-metaclass))
 
-(defmethod (setf system-state) :after (state (sys system-state))
+(defmethod (setf system-state) :after (state (sys system-object))
   (setf (system-laststate sys) state))
 
-(defmethod initialize-instance :after ((sys system-state) &rest rest)
+(defmethod initialize-instance :after ((sys system-object) &rest rest)
   (declare (ignore rest))
   (when (slot-boundp sys 'laststate)
     (setf (system-state sys) (system-laststate sys))))

@@ -645,6 +645,68 @@ store controller.  This method is responsible for mapping the oid and
 slotname of the slot access to the appropriate value in the data
 store.
 
+@subsection Using Cached Slots
+Fill in information here
+
+@subsection Using Indexed Slots
+Fill in information here
+
+@subsection Using Derived Indexed Slots
+Was this deprecated?
+
+@subsection Using Set Valed Slots
+Fill in information here
+
+@subsection Using Association Slots
+Assocation slots allow you to create relationships between objects in your system.
+In the following set of examples two classes are created, a 'job' class and a
+'person' class. These classes are related in that each person can only be associated
+with one job, but a job might have multiple people associated with it. To capture
+this relationship in Elephant you can use Association slots.
+
+@lisp
+(defpclass job()
+ ((title :initarg :title :accessor title-of :index t)
+  (company :initarg :company :accessor company-of :index t)
+  (people :accessor job-holders :associate (person job))))
+@end lisp
+
+The job class has a virtual slot people. This virtual slot is associated with objects
+of class 'person. In this case instances 'person are associated with this instance of 'job
+where the 'person instance references the 'job in the 'person instances 'job slot.
+
+To see this more clearly here is the definition of the 'person class.
+
+@lisp
+(defpclass person()
+ ((name :initarg :name :accessor name-of :index t)
+  (job :initarg :job :accessor job-of :associate job)))
+@end lisp
+
+Here providing the @code{:associate job} key informs the 'person class that the
+slot 'job contains instances of class 'job and to maintain an association
+to 'job instances. Notice how the @code{:associate} key was specified differently
+between the 'job class and the 'person class.
+
+If you want to create many-to-many relationships between 'job and 'person then
+you would define the classes as follows:
+@lisp
+(defpclass job()
+ ((title :initarg :title :accessor title-of :index t)
+  (company :initarg :company :accessor company-of :index t)
+  (people :accessor job-holders :associate (person job) :many-to-many t)))
+
+(defpclass person()
+ ((name :initarg :name :accessor name-of :index t)
+  (jobs :accessor jobs-of :associate (job people) :many-to-many t))
+@end lisp
+
+You can add and access elements using the normal Lisp/CLOS accessors, eg
+@lisp
+(setf (jobs-of joe) janitor)
+(job-holders janitor) ; => joe
+@end lisp
+
 @subsection Class Redefinition
 
 Class redefinition is problematic in the current (0.9) version of
@@ -1496,7 +1558,23 @@ When opening a store there are several special options you can invoke:
       when it finds them.  This can avoid a set of annoying crashes in Berkeley DB,
       the very crashes that, in part, motivated Franz to abandon AllegroStore and write
       the pure-Lisp AllegroCache.
+@item @strong{@code{:cache-size}} tells Berkeley DB what size of cache to use. This overrides
+the default value configured in my-config.sexp file (@code{:berkeley-db-cachesize}).
+The cache size will impact your applications performance - the bigger the cache the smaller
+the amount of disk I/O.
+@item @strong{@code{:max-locks}} tells Berkeley DB the maximum number of locks to allocate. 
+This overrides the default value in my-config.sexp (@code{:berkeley-db-max-locks}).
+@item @strong{@code{:max-objects}} tells Berkeley DB the maximum number of objects that can
+be locked. This overrides teh default value configured the my-config.sexp file (@code{:berkeley-db-max-objects}).
 @end itemize
+
+You can specify these parameters directly in a call to open-store. For example:
+@lisp
+(open-store '(:BDB "/tmp/tdb") :max-locks 5000 :max-objects 5000)
+@end lisp
+
+The above code overrides the defaults configured in my-config.sexp by setting both
+max-locks and max-objects to 5000.
 
 @subsection Starting a Transaction
 
@@ -1579,7 +1657,20 @@ guaranteed that it's value is stable.
 for Berkeley DB to match your working set.  Default is 10MB, or about
 twenty thousand indexed class objects, or 50k standard persistent
 objects.  You can save memory by reducing this value.
+@item @code{:berkeley-db-max-locks} - Configures the number of locks the
+system supports. The default is 2000.
+@item @code{:berkeley-db-max-objects} - Configures the maximum number of objects
+that can be simultaneously locked. The default is 2000. This parameter and the
+one above it control how large your transactions can be.
 @end itemize
+
+For additional information on configuring Berkeley DB please refer to the 
+Berkeley DB documentation. Berkeley DB has a number of parameters that can be 
+set. Elephant supports setting the most commonly used BDB parameters. See the 
+Berkeley DB documentation on DB_CONFIG for additional parameters. The DB_CONFIG 
+file will let you override the Elephant settings, and to gain access to other 
+BDB performance parameters. Using DB_CONFIG is beyond the scope of this 
+documentation and is not required by most applications.
 
 @node CLSQL Data Store
 @comment node-name, next, previous, up
