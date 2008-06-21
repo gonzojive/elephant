@@ -20,7 +20,6 @@
 (asdf:operate 'asdf:load-op :postmodern)
 
 (asdf:operate 'asdf:load-op :elephant-tests)
-
 (in-package "ELEPHANT-TESTS")
 
 ;; Test Postgres backend
@@ -34,6 +33,7 @@
 ;; Test SQLite 3
 (setq *default-spec* *testsqlite3-spec*)
 (do-backend-tests)
+
 
 ;; Test Postmodern interface to Postgres
 ;; Note:  One almost certainly has to execute "createdb elepm" as the user "postgres"
@@ -58,5 +58,16 @@
 (get-from-root "x2")
 
 
+(setq *default-spec* *testpg-spec*)
+(close-store)
+(open-store *testpg-spec*)
+(run! 'update-class)
+
+(run! 'simple-explicit-assoc-setup)
+(run! 'simple-explicit-assoc)
+(run! 'simple-slot-assoc)
 
 
+
+(trace get-value)
+(trace db-clsql::sql-get-from-clcn)

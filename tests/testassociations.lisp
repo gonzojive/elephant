@@ -64,11 +64,10 @@
 (defgeneric holders (instance))
 
 (test simple-slot-assoc-setup
-  (when (find-class 'person nil)
-    (drop-instances (get-instances-by-class 'person) :txn-size 500))
-  (when (find-class 'job nil)
-    (drop-instances (get-instances-by-class 'job) :txn-size 500))
-
+   (when (find-class 'person nil)
+     (drop-instances (get-instances-by-class 'person) :txn-size 500))
+   (when (find-class 'job nil)
+     (drop-instances (get-instances-by-class 'job) :txn-size 500))
  (defpclass person ()
    ((name :accessor names-of :initarg :name :index t)
     (jobs :accessor jobs :associate (job holders) :many-to-many t)))

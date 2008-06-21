@@ -386,7 +386,6 @@
 
 (deftest (indexing-slot-makunbound :depends-on index-reset)
     (progn
-
       (defclass idx-unbound-del ()
 	((slot1 :initarg :slot1 :initform 1 :accessor slot1 :index t))
 	(:metaclass persistent-metaclass))

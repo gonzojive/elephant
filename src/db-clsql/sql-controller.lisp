@@ -117,31 +117,19 @@
   )
 
 (defmethod get-value (key (bt sql-btree))
-  (let* ((sc (get-con bt)))
-    (sql-get-from-clcn (oid bt) key sc)
-    )
-  )
+    (sql-get-from-clcn (oid bt) key (get-con bt)))
 
 (defmethod (setf get-value) (value key (bt sql-btree))
-  (let* ((sc (get-con bt)))
-    (sql-add-to-clcn (oid bt) key value sc)
-    )
-  )
+    (sql-add-to-clcn (oid bt) key value (get-con bt)))
 
 (defmethod existsp (key (bt sql-btree))
-  (let* ((sc (get-con bt)))
-    (sql-from-clcn-existsp (oid bt) key sc)
-    )
-  )
+    (sql-from-clcn-existsp (oid bt) key (get-con bt)))
 
 (defmethod remove-kv (key (bt sql-btree))
-  (let* ((sc (get-con bt)))
     (sql-remove-one-from-clcn (oid bt)
 			      key
-			      sc
+			      (get-con bt)
 			      ))
-  )
-
 
 ;; Because these things are transient, I can't move them
 ;; directly into the class above.  I am not sure how best to
@@ -707,15 +695,16 @@
 
 (defun sql-get-from-clcn-cnt (clcn key sc)
   (assert (integerp clcn))
-  (let* ((con (controller-db sc))
-	 (kbs (serialize-to-base64-string key sc))
-	 (tuples
-	  (clsql::select [count [value]]
-			 :from [keyvalue]
-			 :where [and [= [clctn_id] clcn] [= [key] kbs]]
-			 :database con
-			 )))
-    (caar tuples)))
+  (the integer
+    (let* ((con (controller-db sc))
+	   (kbs (serialize-to-base64-string key sc))
+	   (tuples
+	    (clsql::select [count [value]]
+			   :from [keyvalue]
+			   :where [and [= [clctn_id] clcn] [= [key] kbs]]
+			   :database con
+			   )))
+      (caar tuples))))
 
 (defun sql-dump-clcn (clcn sc)
   (assert (integerp clcn))
