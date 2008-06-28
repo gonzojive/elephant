@@ -97,7 +97,6 @@
 	  (delete spec *dbconnection-spec* :key #'car :test #'equalp))))
 
 (defmethod get-con ((instance persistent))
-  (declare (ignore sc))
   (let ((con (fast-lookup-con-spec (db-spec instance))))
     (cond ((not con)
 	   (aif (slow-lookup-con-spec (db-spec instance))
@@ -638,6 +637,7 @@ true."))
    open-controller to reopen the database"))
 
 (defmethod open-controller :after ((sc store-controller) &rest args)
+  (declare (ignore args))
   (with-transaction (:store-controller sc)
     ;; Initialize classname -> cidx
     (setf (slot-value sc 'schema-name-index)
@@ -652,7 +652,9 @@ true."))
 (defmethod close-controller :before ((sc store-controller))
   (map-cache (lambda (schema-id schema) 
 	       (declare (ignore schema))
-	       (uncache-controller-schema sc schema-id))
+	       (handler-case
+		   (uncache-controller-schema sc schema-id)
+		 (error () nil)))
 	     (controller-schema-cache sc))
   (mapc (lambda (classname)
 	  (remove-class-controller-schema sc (find-class classname)))
@@ -836,11 +838,11 @@ true."))
   "Properties that are not user manipulable")
 
 (defmethod controller-properties ((sc store-controller))
-  (get-from-root *elephant-properties-label* :store-controller sc))
+  (get-from-root *elephant-properties-label* :sc sc))
 
 (defmethod set-ele-property (property value &key (sc *store-controller*))
   (assert (and (symbolp property) (not (member property *restricted-properties*))))
-  (let ((props (get-from-root *elephant-properties-label* :store-controller sc)))
+  (let ((props (get-from-root *elephant-properties-label* :sc sc)))
     (setf (get-value *elephant-properties-label* (controller-root sc))
 	  (if (assoc property props)
 	      (progn (setf (cdr (assoc property props)) value)
@@ -851,6 +853,6 @@ true."))
   (assert (symbolp property))
   (let ((entry (assoc property 
 		      (get-from-root *elephant-properties-label* 
-				     :store-controller sc))))
+				     :sc sc))))
     (when entry
       (cdr entry))))

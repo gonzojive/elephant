@@ -290,10 +290,10 @@ et cetera."))
 
 (defmethod default-class-id (type (sc bdb-store-controller))
   (ecase type
-    ('bdb-btree 1)
-    ('bdb-dup-btree 2)
-    ('bdb-indexed-btree 3)
-    ('bdb-btree-index 4)))
+    (bdb-btree 1)
+    (bdb-dup-btree 2)
+    (bdb-indexed-btree 3)
+    (bdb-btree-index 4)))
 
 (defmethod default-class-id-type (cid (sc bdb-store-controller))
   (case cid
