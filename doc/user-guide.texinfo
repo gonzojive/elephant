@@ -645,17 +645,113 @@ store controller.  This method is responsible for mapping the oid and
 slotname of the slot access to the appropriate value in the data
 store.
 
-@subsection Using Cached Slots
-Fill in information here
-
 @subsection Using Indexed Slots
 Fill in information here
 
 @subsection Using Derived Indexed Slots
-Was this deprecated?
-
-@subsection Using Set Valed Slots
 Fill in information here
+
+@subsection Using Set Valued Slots
+Set valued slots allow you to create slots that hold persistent collections
+as slot values. These slots provide a simpler interface to using PSETs 
+(see the section titled 'Using PSets'). Because Set Valued slots integrate directly into the slot 
+handling mechanism used in Elephant it is expected that most application 
+developers will use these slots rather than using PSETs.
+
+The following example shows how to use set valued slots.
+
+@lisp 
+(defpclass my-set ()
+  ((set-slot :accessor set-slot :initform nil :set-valued t)))
+@end lisp
+
+The above defines a persistent class with one slot, set-slot. This slot is
+a Set Valued slot. All items that are added to this slot will automatically
+be persisted.
+
+@lisp
+CL-USER> (setf myset (make-instance 'my-set))
+CL-USER> (set-insert 'a myset 'slot-set)
+CL-USER> (setf (set-slot myset) 'b)
+@end lisp
+
+In the above example we create an instance of the my-set class and add 'a and 'b
+to its slot set. The example shows two different ways to add items to the slot. The
+first command uses @code{set-insert}. The second example uses the @code{setf set-slot}
+accessor.
+
+You can list the members of the set:
+
+@lisp
+CL-USER> (set-list myset 'set-slot)
+(B A)
+@end lisp
+
+In the example above we didn't use the @code{set-slot} accessor. To see why
+look at the example below:
+@lisp
+CL-USER> (set-slot myset)
+#<DEFAULT-SLOT-SET oid:205>
+@end lisp
+
+The @code{set-slot} accessor returns the object in the slot, not the set
+of items added into the set.
+
+For simple elements Elephant will keep track of the set items and won't
+add duplicates. Continuing the example above:
+
+@lisp
+CL-USER> (set-insert 'a myset 'slot-set)
+CL-USER> (set-list myset 'set-slot)
+(B A)
+@end lisp
+
+Items can easily be removed from the using @code{set-remove}.
+
+@lisp
+CL-USER> (set-remove 'a myset 'set-slot)
+CL-USER> (set-list myset 'set-slot)
+(B)
+@end lisp
+
+If the items in your set are composed of more complex data structures
+you will need to keep track of the items yourself if you need the items
+in the set to reflect changes you make to the items. Below is a more 
+complicated example using @code{defstruct}.
+
+@lisp
+CL-USER> (defstruct my-struct a-slot b-slot)
+CL-USER> (setf s1 (make-my-struct :a-slot 1 :b-slot 1))
+CL-USER> (set-insert s1 myset 'set-slot)
+CL-USER> (setf (set-slot myset) s1)
+CL-USER> (set-list myset 'set-slot)
+(#S(MY-STRUCT :A-SLOT 1 :B-SLOT 1))
+@end lisp
+
+In the above example we attempted to add s1 to the set twice, but there
+is only one instance of it in the set. The example above uses both the
+@code{set-insert} and @code{setf slot-set} accessor functions.
+
+However, if a change is made to s1 and then s1 is added in to the set
+Elephant will treat this as a new element.
+
+@lisp
+CL-USER> (setf (my-struct-a-slot s1) 2)
+CL-USER> (set-insert s1 myset 'set-slot)
+CL-USER> (set-list myset 'set-slot)
+(#S(MY-STRUCT :A-SLOT 3 :B-SLOT 1) #S(MY-STRUCT :A-SLOT 2 :B-SLOT 1))
+@end lisp
+
+Set valued slots greatly simplify the handling of persistent collections.
+These persistent collections do not need to contain the same type of data.
+In the examples above we could have mixed in the @code{(defstruct)} items
+and the fundamental values such as 'A and 'B. In that case your set would
+have looked like:
+
+@lisp
+CL-USER> (ele:set-list myset 'set-slot)
+(#S(MY-STRUCT :A-SLOT 3 :B-SLOT 1) #S(MY-STRUCT :A-SLOT 2 :B-SLOT 1) B A)
+@end lisp
 
 @subsection Using Association Slots
 Assocation slots allow you to create relationships between objects in your system.
