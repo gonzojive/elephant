@@ -128,7 +128,7 @@
     (aif (get-controller-association-index slot-def sc)
 	 (progn (add-association-slot-index it slot-def sc) it)
 	 (let ((new-idx (make-dup-btree sc)))
-	   (add-slot-index sc new-idx (foreign-classname slot-def) (foreign-slotname slot-def))
+	   (add-slot-index sc new-idx (association-slot-base slot-def) (slot-definition-name slot-def))
 	   (add-association-slot-index new-idx slot-def sc)
 	   new-idx))))
 
