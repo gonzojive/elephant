@@ -97,6 +97,8 @@
     ;; Update schema chain
     (setf (schema-predecessor new-schema) old-schema)
     (setf (%class-schema instance) new-schema)
+    (and *store-controller* (not (subtypep (class-name instance) 'btree))
+      (lookup-schema *store-controller* instance)) ; ensure db schema of user-defined classes
     ;; Cleanup some slot values
     (let ((idx-state (%class-indexing instance)))
       (when (consp idx-state)
