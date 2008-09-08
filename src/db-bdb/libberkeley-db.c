@@ -241,9 +241,9 @@ void db_set_error_file(DB *db, char *filename) {
 /* We manage our own buffers (DB_DBT_USERMEM). */
 
 int db_get_raw(DB *db, DB_TXN *txnid, 
-	       unsigned char *key, u_int32_t key_size,
-	       unsigned char *buffer, u_int32_t buffer_length,
-	       u_int32_t flags, u_int32_t *result_size) {
+	       unsigned char *key, u_int32_t key_size, u_int32_t key_length,
+	       unsigned char *buffer, u_int32_t buffer_size, u_int32_t buffer_length,
+	       u_int32_t flags, u_int32_t *ret_key_size, u_int32_t *result_size) {
   DBT DBTKey, DBTValue;
   int ret;
   
@@ -251,12 +251,16 @@ int db_get_raw(DB *db, DB_TXN *txnid,
   memset(&DBTValue, 0, sizeof(DBT));
   DBTKey.data = key;
   DBTKey.size = key_size;
+  DBTKey.ulen = key_length;
+  DBTKey.flags |= DB_DBT_USERMEM;
   DBTValue.data = buffer;
+  DBTValue.size = buffer_size;
   DBTValue.ulen = buffer_length;
   DBTValue.flags |= DB_DBT_USERMEM;
   
   ret = db->get(db, txnid, &DBTKey, &DBTValue, flags);
   *result_size = DBTValue.size;
+  *ret_key_size = DBTKey.size;
   
   return ret;
 }

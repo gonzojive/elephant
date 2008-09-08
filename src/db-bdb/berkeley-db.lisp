@@ -62,6 +62,8 @@
 			    :db-bdb-c45)
 			   ((equal bdb-version "4.6")
 			    :db-bdb-c46)
+			   ((equal bdb-version "4.7")
+			    :db-bdb-c47)
 			   (t (error "A valid Berkeley DB version must be defined in my-config.sexp, got ~A.  Valid values are \"4.5\" and \"4.6\"" bdb-version))))))
     (import-all-symbols const-pkg (find-package :db-bdb))))
 
@@ -516,9 +518,12 @@ and DUP-SORT.")
      (txn :pointer-void)
      (key array-or-pointer-char)
      (key-size :unsigned-int)
+     (key-length :unsigned-int)
      (buffer array-or-pointer-char)
+     (buffer-size :unsigned-int)
      (buffer-length :unsigned-int)
      (flags :unsigned-int)
+     (ret-key-size :unsigned-int :out)
      (result-size :unsigned-int :out))
   :returning :int)
 
@@ -535,14 +540,15 @@ decoding, or NIL if nothing was found."
 	   (type boolean get-both degree-2 read-committed dirty-read 
 		 read-uncommitted multiple multiple-key))
   (loop 
+   for key-length fixnum = (buffer-stream-length key-buffer-stream)
    for value-length fixnum = (buffer-stream-length value-buffer-stream)
    do
-   (multiple-value-bind (errno result-size)
+   (multiple-value-bind (errno ret-key-size result-size)
        (%db-get-key-buffered db transaction 
 			     (buffer-stream-buffer key-buffer-stream)
-			     (buffer-stream-size key-buffer-stream)
-			     (buffer-stream-buffer value-buffer-stream) 
-			     value-length
+                             (buffer-stream-size key-buffer-stream) key-length
+			     (buffer-stream-buffer value-buffer-stream)
+                             0 value-length
 			     (flags :get-both get-both
 				    :degree-2 (or degree-2 read-committed)
 				    :dirty-read (or dirty-read read-uncommitted)
@@ -551,6 +557,7 @@ decoding, or NIL if nothing was found."
      (declare (type fixnum result-size errno))
      (cond 
        ((= errno 0)
+	;(setf (buffer-stream-size key-buffer-stream) ret-key-size)
 	(setf (buffer-stream-size value-buffer-stream) result-size)
 	(return-from db-get-key-buffered 
 	  (the buffer-stream value-buffer-stream)))
@@ -558,8 +565,9 @@ decoding, or NIL if nothing was found."
 	(return-from db-get-key-buffered nil))
        ((or (= errno DB_LOCK_DEADLOCK) (= errno DB_LOCK_NOTGRANTED))
 	(throw 'transaction transaction))
-       ((> result-size value-length)
-	(resize-buffer-stream-no-copy value-buffer-stream result-size))
+       ((or (> result-size value-length) (> ret-key-size key-length))
+	(resize-buffer-stream-no-copy value-buffer-stream result-size)
+	(resize-buffer-stream-no-copy key-buffer-stream ret-key-size))
        (t (error 'bdb-db-error :errno errno))))))
 
 (def-function ("db_get_raw" %db-get-buffered)
