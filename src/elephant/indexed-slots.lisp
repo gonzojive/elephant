@@ -123,6 +123,19 @@
 (defmethod drop-slot-index ((sc store-controller) class-name index-name)
   (remove-kv (cons class-name index-name) (controller-index-table sc)))
 
+(defmethod rebuild-slot-index ((sc store-controller) class-name index-name)
+  (drop-slot-index sc class-name index-name)
+  (let ((new-idx (make-dup-btree sc))
+	(class (find-class class-name)))
+    (add-slot-index sc new-idx class-name index-name)
+    (map-class #'(lambda (instance)
+		   (update-slot-index sc class instance
+				      (find-slot-def-by-name class index-name)
+				      (slot-value instance index-name)))
+	       class)))
+
+
+
 ;; =================================
 ;;   INTERNAL ACCESS TO INDICES
 ;; =================================
@@ -228,7 +241,7 @@
 	 (map-oid-fn (cidx pcidx oid)
 	   (declare (ignore cidx pcidx))
 	   (funcall fn oid)))
-    (declare (dynamic-extent map-fn))
+;;    (declare (dynamic-extent map-fn))
     (let* ((classobj (if (symbolp class) (find-class class) class))
 	   (classname (if (symbolp class) class (class-name class)))
 	   (db-schemas (get-db-schemas sc classname))

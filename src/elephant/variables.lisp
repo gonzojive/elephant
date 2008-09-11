@@ -141,6 +141,10 @@
    bunch in the application rather than just defclass changes
    interactively.")
 
+(defparameter *return-null-on-missing-instance* t
+  "During instance recreation, references to missing instances
+   simply return null instead of signaling an error")
+
 (defmacro with-inhibited-warnings (&body body)
   `(let ((*warn-on-manual-class-finalization* nil)
 	 (*warn-when-dropping-persistent-slots* nil))
