@@ -509,12 +509,12 @@ definition class depending on the keyword."
 		(class-name class))))
     initargs))
 
-(defun find-class-for-direct-slot (class name)
+(defun find-class-for-direct-slot (class def)
   (let ((list (compute-class-precedence-list class)))
     (labels ((rec (super)
 	       (if (null super)
 		   nil
-		   (aif (find-direct-slot-def-by-name super name)
+		   (aif (find-direct-slot-def-by-name super (slot-definition-name def))
 			(class-name super)
 			(rec (pop list))))))
       (rec class))))
