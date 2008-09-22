@@ -43,16 +43,16 @@
 (pushnew :use-fiveam *features*)
 
 (defsystem elephant-tests
-  :name "elephant"
+  :name "Elephant test suite"
   :author "Ben Lee <blee@common-lisp.net>"
   :version "0.1"
-  :maintainer "Ben Lee <blee@common-lisp.net>"
-  :licence "Lessor Lisp General Public License"
+  :maintainer "Elephant Team <elephant-devel@common-lisp.net>"
+  :licence "Lesser Lisp General Public License"
   :description "Object database for Common Lisp"
   :long-description "An object-oriented database based on Berkeley DB, for CMUCL/SBCL, OpenMCL, Lispworks, and Allegro."
   
   :depends-on #-use-fiveam (:elephant :rt :bordeaux-threads)
-              #+use-fiveam (:elephant :fiveam  :bordeaux-threads)
+              #+use-fiveam (:elephant :fiveam :bordeaux-threads)
   :components
   ((:module :tests
 	    :components
@@ -76,8 +76,8 @@
   :name "elephant"
   :author "Ben Lee <blee@common-lisp.net>"
   :version "0.1"
-  :maintainer "Ben Lee <blee@common-lisp.net>"
-  :licence "Lessor Lisp General Public License"
+  :maintainer "Elephant Team <elephant-devel@common-lisp.net>"
+  :licence "Lesser Lisp General Public License"
   :description "Tests that only run under BDB"
   
   :depends-on (:elephant-tests)
