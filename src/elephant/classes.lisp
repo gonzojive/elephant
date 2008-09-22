@@ -108,7 +108,11 @@
       (compute-derived-index-triggers instance it))
     ;; Synchronize instances to new schemas
     (when (and old-schema (not (match-schemas new-schema old-schema)))
-      (synchronize-stores-for-class instance))))
+      (synchronize-stores-for-class instance))
+    (and *store-controller*
+         (not (subtypep (class-name instance) 'btree))
+         (not (match-schemas (lookup-schema *store-controller* instance) new-schema))
+         (synchronize-stores-for-class instance))))
 
 (defun compute-derived-index-triggers (class derived-slot-defs)
   (let* ((sdefs (all-single-valued-slot-defs class))

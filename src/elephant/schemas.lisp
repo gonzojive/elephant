@@ -143,6 +143,12 @@
 ;; Schema matching - has the schema changed?
 ;;
 
+(defmethod match-schemas ((sch1 null) sch2)
+  nil)
+
+(defmethod match-schemas (sch1 (sch2 null))
+  nil)
+
 (defmethod match-schemas ((sch1 schema) (sch2 schema))
   "Are the two schemas functionally equivalent?"
   (and (equal (schema-classname sch1) (schema-classname sch2))
