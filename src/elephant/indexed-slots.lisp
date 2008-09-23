@@ -67,11 +67,10 @@
 
 (defun derived-index-updater (class instance written-slot-def)
   "Compute the derived indices to update from the slot-def that is
-   being written to"
+   being written to.  Should be called in a transaction"
   (awhen (derived-slot-triggers written-slot-def)
-    (ensure-transaction (:store-controller (get-con instance))
-      (dolist (derived-slot-def it)
-	(update-derived-slot class instance derived-slot-def)))))
+    (dolist (derived-slot-def it)
+      (update-derived-slot class instance derived-slot-def))))
 
 (defun update-derived-slot (class instance derived-slot-def)
   "Make a copy of the functionality here to be more efficient"

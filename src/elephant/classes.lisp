@@ -69,8 +69,8 @@
 
 (defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses index)
   "Ensures we inherit from persistent-object prior to initializing."
+  (declare (ignorable index))
   (let* ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
-    (declare (ignorable index))
     (apply #'call-next-method class slot-names
  	   :direct-superclasses new-direct-superclasses args)))
 
@@ -361,8 +361,11 @@ slots."
 (defmethod (setf slot-value-using-class) (new-value (class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Set the slot value in the database."
   (let ((name (slot-definition-name slot-def)))
-    (persistent-slot-writer (get-con instance) new-value instance name)
-    (derived-index-updater class instance slot-def))
+    (if (derived-slot-triggers slot-def)
+	(ensure-transaction (:store-controller (get-con instance))
+	  (persistent-slot-writer (get-con instance) new-value instance name)
+	  (derived-index-updater class instance slot-def))
+	(persistent-slot-writer (get-con instance) new-value instance name)))
   new-value)
 
 (defmethod slot-boundp-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
