@@ -1,6 +1,6 @@
 
 ;; Linux defaults
-#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows)) (not (or macosx darwin)))
+#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows win32)) (not (or macosx darwin)))
 ((:compiler . :gcc)
  (:berkeley-db-version . "4.5")
  (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
@@ -14,7 +14,7 @@
  (:prebuilt-libraries . nil))
 
 ;; OSX Defaults 
-#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows)) (or macosx darwin))
+#+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows win32)) (or macosx darwin))
 ((:compiler . :gcc)
  (:berkeley-db-version . "4.5")
  (:berkeley-db-include-dir . "/usr/local/BerkeleyDB.4.5/include/")
@@ -28,7 +28,7 @@
  (:prebuilt-libraries . nil))
 
 ;; Windows defaults (assumes prebuild libraries)
-#+(or mswindows windows)
+#+(or mswindows windows win32)
 ((:compiler . :cygwin)
  (:berkeley-db-version . "4.5")
  (:berkeley-db-include-dir . "C:/Program Files/Oracle/Berkeley DB 4.5.20/include/")

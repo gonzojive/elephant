@@ -22,9 +22,119 @@
 
 (in-package :elephant-utils)
 
+#+(and sbcl win32)
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (use-package :sb-alien))
+
+#+(and sbcl win32)
+(load-shared-object "Kernel32")
+
+#+(and sbcl win32)
+(declaim (inline SetCurrentDirectoryA))
+#+(and sbcl win32)
+(declaim (inline GetCurrentDirectoryA))
+
+#+(and sbcl win32)
+(define-alien-routine ("SetCurrentDirectoryA" SetCurrentDirectoryA) int
+  (directory (* unsigned-char)))
+
+#+(and sbcl win32)
+(define-alien-routine ("GetCurrentDirectoryA" GetCurrentDirectoryA) unsigned-int
+  (buffer-length unsigned-int)
+  (buffer (* unsigned-char)))
+
+#+(and sbcl win32)
+(defun char-string->lisp-string (cstring &optional (length -1))
+  "
+  Arguments: /cstring/ is a pointer to a zero-terminated
+    array of chars (unsigned bytes)
+    /length/, if supplied, truncates the translation after
+    /length/ number of characters if a zero-termination is not
+    encountered before that
+  Semantics: translates /cstring/ to a lisp string.  If
+    /cstring/ is a null pointer, returns nil
+  Returns: a lisp string or nil.
+  "
+  (declare (type integer length))
+  (when (null-alien cstring)
+    (return-from char-string->lisp-string nil))
+  ;; calculate the length
+  (when (minusp length)
+    (do ((index 0 (incf index)))
+        ((= (deref cstring index) 0) (setq length index))))
+  (do* ((index 0 (incf index))
+        (char (deref cstring index) (deref cstring index))
+        (lisp-string (make-array length :element-type 'character)))
+       ((or (= index length) (zerop char)) (subseq lisp-string 0 index))
+    (declare (type integer index)
+             (type (unsigned-byte 8) char)
+             (type string lisp-string))
+    (setf (aref lisp-string index) (code-char char))))
+
+#+(and sbcl win32)
+(defun lisp-string->char-string (string)
+  "
+  Semantics: converts the lisp /string/ into an alien pointer to
+    a zero-terminated array of 8-bit chars.  Any
+    characters in /string/ with a unicode code point
+    > #xFF are given a representation as #x1A -- the
+    standard unicode Substitute control
+  Returns: Two values: an alien pointer to a zero-terminated array of
+    8-bit chars suitable for passing to a Windows API;
+    and the length of the string
+  "
+  (let* ((size (length string))
+         (char-string (make-alien (unsigned 8) (1+ size)))
+         (unicode 0)
+         (char 0))
+    (declare (type integer size unicode)
+             (type (unsigned-byte 8) char))
+    (dotimes (index size)
+      (setq unicode (char-code (elt string index)))
+      (when (> unicode #xFF) (setq unicode #x1A)) ; coerce to 8-bits
+      (setq char (coerce unicode '(unsigned-byte 8)))
+      (setf (deref char-string index) char))
+    (setf (deref char-string size) 0)
+    (return-from lisp-string->char-string
+      (values char-string size))))
+
+#+(and sbcl win32)
+(defun get-cwd ()
+  "
+  Semantics: returns pathname for the current working (execution) directory.
+    The current working directory is the directory the operating system
+    believes the program is running in.  Shell commands execute here.
+  Arguments:
+  Returns: pathname of the current working directory
+  "
+  (let* ((size (GetCurrentDirectoryA 0 nil))
+         (cwd (make-alien unsigned-char size)))
+    (declare (type integer size))
+    (GetCurrentDirectoryA size cwd)
+    (char-string->lisp-string cwd size)
+    (truename (char-string->lisp-string cwd size))))
+
+#+(and sbcl win32)
+(defun cwd (&optional dir)
+  "
+  Semantics: Set the current working directory to /dir/.
+    If /dir/ is nil or omitted, get the current working directory.
+  Arguments: /dir/ is a slash-terminated lisp string or directory
+    pathspec
+  Returns: the current working directory after execution
+  Error Conditions: signals 'file-error if not possible
+  "
+  (when (null dir)
+    (return-from cwd (get-cwd)))
+  (let ((result (SetCurrentDirectoryA (lisp-string->char-string (namestring dir)))))
+    (declare (type integer result))
+    (if (zerop result)
+        (error (make-condition 'file-error :pathname dir))
+        (get-cwd))))
+
 (defmacro in-directory ((dir) &body body)
   `(progn 
-     (#+sbcl sb-posix:chdir 
+     (#+sbcl #-win32 sb-posix:chdir #+win32 cwd
       #+cmu unix:unix-chdir
       #+allegro excl:chdir
       #+lispworks hcl:change-directory
