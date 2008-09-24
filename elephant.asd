@@ -198,7 +198,7 @@
 
 ;;Cygwin compile script:
 ;;gcc -mno-cygwin -mwindows -std=c99 -c libmemutil.c
-;;dlltool -z libmeutil.def --export-all-symbols -e exports.o -l libmemutil.lib libmemutil.o
+;;dlltool -z libmemutil.def --export-all-symbols -e exports.o -l libmemutil.lib libmemutil.o
 ;;gcc -shared -mno-cygwin -mwindows libmemutil.o exports.o -o libmemutil.dll
 
 (defmethod operation-done-p ((o compile-op) (c elephant-c-source))
