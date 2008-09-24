@@ -1480,7 +1480,7 @@ be prepared to handle deadlock / lock no granted errors.")
 	    :documentation "Sets the size of the buffer pool cache
             for elephant database data.  Set large if you can!")
 
-(def-function ("db_env_get_max_objects" %db-env-get-max-objects)
+(def-function ("db_env_get_lk_max_objects" %db-env-get-max-objects)
     ((env :pointer-void)
      (max :int :out))
   :returning :int)
