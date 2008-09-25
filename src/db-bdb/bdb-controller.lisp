@@ -102,7 +102,7 @@ et cetera."))
 ;;
 
 (defmethod open-controller ((sc bdb-store-controller) &key (recover t)
-			    (recover-fatal nil) (thread t) 
+			    (recover-fatal nil) (thread t) (register t) 
 			    (deadlock-detect nil)
 			    (cache-size elephant::*berkeley-db-cachesize*)
 			    (max-locks elephant::*berkeley-db-max-locks*)
@@ -118,7 +118,7 @@ et cetera."))
     (db-env-set-timeout env 100000 :set-lock-timeout t)
     (db-env-open env (namestring (second (controller-spec sc)))
 		 :create t :init-rep nil :init-mpool t :thread thread
-		 :init-lock t :init-log t :init-txn t :register nil
+		 :init-lock t :init-log t :init-txn t :register register
 		 :recover recover :recover-fatal recover-fatal)
     (let ((metadata (db-create env))
 	  (db (db-create env))
