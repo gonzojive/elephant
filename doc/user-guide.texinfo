@@ -875,7 +875,9 @@ at a time.
 Cursors must be created in the context of an active transaction
 (i.e. a @code{with/ensure-transaction} body).  A cursor is made
 through a call to the @code{make-cursor} method of the BTree you wish
-to traverse.  
+to traverse. You must ensure that the cursor gets closed when
+the stack is unwound; it's best to use the convenience macro
+@code{with-btree-cursor} instead of @code{make-cursor}.
 
 An existing cursors can also be duplicated within the same transaction
 by calling @code{cursor-duplicate} which avoids the overhead of
@@ -923,7 +925,7 @@ If cursors take place within a transaction, what happens when
 traversing a very large BTree?  This depends on the data store policy
 regarding whether a cursor read locks its entire btree (or the subset
 that is being iterated over) or allows changes to any pairs its
-transaction has not changed.  See your data store documenation for
+transaction has not changed.  See your data store documentation for
 details.
 
 @node BTree Indexing
