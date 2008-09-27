@@ -38,7 +38,9 @@
    (oid-seq :type (or null pointer-void) :accessor controller-oid-seq)
    (cid-seq :type (or null pointer-void) :accessor controller-cid-seq)
    (deadlock-pid :accessor controller-deadlock-pid :initform nil)
-   (deadlock-input :accessor controller-deadlock-input :initform nil))
+   (deadlock-detect-thread :type (or null t)
+                           :accessor controller-deadlock-detect-thread
+                           :initform nil))
   (:documentation "Class of objects responsible for the
 book-keeping of holding DB handles, the cache, table
 creation, counters, locks, the root (for garbage collection,)
@@ -103,7 +105,7 @@ et cetera."))
 
 (defmethod open-controller ((sc bdb-store-controller) &key (recover t)
 			    (recover-fatal nil) (thread t) (register t) 
-			    (deadlock-detect nil)
+                            (deadlock-detect t)
 			    (cache-size elephant::*berkeley-db-cachesize*)
 			    (max-locks elephant::*berkeley-db-max-locks*)
 			    (max-objects elephant::*berkeley-db-max-objects*))
@@ -219,8 +221,8 @@ et cetera."))
 		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc))))
 
       (when deadlock-detect
-	(start-deadlock-detector sc))
-	
+        (start-deadlock-detector sc))
+
       sc)))
 
 (defun elephant-db-path (directory)
@@ -348,33 +350,82 @@ et cetera."))
 ;;
 
 (defparameter *deadlock-type-alist*
-  '((:oldest . "o")
-    (:youngest . "y")
-    (:timeout . "e")
-    (:most . "m")
-    (:least . "n")))
+  `((:default . (,DB_LOCK_DEFAULT . nil))
+    (:oldest . (,DB_LOCK_OLDEST . "o"))
+    (:youngest . (,DB_LOCK_YOUNGEST . "y"))
+    (:timeout . (,DB_LOCK_EXPIRE . "e"))
+    (:most . (,DB_LOCK_MAXLOCKS . "m"))
+    (:least . (,DB_LOCK_MINLOCKS . "n"))))
 
 (defun lookup-deadlock-type (typestring)
-  (let ((result (assoc typestring *deadlock-type-alist*)))
+  "Translate a Lisp deadlock abort type into a BDB constant and
+a db_deadlock parameter."
+  (let ((result (cdr (assoc typestring *deadlock-type-alist*))))
     (unless result
       (error "Unrecognized deadlock type '~A'" typestring))
-    (cdr result)))
+    (values (car result) (cdr result))))
 
-(defmethod start-deadlock-detector ((ctrl bdb-store-controller) &key (type :oldest) (time 0.1) log)
-  (let ((process-handle 
-	 (launch-background-program 
-	  (second (controller-spec ctrl))
-	  (namestring 
-	   (make-pathname :defaults (get-user-configuration-parameter :berkeley-db-deadlock)))
-	  :args `("-a" ,(lookup-deadlock-type type)
-		       "-t" ,(format nil "~D" time)
-		       ,@(when log (list "-L" (format nil "~A" log)))))))
-    (declare (ignore str errstr))
-    (setf (controller-deadlock-pid ctrl) process-handle)))
+(defmethod start-deadlock-detector ((ctrl bdb-store-controller) &key (type :default) (time :on-conflict)
+                                                                     (log nil) (external-process-p nil))
+  "Start the deadlock detector. TYPE specifies which locks should be aborted
+(see DB-BDB::*DEADLOCK-TYPE-ALIST*). TIME is either :ON-CONFLICT (the default, recommended) or
+a positive number. LOG must be either NIL (when using on-conflict deadlock detection),
+a stream (when using the threaded interval checker) or a string (when using the external interval
+checker db_deadlock)."
+  (unless (typep log '(or stream string null))
+    (error "LOG must be a stream, string or NIL."))
+  (let ((env (controller-environment ctrl))
+        (%type (lookup-deadlock-type type)))
+    (cond
+      ((eq time :on-conflict)
+       (when log
+         (warn "LOG argument can't be used with on-conflict deadlock detection."))
+       (when external-process-p
+         (warn "EXTERNAL-PROCESS-P argument is meaningless with on-conflict deadlock detection."))
+       (db-env-set-lock-detect env %type)
+       t)
+      ((and (typep time 'number) external-process-p)
+       (assert (typep log '(or string null)))
+       (let ((process-handle 
+               (launch-background-program 
+                 (second (controller-spec ctrl))
+                 (namestring 
+                   (make-pathname :defaults (get-user-configuration-parameter :berkeley-db-deadlock)))
+                 :args `("-a" ,(let ((arg (nth-value 1 (lookup-deadlock-type type))))
+                                 (if arg arg (error "Can't propagate deadlock abortion type ~S to db_deadlock." type)))
+                         "-t" ,(format nil "~D" time)
+                         ,@(when log (list "-L" (format nil "~A" log)))))))
+         (declare (ignore str errstr))
+         (setf (controller-deadlock-pid ctrl) process-handle)))
+      ((typep time 'number)
+       (assert (typep log '(or stream null)))
+       (unless (find-package :bordeaux-threads)
+         (asdf:oos 'asdf:load-op :bordeaux-threads))
+       (assert (plusp time))
+       (warn "The interval deadlock detector might not work reliably in high-concurrency situations.")
+       (let ((thread (funcall (find-symbol "MAKE-THREAD" :bordeaux-threads)
+                              (lambda ()
+                                (loop do (progn
+                                           (let ((aborted (db-env-lock-detect env %type)))
+                                             (and log (not (zerop aborted))
+                                               (format log "INFO: Aborted ~D transactions due to deadlock.~%" aborted)))
+                                           (sleep time))))
+                                           :name (format nil "Deadlock detector for ~A" ctrl))))
+         (setf (controller-deadlock-detect-thread ctrl) thread)))
+      (t (error "Invalid deadlock activation time specifier ~S -- must be either :ON-CONFLICT or a positive number." time)))))
 			
 (defmethod stop-deadlock-detector ((ctrl bdb-store-controller))
-  (when (controller-deadlock-pid ctrl)
-    (kill-background-program (controller-deadlock-pid ctrl))))
+  (let ((thread (controller-deadlock-detect-thread ctrl))
+        (pid (controller-deadlock-pid ctrl)))
+    (when (and thread pid)
+      (warn "Both external and built-in threaded deadlock detector are running?!"))
+    (when thread
+      (handler-case (funcall (find-symbol "DESTROY-THREAD" :bordeaux-threads) thread)
+        (error (c) (warn "Couldn't stop deadlock detector thread -- who shut it down?")))
+      (setf (controller-deadlock-detect-thread ctrl) nil))
+    (when pid
+      (kill-background-program pid))
+    t))
 
 ;;
 ;; Enable program-based checkpointing
