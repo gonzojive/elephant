@@ -261,6 +261,8 @@ et cetera."))
     (setf (controller-db sc) nil)
     (db-close (controller-metadata sc))
     (setf (controller-metadata sc) nil)
+    ;; XXX if any of the above fails the environment doesn't get closed.
+    ;; Close it in this case nevertheless via UNWIND-PROTECT?
     (db-env-close (controller-environment sc))
     (setf (controller-environment sc) nil)
     nil))
