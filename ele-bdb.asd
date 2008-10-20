@@ -33,7 +33,7 @@
 ;;
 
 
-#+(or windows mswindows)
+#+(or windows mswindows win32)
 (defun path-for-cygwin (path)
 "DOS pathname -> cygwin pathname. Replace backslashes with slashes and drive letter with directory.  
 e.g. \"C:\\dir\\\" -> \"/cygdrive/C/dir/\" "
@@ -68,10 +68,10 @@ e.g. \"C:\\dir\\\" -> \"/cygdrive/C/dir/\" "
 (defun library-directories (c)
   (let ((include (make-pathname :defaults (get-config-option :berkeley-db-include-dir c)))
 	(lib (make-pathname :defaults (get-config-option :berkeley-db-lib-dir c))))
-    #+(or windows mswindows)
+    #+(or windows mswindows win32)
     (list (format nil "-L'~A'" (path-for-cygwin lib))
 	  (format nil "-I'~A'" (path-for-cygwin include)))
-    #-(or windows mswindows)
+    #-(or windows mswindows win32)
     (list (format nil "-L~A" lib) (format nil "-I~A" include))))
 
 (defmethod foreign-libraries-to-load-first ((c bdb-c-source))

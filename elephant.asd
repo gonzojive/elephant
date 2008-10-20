@@ -101,7 +101,7 @@
    the specific options from 'compiler-options method.  Default options 
    can be overridden or augmented by subclass methods"
   (unless (get-config-option :prebuilt-libraries c)
-  #+(or mswindows windows)
+  #+(or mswindows windows win32)
   (progn
     (let* ((pathname (component-pathname c))
            (directory #+lispworks (make-pathname :host (pathname-host pathname) :directory (pathname-directory pathname))
@@ -116,6 +116,7 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status) 
 		    (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
+        #+sbcl (setf exit-status (run-shell-command command))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))
 
@@ -126,6 +127,7 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status) 
                       (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
+        #+sbcl (setf exit-status (run-shell-command command))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))
 
@@ -141,10 +143,11 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status)
                       (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
+        #+sbcl (setf exit-status (run-shell-command command))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))))
 
-  #-(or mswindows windows)
+  #-(or mswindows windows win32)
   (unless (zerop (run-shell-command
 		  "~A ~{~A ~}"
 		  (c-compiler-path c)
