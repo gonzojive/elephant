@@ -97,6 +97,7 @@ et cetera."))
        (if (and ,txn-rec (eq (transaction-store ,txn-rec) ,sc))
 	   (transaction-object ,txn-rec)
 	   +NULL-CHAR+))))
+
 ;;
 ;; Open/close     
 ;;

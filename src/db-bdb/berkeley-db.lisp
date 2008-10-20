@@ -89,9 +89,7 @@
        (format stream "Berkeley DB error #~A: ~A"
 	       (db-error-errno condition)
 	       (db-strerror (db-error-errno condition)))))
-    (:documentation "Berkeley DB errors."))
-
-  )
+    (:documentation "Berkeley DB errors.")))
 
 (defmacro txn-default (dvar)
   `(progn

@@ -829,7 +829,8 @@ true."))
 (defun drop-instances (instances &key (sc *store-controller*) (txn-size 500))
   "Removes a list of persistent objects from all class indices
    and unbinds any persistent slot values associated with those instances"
-  (when instances
+  (declare (optimize (speed 1) (debug 3) (safety 3)))
+  (when (mklist instances)
     (assert (consp instances))
     (do-subsets (subset txn-size instances)
       (ensure-transaction (:store-controller sc)

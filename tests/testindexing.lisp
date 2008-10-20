@@ -640,6 +640,19 @@
       )
   t)
   
+(defpclass idx-nine ()
+ ((str :type string
+	:initarg :str
+	:reader str-of
+	:index t)))
+
+(test map-inverted-index-1
+  (drop-instances (get-instances-by-class 'idx-nine))
+  (loop :for st :in '("a" "b" "c" "d" "g" "ga" "gb" "gc" "z")
+     :do (make-instance 'idx-nine :str st))
+  (is (null (map-inverted-index (lambda (x y)
+				  (declare (ignore y))
+				  x) 'idx-nine 'str :start "f" :end "fz" :collect t))))
 
       
 
