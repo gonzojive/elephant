@@ -271,8 +271,8 @@
           ;; having the objects hang around in the index
 	  ((and (eq old-type :indexed) (eq new-type :indexed))
 	   (unindex-slot-value sc (slot-value previous old-name)
-			       (oid previous) old-name (getf old-args :base)))
-;;	   (setf (slot-value current new-name) (slot-value previous old-name)))
+			       (oid previous) old-name (getf old-args :base))
+	   (setf (slot-value current new-name) (slot-value previous old-name)))
 	  ((eq old-type :indexed)
 	   (unindex-slot-value sc (slot-value previous old-name)
 			       (oid previous) old-name (getf old-args :base)))
