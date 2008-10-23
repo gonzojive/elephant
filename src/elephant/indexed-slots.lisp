@@ -116,17 +116,18 @@
 	 new-idx)))
 
 (defmethod add-slot-index ((sc store-controller) new-index class-name index-name)
+  "Add it to the index table and the class slot def"
   (setf (get-value (cons class-name index-name) (controller-index-table sc))
 	new-index))
 
 (defmethod drop-slot-index ((sc store-controller) class-name index-name)
+  (clear-slot-def-index (find-slot-def-by-name (find-class class-name) index-name) sc)
   (remove-kv (cons class-name index-name) (controller-index-table sc)))
 
 (defmethod rebuild-slot-index ((sc store-controller) class-name index-name)
   (drop-slot-index sc class-name index-name)
-  (let ((new-idx (make-dup-btree sc))
-	(class (find-class class-name)))
-    (add-slot-index sc new-idx class-name index-name)
+  (let ((class (find-class class-name)))
+    (ensure-slot-def-index (find-slot-def-by-name class index-name) sc)
     (map-class #'(lambda (instance)
 		   (update-slot-index sc class instance
 				      (find-slot-def-by-name class index-name)

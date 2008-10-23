@@ -209,6 +209,10 @@
   (setf (indexed-slot-indices def)
 	(acons sc idx (indexed-slot-indices def))))
 
+(defmethod clear-slot-def-index ((def indexed-effective-slot-definition) sc)
+  (setf (indexed-slot-indices def)
+	(remove sc (indexed-slot-indices def) :key #'car)))
+
 (defmethod indexed-slot-defs (class)
   (find-slot-defs-by-type class 'indexed-effective-slot-definition nil))
 
@@ -217,7 +221,7 @@
 
 
 ;;
-;; Indexed slots
+;; Derived indexed slots
 ;;
 
 (defclass derived-index-slot-definition (indexed-slot-definition)

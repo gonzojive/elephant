@@ -244,7 +244,7 @@
       ;; do we need to pass the persistent object?  Transient ops require previous?
       (awhen (schema-upgrade-fn old-schema)
 	(apply-schema-change-fn current it old-schema))
-      ;; Change all the slots
+      ;; Handle changed slots
       (loop for entry in diff do
 	   (change-instance-slot sc current previous (diff-type entry) (diff-recs entry)))
       ;; Initialize new slots (is this done by default?)
@@ -269,6 +269,10 @@
 	   (setf (slot-value previous old-name) (slot-value previous old-name)))
 	  ;; If the old slot was indexed, we definitely need to unindex it to avoid
           ;; having the objects hang around in the index
+	  ((and (eq old-type :indexed) (eq new-type :indexed))
+	   (unindex-slot-value sc (slot-value previous old-name)
+			       (oid previous) old-name (getf old-args :base)))
+;;	   (setf (slot-value current new-name) (slot-value previous old-name)))
 	  ((eq old-type :indexed)
 	   (unindex-slot-value sc (slot-value previous old-name)
 			       (oid previous) old-name (getf old-args :base)))

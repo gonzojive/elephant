@@ -37,7 +37,13 @@
 
 (defun slot-rec-eq (rec1 rec2)
   (and (eq (slot-rec-name rec1) (slot-rec-name rec2))
-       (eq (slot-rec-type rec1) (slot-rec-type rec2))))
+       (eq (slot-rec-type rec1) (slot-rec-type rec2))
+       (indexed-slot-rec-eq rec1 rec2)))
+
+(defun indexed-slot-rec-eq (rec1 rec2)
+  (or (not (eq (slot-rec-type rec1) :indexed))
+      (eq (getf (slot-rec-args rec1) :base)
+	  (getf (slot-rec-args rec2) :base))))
 
 (defun get-slot-recs-by-type (type schema)
   (remove-if-not (lambda (rec)
