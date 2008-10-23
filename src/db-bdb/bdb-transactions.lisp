@@ -25,7 +25,8 @@
 				&key 
 				transaction parent environment
 				(retries *default-retries*)
-				degree-2 read-uncommitted txn-nosync txn-nowait txn-sync)
+				degree-2 read-uncommitted txn-nosync 
+				txn-nowait txn-sync snapshot)
   (declare (ignorable transaction))
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
@@ -38,7 +39,8 @@
 					:read-uncommitted read-uncommitted
 					:txn-nosync txn-nosync
 					:txn-nowait txn-nowait
-					:txn-sync txn-sync)))
+					:txn-sync txn-sync
+					:snapshot snapshot)))
 	 (declare (type pointer-void txn))
 	 (let (result)
 	   (let ((*current-transaction* (make-transaction-record sc txn))
@@ -71,6 +73,7 @@
 					 txn-sync
 					 read-uncommitted
 					 degree-2
+					 snapshot
 					 &allow-other-keys)
   (assert (not *current-transaction*))
   (db-transaction-begin (controller-environment sc)
@@ -79,7 +82,8 @@
 			:txn-nowait txn-nowait
 			:txn-sync txn-sync
 			:read-uncommitted read-uncommitted
-			:degree-2 degree-2))
+			:degree-2 degree-2
+			:snapshot snapshot))
 			
 
 (defmethod controller-commit-transaction ((sc bdb-store-controller) transaction 

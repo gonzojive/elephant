@@ -110,10 +110,17 @@
       (setf (slot-value object 'cache-mode) mode)
       (setf (slot-value object 'cache-mode)
 	    (ecase mode
-	      (:none-cached +none-cached+)
-	      (:all-cached +all-cached+)
-	      (:write-through +all-write-through+)
-	      (:index-write-through +index-write-through+))))
+	      (:none-cached 
+	       +none-cached+)
+	      (:all-cached 
+	       +all-cached+)
+	      (:write-through 
+	       +all-write-through+)
+	      (:index-write-through 
+	       +index-write-through+))))
+  (if (eq (cache-mode object) +all-cached+)
+      (refresh-slots object)
+      (save-slots object))
   mode)
 
 (defmacro with-cached-instances ((mode &rest instances) &body body)

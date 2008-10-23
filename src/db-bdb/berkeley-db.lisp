@@ -203,7 +203,8 @@
 		 after before keyfirst keylast freelist-only free-space
 		 no-dup-data no-overwrite nosync position 
 		 seq-dec seq-inc seq-wrap set-lock-timeout
-		 set-transaction-timeout multiple multiple-key)
+		 set-transaction-timeout multiple multiple-key 
+		 multiversion snapshot)
   (let ((flags (gensym)))
     `(let ((,flags 0))
       (declare (type fixnum ,flags))
@@ -229,6 +230,8 @@
       ,@(when read-uncommitted `((when ,read-uncommitted (setq ,flags (logior ,flags DB_READ_UNCOMMITTED)))))
       ,@(when multiple `((when ,multiple (setq ,flags (logior ,flags DB_MULTIPLE)))))
       ,@(when multiple-key `((when ,multiple-key (setq ,flags (logior ,flags DB_MULTIPLE_KEY)))))
+      ,@(when multiversion `((when ,multiversion (setq ,flags (logior ,flags DB_MULTIVERSION)))))
+      ,@(when snapshot `((when ,snapshot (setq ,flags (logior ,flags DB_TXN_SNAPSHOT)))))
       ,@(when create `((when ,create (setq ,flags (logior ,flags DB_CREATE)))))
       ,@(when excl `((when ,excl (setq ,flags (logior ,flags DB_EXCL)))))
       ,@(when nommap `((when ,nommap (setq ,flags (logior ,flags DB_NOMMAP)))))
@@ -431,7 +434,7 @@
 (wrap-errno db-open (db transaction file database type flags mode)
 	    :flags (auto-commit create dirty-read read-uncommitted 
 				excl nommap rdonly thread truncate
-				)
+				multiversion)
 	    :keys ((transaction (txn-default *current-transaction*))
 		   (file +NULL-CHAR+)
 		   (database +NULL-CHAR+)
@@ -527,7 +530,7 @@ and DUP-SORT.")
 
 (defun db-get-key-buffered (db key-buffer-stream value-buffer-stream
 			    &key (transaction (txn-default *current-transaction*))
-			    get-both degree-2 read-committed
+			    get-both degree-2 read-committed 
 			    dirty-read read-uncommitted multiple multiple-key)
   "Get a key / value pair from a DB.  The key is encoded in
 a buffer-stream.  Space for the value is passed in as a
@@ -592,7 +595,7 @@ decoding, or NIL if nothing was found."
 	   (type string key)
 	   (type buffer-stream value-buffer-stream)
 	   (type fixnum key-size)
-	   (type boolean get-both degree-2 read-committed 
+	   (type boolean get-both degree-2 read-committed
 		 dirty-read read-uncommitted multiple multiple-key))
   (with-cstring (k key)
     (loop 
@@ -1289,11 +1292,12 @@ get, get-range."
 
 (defun db-transaction-begin (env &key parent
 			     degree-2 read-committed dirty-read read-uncommitted
-			     txn-nosync txn-nowait txn-sync)
+			     txn-nosync txn-nowait txn-sync
+			     snapshot)
   "Start a transaction.  Transactions may be nested."
   (declare (type pointer-void env parent)
 	   (type boolean degree-2 read-committed dirty-read read-uncommitted 
-		 txn-nosync txn-nowait txn-sync))
+		 txn-nosync txn-nowait txn-sync snapshot))
   (let ((errno-buffer (allocate-foreign-object :int 1)))
     (declare (type pointer-int errno-buffer))
     (let* ((txn
@@ -1302,7 +1306,8 @@ get, get-range."
 				  :dirty-read (or dirty-read read-uncommitted)
 				  :txn-nosync txn-nosync
 				  :txn-nowait txn-nowait
-				  :txn-sync txn-sync)
+				  :txn-sync txn-sync
+				  :snapshot snapshot)
 			   errno-buffer))
 	   (errno (deref-array errno-buffer '(:array :int) 0)))
       (declare (type pointer-void txn)

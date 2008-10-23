@@ -68,6 +68,8 @@
 (defconstant DB_DEGREE_2         #x04000000) ;; DEPRECATED, now called DB_READ_COMMITTED
 (defconstant DB_READ_UNCOMMITTED #x08000000)
 (defconstant DB_DIRTY_READ       #x08000000) ;; DEPRECATED, now called DB_READ_UNCOMMITTED
+(defconstant DB_SNAPSHOT         #x00400000)
+(defconstant DB_TXN_SNAPSHOT     #x10000000)
 
 (defconstant DB_AFTER		      1)
 (defconstant DB_BEFORE		      3)

@@ -106,7 +106,8 @@ et cetera."))
 
 (defmethod open-controller ((sc bdb-store-controller) &key (recover t)
 			    (recover-fatal nil) (thread t) (register t) 
-                            (deadlock-detect t)
+			    (deadlock-detect t)
+			    (multiversion nil)
 			    (cache-size elephant::*berkeley-db-cachesize*)
 			    (max-locks elephant::*berkeley-db-max-locks*)
 			    (max-objects elephant::*berkeley-db-max-objects*))
@@ -133,7 +134,9 @@ et cetera."))
       ;; Open metadata database
       (setf (controller-metadata sc) metadata)
       (db-open metadata :file "%ELEPHANT" :database "%METADATA" 
-	       :auto-commit t :type DB-BTREE :create t :thread thread)
+	       :auto-commit t :type DB-BTREE :create t :thread thread
+	       :multiversion multiversion)
+
 
       ;; Establish database version if new
       (when new-p (set-database-version sc))
@@ -146,14 +149,14 @@ et cetera."))
       (setf (controller-db sc) db)
       (db-open db :file "%ELEPHANT" :database "%ELEPHANTDB" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t)
+	       :read-uncommitted t :multiversion multiversion)
 
       ;; Standard btrees
       (setf (controller-btrees sc) btrees)
       (db-bdb::db-set-lisp-compare btrees (controller-serializer-version sc))
       (db-open btrees :file "%ELEPHANT" :database "%ELEPHANTBTREES" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t)
+	       :read-uncommitted t :multiversion multiversion)
 
       ;; Indexed btrees
       (setf (controller-indices sc) indices)
@@ -162,7 +165,7 @@ et cetera."))
       (db-set-flags indices :dup-sort t)
       (db-open indices :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
  	       :auto-commit t :type DB-BTREE :create t :thread thread
- 	       :read-uncommitted t)
+ 	       :read-uncommitted t :multiversion multiversion)
       
       (setf (controller-indices-assoc sc) indices-assoc)
       (db-bdb::db-set-lisp-compare indices-assoc (controller-serializer-version sc))
@@ -170,7 +173,7 @@ et cetera."))
       (db-set-flags indices-assoc :dup-sort t)
       (db-open indices-assoc :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
 	       :auto-commit t :type DB-UNKNOWN :thread thread
-	       :read-uncommitted t)
+	       :read-uncommitted t :multiversion multiversion)
       (db-bdb::db-fake-associate btrees indices-assoc :auto-commit t)
       
 
@@ -181,13 +184,14 @@ et cetera."))
       (db-set-flags dup-btrees :dup-sort t)
       (db-open dup-btrees :file "%ELEPHANTDUP" :database "%ELEPHANTDUPS"
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t)
+	       :read-uncommitted t :multiversion multiversion)
      
       ;; OIDs
       (let ((db (db-create env)))
 	(setf (controller-oid-db sc) db)
 	(db-open db :file "%ELEPHANTOID" :database "%ELEPHANTOID" 
-		 :auto-commit t :type DB-BTREE :create t :thread thread)
+		 :auto-commit t :type DB-BTREE :create t :thread thread
+		 :multiversion multiversion)
 	(let ((oid-seq (db-sequence-create db)))
 	  (db-sequence-set-cachesize oid-seq 100)
 	  (db-sequence-set-flags oid-seq :seq-inc t :seq-wrap t)
@@ -370,7 +374,11 @@ a db_deadlock parameter."
 
 (defmethod start-deadlock-detector ((ctrl bdb-store-controller) &key (type :default) (time :on-conflict)
                                                                      (log nil) (external-process-p nil))
-  "Start the deadlock detector. TYPE specifies which locks should be aborted (see DB-BDB::*DEADLOCK-TYPE-ALIST*). TIME is either :ON-CONFLICT (the default, recommended) or a positive number. LOG must be either NIL (when using on-conflict deadlock detection), a stream (when using the threaded interval checker) or a string (when using the external interval checker db_deadlock)."
+  "Start the deadlock detector. TYPE specifies which locks should be aborted
+(see DB-BDB::*DEADLOCK-TYPE-ALIST*). TIME is either :ON-CONFLICT (the default, recommended) or
+a positive number. LOG must be either NIL (when using on-conflict deadlock detection),
+a stream (when using the threaded interval checker) or a string (when using the external interval
+checker db_deadlock)."
   (unless (typep log '(or stream string null))
     (error "LOG must be a stream, string or NIL."))
   (let ((env (controller-environment ctrl))
@@ -394,7 +402,6 @@ a db_deadlock parameter."
                                  (if arg arg (error "Can't propagate deadlock abortion type ~S to db_deadlock." type)))
                          "-t" ,(format nil "~D" time)
                          ,@(when log (list "-L" (format nil "~A" log)))))))
-         (declare (ignore str errstr))
          (setf (controller-deadlock-pid ctrl) process-handle)))
       ((typep time 'number)
        (assert (typep log '(or stream null)))
