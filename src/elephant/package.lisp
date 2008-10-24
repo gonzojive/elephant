@@ -261,6 +261,7 @@
    #:enable-class-indexing #:disable-class-indexing
    #:add-class-slot-index #:remove-class-slot-index
    #:add-class-derived-index #:remove-class-derived-index
+   #:rebuild-slot-index
    #:describe-db-class-index
    #:report-indexed-classes
    #:class-indexedp-by-name
