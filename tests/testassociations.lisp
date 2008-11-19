@@ -6,12 +6,17 @@
 (defparameter NUM_PERSONS 1000)
 (defparameter PERSONS_PER_JOB 10)
 
+;; Forward references
+(defpclass person () ())
+(defpclass job () ())
+(defpclass pjassoc () ())
+
 ;; Create a one-to-many association from job to person...
 ;; one job can have up to 10 persons, in any order.  
 ;; In this test I will do this with an explict association class,
 ;; and then maybe Ian and the Marc, the new guy, can beat it 
 ;; with an explicit association....
-(test simple-explicit-assoc-setup
+(test simple-explicit-assoc-setup 
   (when (find-class 'person nil)
     (drop-instances (get-instances-by-class 'person) :txn-size 500))
   (when (find-class 'job nil)
@@ -68,6 +73,7 @@
      (drop-instances (get-instances-by-class 'person) :txn-size 500))
    (when (find-class 'job nil)
      (drop-instances (get-instances-by-class 'job) :txn-size 500))
+
  (defpclass person ()
    ((name :accessor names-of :initarg :name :index t)
     (jobs :accessor jobs :associate (job holders) :many-to-many t)))

@@ -469,6 +469,8 @@
 	(is (= (length (get-instances-by-class 'idx-seven)) 1))
 	(is (= (length (get-instances-by-value 'idx-seven 'slot3 2)) 1))))
 
+(defpclass idx-eight () ())
+
 (deftest (indexing-redef-class :depends-on index-reset)
     (progn
       (wipe-class 'idx-eight)
@@ -494,7 +496,7 @@
 	   (slot7 :accessor slot7 :initarg :slot7)
 	   (slot8 :accessor slot8 :initarg :slot8 :initform 15 :transient t))
 	  (:metaclass persistent-metaclass))
-	      (format t "indexing redef-class d~%")
+	(format t "indexing redef-class d~%")
 	(let* ((
 	       v1
 	       (and (eq (slot1 o1) 1)
@@ -529,6 +531,9 @@
 (defvar normal-index nil)
 
 (defgeneric stress1 (obj))
+
+(defpclass stress-normal () ())
+(defpclass stress-index () ())
 
 (defun make-stress-classes ()
   (defclass stress-normal ()
