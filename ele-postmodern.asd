@@ -28,5 +28,4 @@
                        (:file "pm-secondary"))
 		      :serial t))))
   :depends-on (:postmodern
-               :elephant
-               :bordeaux-threads))
+               :elephant))
