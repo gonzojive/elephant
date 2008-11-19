@@ -47,8 +47,11 @@
 
 (defun remove-keywords (keywords list)
   (cond ((null list) nil)
-	((member (car list) keywords) (cddr list))
-	(t (cons (car list) (remove-keywords keywords (cdr list))))))
+	((member (car list) keywords)
+	 (remove-keywords keywords (cddr list)))
+	(t (cons (car list) 
+		 (cons (cadr list)
+		       (remove-keywords keywords (cddr list)))))))
 
 (defun concat-separated-strings (separator &rest lists)
   (format nil (concatenate 'string "~{~A~^" (string separator) "~}")

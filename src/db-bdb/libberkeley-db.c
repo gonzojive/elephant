@@ -1030,7 +1030,7 @@ double read_num(unsigned char *buf) {
 #define S2_FILL_POINTER_P 0x40
 #define S2_ADJUSTABLE_P 0x80
 
-#define type_numeric2(c) (((c)<9) || ((c)==22))
+#define type_numeric2(c) (((c)<9) || ((c)==22) || ((c)==30))
 
 /******
   BTree keys have the form:
@@ -1050,7 +1050,7 @@ double read_num2(unsigned char *buf);
 int lisp_compare2(DB *dbp, 
 		  const DBT *a, unsigned char *ad, const unsigned int asize,
 		  const DBT *b, unsigned char *bd, const unsigned int bsize) {
-  int difference;
+  int difference, i;
   int offset;
   double ddifference;
   unsigned char at, bt;
@@ -1058,15 +1058,20 @@ int lisp_compare2(DB *dbp,
   /* Get the 8-bit tag */
   at = ad[0]; bt = bd[0];
 
-  /*****
-  printf("Type tag: %d Type tag 2: %d\n", at, bt);
-  *****/
+  /*******
+  printf("Compare value:\n");
+  printf(" at=%d bt=%d\n", at, bt);
+  printf(" asize=%d bsize=%d\n", asize, bsize);
+  for (i=0;i<20;i++) {
+    printf(" at[%d]=%d bt[%d]=%d\n", i, ad[i], i, bd[i]);
+    } 
+  *******/
 
   /* Compare numerics. */
   if ((type_numeric2(at)) && (type_numeric2(bt))) {
-    /*****
-    printf("Num1: %f  Num2: %f\n", read_num2(ad), read_num2(bd));
-    *****/
+    
+    /*    printf("Num1: %f  Num2: %f\n", read_num2(ad), read_num2(bd)); */
+    
     ddifference = read_num2(ad) - read_num2(bd);
     if (ddifference > 0) return 1;
     else if (ddifference < 0) return -1;
@@ -1093,9 +1098,9 @@ int lisp_compare2(DB *dbp,
     offset = 0;
   }
 
-  /*****
-  printf("Prefix type: %d  offset: %d\n", ad[1], offset);
-  *****/
+  
+  /*  printf("Prefix type: %d  offset: %d\n", ad[1], offset); */
+  
 
   /* Same type*/
   switch (at) {
@@ -1139,16 +1144,20 @@ int lisp_compare_value2(DB *dbp, const DBT *a, const DBT *b) {
   
 /* New key form serializer comparison */
 int lisp_compare_key2(DB *dbp, const DBT *a, const DBT *b) {
-  int difference;
+  int difference, i;
   unsigned char *ad, *bd;
   ad = (unsigned char *)a->data;
   bd = (unsigned char *)b->data;
 
-  /*****
+  
+  /********
   printf("Compare keys: \n");
-  printf("OIDs: %d %d\n", read_int(ad, 0), read_int(bd, 0));
-  printf("sizes: %d %d\n", a->size, b->size);
-  *****/
+  printf(" OIDs: %d %d\n", read_int(ad, 0), read_int(bd, 0));
+  printf(" sizes: %d %d\n", a->size, b->size);
+  for (i=0;i<12;i++) {
+    printf(" at[%d]=%d bt[%d]=%d\n", i, ad[i], i, bd[i]);
+  }
+  ********/
 
   /* Compare OIDs: OIDs are limited by native integer width */
   difference = read_int(ad, 0) - read_int(bd, 0);
@@ -1198,11 +1207,14 @@ int db_set_lisp_dup_key_compare(DB *db, int version) {
 }
 
 double read_num2(unsigned char *buf) {
+  int words;
   unsigned char *limit;
   double i, result, denom;
   switch (buf[0]) {
   case S2_FIXNUM32:
+    return (double)read_int32(buf, 1);
   case S2_FIXNUM64:
+    return (double)read_int64(buf, 1);
   case S2_SYMBOL_ID:
     return (double)read_int(buf, 1);
   case S2_CHAR:
@@ -1216,17 +1228,17 @@ double read_num2(unsigned char *buf) {
   case S2_NEGATIVE_BIGNUM:
     result = 0;
     buf += 5;
-    limit = buf + read_uint(buf, -4);
-    for(i=0 ; buf < limit; i++, buf = buf+4) {
-      result -= exp2(i*32) * read_uint(buf, 0);
+    words = read_uint32(buf, -4) / 4;
+    for(i=0 ; i < words; i++, buf = buf+4) {
+      result -= exp2(i*32) * read_uint32(buf, 0);
     }
     return result;
   case S2_POSITIVE_BIGNUM:
     result = 0;
     buf += 5;
-    limit = buf + read_uint(buf, -4);
-    for(i=0 ; buf < limit; i++, buf = buf+4) {
-      result += exp2(i*32) * read_uint(buf, 0);
+    words = read_uint32(buf, -4) / 4;
+    for(i=0 ; i < words; i++, buf = buf+4) {
+      result += exp2(i*32) * read_uint32(buf, 0);
     }
     return result;
   case S2_RATIONAL:

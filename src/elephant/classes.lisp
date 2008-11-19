@@ -72,7 +72,8 @@
   (declare (ignorable index))
   (let* ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
     (apply #'call-next-method class slot-names
- 	   :direct-superclasses new-direct-superclasses args)))
+ 	   :direct-superclasses new-direct-superclasses 
+	   (remove-keywords '(:direct-superclasses :index) args))))
 
 (defun ensure-class-inherits-from (class from-classname direct-superclasses)
   (let* ((from-class (find-class from-classname))
