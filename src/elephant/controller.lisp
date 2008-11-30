@@ -832,9 +832,9 @@ true."))
   "Removes a list of persistent objects from all class indices
    and unbinds any persistent slot values associated with those instances"
   (declare (optimize (speed 1) (debug 3) (safety 3)))
-  (when (mklist instances)
-    (assert (consp instances))
-    (do-subsets (subset txn-size instances)
+  (awhen (mklist instances)
+    (assert (consp it))
+    (do-subsets (subset txn-size it)
       (ensure-transaction (:store-controller sc)
 	(mapc #'drop-instance subset)))))
 
