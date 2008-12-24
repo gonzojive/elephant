@@ -21,19 +21,33 @@
 
 (in-package :elephant)
 
-(defparameter *string-relation-functions*
+(defparameter *string-comparison-functions*
   `((< . ,#'string<)
-    (< . ,#'string<=)
+    (<= . ,#'string<=)
     (> . ,#'string>)
-    (> . ,#'string>=)
+    (>= . ,#'string>=)
     (= . ,#'equal)
     (!= . ,(lambda (x y) (not (equal x y))))))
 
-(defparameter *number-relation-functions*
+(defparameter *number-comparison-functions*
   `((< . ,#'<)
+    (<= . , #'<=)
     (> . ,#'>)
+    (>= . ,#'>=)
     (= . ,#'=)
     (!= . ,#'(lambda (x y) (not (= x y))))))
+
+(defparameter *generic-relation-functions* 
+  `((< . ,#'lisp-compare<)
+    (<= . ,#'lisp-compare<=)
+    (> . ,#'(lambda (x y)
+	      (not (lisp-compare<= x y))))
+    (>= . ,#'(lambda (x y)
+	       (not (lisp-compare< x y))))
+    (= . ,#'(lambda (x y)
+	      (lisp-compare-equal x y)))
+    (!= . ,#'(lambda (x y)
+	       (not (lisp-compare-equal x y))))))
 
 (defun relation-string-function (rel)
   (cdr (assoc rel *string-relation-functions*)))
@@ -41,12 +55,16 @@
 (defun relation-number-function (rel)
   (cdr (assoc rel *number-relation-functions*)))
 
+(defun relation-generic-function (rel)
+  (cdr (assoc rel *generic-relation-functions*)))
+
 (defun test-relation (rel ival tvals)
   (assert (or (and (numberp ival) (numberp (first tvals)))
 	      (and (stringp ival) (stringp (first tvals)))))
   (typecase ival
     (string (funcall (relation-string-function rel) ival (first tvals)))
-    (number (funcall (relation-number-function rel) ival (first tvals)))))
+    (number (funcall (relation-number-function rel) ival (first tvals)))
+    (t (funcall (relation-generic-function rel) ival (first tvals)))))
       
 (defun get-query-instances (constraints)
   "Get a list of instances according to the query constraints"
@@ -54,7 +72,6 @@
   (let ((list nil))
     (flet ((collect (inst)
 	     (push inst list)))
-      (declare (dynamic-extent collect))
       (map-class-query #'collect constraints))))
 
 (defun map-class-query (fn constraints)
@@ -108,9 +125,9 @@
 
 (defun satisfied-bindings-p (bindings)
   (every #'(lambda (binding)
-	     (and (listp binding)
-		  (cdr binding)
-		  (not (null (second binding)))))
+	     (and (consp binding)
+		  (cdr binding)))
+;;		  (not (null (second binding)))))
 	 bindings))
 
 (defun reset-bindings (inst bindings)
