@@ -24,7 +24,8 @@
 
 (defvar *debug-si* nil)
 
-(declaim #-elephant-without-optimize (optimize (speed 3)))
+(declaim #-elephant-without-optimize (optimize (speed 3))
+	 #+elephant-without-optimize (optimize (speed 1) (safety 3) (debug 3)))
 
 ;; ================================================
 ;; SIMPLE PERSISTENT OBJECTS
@@ -63,23 +64,48 @@
     objects that would not be appropriate for Elephant objects
     such as persistent collections"))
 
+(defclass cacheable-persistent-object (persistent-object)
+  ((pchecked-out :accessor pchecked-out-p :initform nil)
+   (checked-out :accessor checked-out-p :initform nil :transient t))
+  (:metaclass persistent-metaclass)
+  (:documentation 
+   "Adds a special value slot to store checkout state"))
+
 ;; ================================================
 ;; METACLASS INITIALIZATION 
 ;; ================================================
 
-(defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses index)
+(defmethod shared-initialize :around ((class persistent-metaclass) slot-names &rest args &key direct-superclasses direct-slots index cache-style)
   "Ensures we inherit from persistent-object prior to initializing."
   (declare (ignorable index))
-  (let* ((new-direct-superclasses (ensure-class-inherits-from class 'persistent-object direct-superclasses)))
+  ;; When we declare slots and don't initialize the cache-style and don't
+  ;; inherit cacheable-persistent-object...inform the user
+  (when (and (not cache-style) (has-cached-slot-specification direct-slots)
+	     (not (superclass-member-p 'cacheable-persistent-object 
+				       (class-direct-superclasses class))))
+    (error "Must specify the class caching style if you declare cached slots and don't~%inherit from a cached class.  Class option :cache-style must be one of~% :checkout, :txn or :none"))
+  (let* ((new-direct-superclasses 
+	  (if cache-style 
+	      (ensure-class-inherits-from class '(cacheable-persistent-object) direct-superclasses)
+	      (ensure-class-inherits-from class '(persistent-object) direct-superclasses))))
+    ;; Call the next method
     (apply #'call-next-method class slot-names
  	   :direct-superclasses new-direct-superclasses 
-	   (remove-keywords '(:direct-superclasses :index) args))))
+	   (remove-keywords '(:direct-superclasses :index) args))
+    ;; Make sure we convert the cache argument so it can be used in accessors
+    (when (consp (%cache-style class))
+      (setf (%cache-style class) (first (%cache-style class))))))
 
-(defun ensure-class-inherits-from (class from-classname direct-superclasses)
-  (let* ((from-class (find-class from-classname))
-	 (has-persistent-object (superclass-member-p from-class direct-superclasses)))
-    (if (not (or (eq class from-class) has-persistent-object))
-	(append direct-superclasses (list from-class))
+(defun ensure-class-inherits-from (class from-classnames direct-superclasses)
+  (let* ((from-classes (mapcar #'find-class from-classnames))
+	 (has-persistent-objects 
+	  (every #'(lambda (class) (superclass-member-p class direct-superclasses))
+		 from-classes)))
+    (if (not (or (member class from-classes) has-persistent-objects))
+	(progn
+	  (dolist (class from-classes)
+	    (setf direct-superclasses (remove class direct-superclasses)))
+	  (append direct-superclasses from-classes))
 	direct-superclasses)))
 
 (defun superclass-member-p (class superclasses)
@@ -90,6 +116,9 @@
 		  (when supers
 		    (superclass-member-p class supers)))))
 	superclasses))
+
+(defun has-cached-slot-specification (direct-slot-defs)
+  (some #'(lambda (slot) (getf slot :cached)) direct-slot-defs))
 
 (defmethod finalize-inheritance :after ((instance persistent-metaclass))
   "Constructs the metaclass schema when the class hierarchy is valid"
@@ -166,7 +195,7 @@
   (ensure-transaction (:store-controller sc)
     (call-next-method)))
 
-(defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid cache-mode &allow-other-keys)
+(defmethod shared-initialize :around ((instance persistent-object) slot-names &rest initargs &key from-oid &allow-other-keys)
   "Initializes the persistent slots via initargs or forms.
 This seems to be necessary because it is typical for
 implementations to optimize setting the slots via initforms
@@ -181,16 +210,15 @@ slots."
      (derived-slots derived-index-slot-names)
      (association-end-slots association-end-slot-names)
      (persistent-slots persistent-slot-names))
-    ;; Set caching mode to default
-    (setf (cache-mode instance) 
-	  (or cache-mode *cached-instance-default-mode*))
     ;; Slot initialization
     (let* ((class (class-of instance))
 	   (persistent-initializable-slots 
 	    (union (union persistent-slots indexed-slots) association-end-slots))
 	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
+;;      NOTE: backing store for cached slots is only initialized on checkout or txn
       (cond (from-oid ;; If re-starting, make sure we read the cached values
-	     (refresh-cached-slots instance cached-slots))
+;;	     (refresh-cached-slots instance cached-slots)) ;; old model dependency
+	     nil)
 	    (t        ;; If new instance, initialize all slots
 	     (setq transient-slots (union transient-slots cached-slots))
 	     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)))
@@ -201,6 +229,12 @@ slots."
 	(initialize-set-slots class instance set-slots))
       (loop for dslotname in derived-slots do
 	   (derived-index-updater class instance (find-slot-def-by-name class dslotname))))))
+
+(defmethod shared-initialize :around ((instance cacheable-persistent-object) slot-names &key make-cached-instance &allow-other-keys)
+  ;; User asked us to start in cached mode?  Otherwise default to not.
+  (setf (slot-value instance 'pchecked-out) make-cached-instance)
+  (setf (slot-value instance 'checked-out) make-cached-instance)
+  (call-next-method))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (dolist (slotname persistent-slot-inits)
@@ -512,7 +546,18 @@ slots."
     (persistent-slot-boundp (get-con instance) instance name)))
 
 #+sbcl ;; CMU also?  Old code follows...
-(defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))
+(defmethod initialize-internal-slot-functions ((slot-def persistent-effective-slot-definition))
+  (let ((name (slot-definition-name slot-def)))
+    (setf (slot-definition-reader-function slot-def)
+	  (make-persistent-reader name))
+    (setf (slot-definition-writer-function slot-def)
+	  (make-persistent-writer name))
+    (setf (slot-definition-boundp-function slot-def)
+	  (make-persistent-slot-boundp name)))
+  (call-next-method)) ;;  slot-def)
+
+#+sbcl ;; CMU also?  Old code follows...
+(defmethod initialize-internal-slot-functions ((slot-def cached-effective-slot-definition))
   (let ((name (slot-definition-name slot-def)))
     (setf (slot-definition-reader-function slot-def)
 	  (make-persistent-reader name))

@@ -220,7 +220,9 @@
    #:*oid-only* #:*default-retries*
 
    ;; Cached slots
-   #:cache-mode #:refresh #:save #:with-cached-instances
+   #:caching-style #:cacheable-class
+   #:persistent-checked-out-p #:persistent-checkout #:persistent-sync
+   #:persistent-checkin #:with-persistent-checkouts #:persistent-checkout-cancel
 
    ;; PSets 
    #:pset #:make-pset #:insert-item #:remove-item #:map-pset #:find-item #:pset-list #:drop-pset

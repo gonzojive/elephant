@@ -8,8 +8,10 @@
 
 
 (deftest drop-instances-atom
-  (drop-instances (make-instance 'zork187)))
+    (drop-instances (make-instance 'zork187))
+  nil)
 
 (deftest drop-instances-list
-  (drop-instances (list (make-instance 'zork187))))
+    (drop-instances (list (make-instance 'zork187)))
+  nil)
 

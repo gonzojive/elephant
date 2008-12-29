@@ -61,6 +61,7 @@
              (:file "fiveam-rt")
              (:file "elephant-tests")
              (:file "persistent-objects")
+	     (:file "testcaching")
              (:file "testperformance")
 	     (:file "testserializer")
 	     (:file "testconditions")

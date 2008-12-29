@@ -58,12 +58,29 @@
    the class to cache multiple index controllers.  Set by
    a user configurable parameter.")
 
-(defconstant +none-cached+ 0)
-(defconstant +all-cached+ 1)
-(defconstant +all-write-through+ 2)
-(defconstant +index-write-through+ 3)
+(defconstant +none+ 0
+  "Cache specification is ignored")
 
-(defparameter *cached-instance-default-mode* +none-cached+
+(defconstant +txn+ 1
+  "Cache values for subsequent reads in a transaction.  Writes
+   are write-through so any indices get updated.  This is an
+   object-wide policy for all cached slot types")
+
+(defconstant +checkout+ 2
+  "An object can be checked out and all cached slots are 
+   manipulated entirely in memory.  This provides protection
+   only for writes.  An object cannot be written without being
+   checked out.  If someone tries to check out an object that
+   is checked out, an error is flagged.  This enables critical
+   sections to be defined to provide per-process isolation for
+   short-term operations.  For long term checkouts, the user 
+   will need to provide any needed thread isolation.  It would
+   be easy to add multiple-process isolation by maintaining an
+   owned state in the in-memory object so a process knew it was
+   the one that did the check out and any write operations would
+   assert an error.")
+
+(defparameter *cached-instance-default-mode* +none+
    "Determines the global default for cache mode on
     instances.  Override with instance initarg :cache-mode")
 
