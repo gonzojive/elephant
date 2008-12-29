@@ -49,13 +49,17 @@
 ;;
 
 (defun ele-make-fast-lock ()
-  #+allegro nil
-  #-allegro (ele-make-lock))
+;;  #+allegro nil
+  #+sbcl nil
+;;  #+sbcl (ele-make-lock)
+  #-(or allegro sbcl) (ele-make-lock))
 
 (defmacro ele-with-fast-lock ((lock &rest ignored) &body body)
   (declare (ignorable lock ignored))
   #+allegro `(excl:without-interrupts ,@body)
-  #-allegro `(ele-with-lock (,lock ,@ignored) ,@body))
+  #+sbcl `(sb-sys:without-interrupts ,@body)
+;;  #+sbcl `(ele-with-lock (,lock ,@ignored) ,@body)
+  #-(or allegro sbcl) `(ele-with-lock (,lock ,@ignored) ,@body))
 
 (defun ele-thread-hash-key ()
 "This routine has to return something unqiue about the thread which can serve as a hash key."

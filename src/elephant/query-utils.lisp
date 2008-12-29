@@ -23,7 +23,7 @@
 (defclass simple-set ()
   ((recs :initarg :recs :accessor set-recs :initform nil)
    (seq :initarg :seq :accessor set-sequence
-	:initform (make-array 1000 :adjustable t :fill-pointer 0))))
+	:initform (make-array 1000 :adjustable nil :fill-pointer 0))))
 
 (defmethod print-object ((set simple-set) stream)
   (format stream "#<SIMPLE-SET:~A ~A>" 
@@ -36,9 +36,11 @@
 (defun make-simple-set (recs)
   (make-instance 'simple-set :recs recs))
 
+(defparameter *min-simple-set-extension* 1000)
+
 (defun add-row (set values)
   (assert (valid-row set values))
-  (vector-push-extend values (set-sequence set)))
+  (vector-push-extend values (set-sequence set) *min-simple-set-extension*))
 
 (defun valid-row (set values)
   (every #'(lambda (i rec)
@@ -57,44 +59,92 @@
 		:key (lambda (values)
 		       (nth offset values))))))
 
-(defun intersect-sets (output-recs set1 vrec1 set2 vrec2 &optional (dups :none))
-  "The simple is when we are intersecting on two columns w/o duplicate elements.  
-   If we have duplicates, we want to "
+(defun intersect-sets (output-recs set1 vrec1 set2 vrec2)
+  "The simple is when we are intersecting on two columns.  We back up the
+   join pointer when we have dual sets of duplicate elements."
   (let* ((seq1 (set-sequence set1))
 	 (v1 (position vrec1 (set-recs set1) :test #'equal))
 	 (seq2 (set-sequence set2))
 	 (v2 (position vrec2 (set-recs set2) :test #'equal))
-	 (i 0) (j 0)
 	 (imax (length (set-sequence set1)))
 	 (jmax (length (set-sequence set2)))
 	 (out (make-array (min imax jmax) :fill-pointer 0))
-	 (output-map (output-map output-recs (set-recs set1) (set-recs set2))))
-    (declare (fixnum i j imax jmax v1 v2))
-;;	     ((array *) seq1 seq2 out))
+	 (output-map (output-map output-recs (set-recs set1) (set-recs set2)))
+	 (left (nth v1 (aref seq1 0)))
+	 (right (nth v2 (aref seq2 0)))
+	 (next-left nil)
+	 (next-right nil)
+	 (i 1) (j 1) (bp 0))
+    (declare (fixnum i j imax jmax v1 v2 bp)
+	     (list left right next-left next-right))
+;;	     ((array t *) seq1 seq2 out))
     (unless v1
       (error "Dependency ~A not found in ~A with spec ~A"
 	     vrec1 set1 (set-recs set1)))
     (unless v2
       (error "Dependency ~A not found in ~A with spec ~A"
 	     vrec2 set2 (set-recs set2)))
-    (loop
-       (when (or (= i imax) (= j jmax))
-	 (return (make-instance 'simple-set :recs output-recs :seq out)))
-       (let ((row1 (aref seq1 i))
-	     (row2 (aref seq2 j)))
-	 (let ((velt1 (nth v1 row1))
-	       (velt2 (nth v2 row2)))
-	   (cond ((lisp-compare-equal velt1 velt2)
-		  (vector-push-extend 
-		   (merge-set-rows output-map row1 row2) out)
-		  (ecase dups
-		    (:none (incf i) (incf j))
-		    (:right (incf j))
-		    (:left (incf i))
-		    (:both (error "Not sure what to do here yet"))))
-		 ((lisp-compare< velt1 velt2)
-		  (incf i))
-		 (t (incf j))))))))
+    (labels ((maybe-return ()
+	       (when (and (= imax i) (= jmax j))
+		 (return-from intersect-sets
+		   (make-instance 'simple-set :recs output-recs :seq out))))
+	     (increment-left ()
+	       (setq right right-next)
+	       (unless (= imax i)
+		 (incf i))
+	       (setq right-next (nth v1 (aref seq1 i))))
+	     (increment-right ()
+	       (setq left left-next)
+	       (unless (= jmax j)
+		 (incf j))
+	       (setq left-next (nth v2 (aref seq2 j))))
+	     (track-left-dups ()
+	       (if (lisp-compare-equal left next-left)
+		   (when (not dups-left)
+		     (setf dups-left t))
+		   (when dups-left
+		     (setf dups-left nil))))
+	     (track-right-dups ()
+	       (unless dups-right
+		 (when (lisp-compare-equal right next-right)
+		   (setf dups-right t)
+		   (setf bp (1- j)))))
+	     (step-on-equal ()
+	       (cond ((and (not dups-right) (not dups-left))
+		      (increment-right))
+		     (dups-right 
+		      (increment-right))
+		     ((and (not dups-right) dups-left)
+		      (increment-left))))
+	     (step-on-right-greater ()
+	       (cond (dups-left
+		      (increment-right))
+		     ((and dups-right (not dups-left))
+		      (increment-right))
+		     ((and (not dups-right) dups-left)
+		      (increment-left))
+		     ((and dups-right dups-left)
+	     (step-on-left-greater ()
+	       (cond ((and (not dups-right) (not dups-left))
+		      (increment-right))
+		     ((and dups-right (not dups-left))
+		      (increment-right))
+		     ((and (not dups-right) dups-left)
+		      (increment-left))
+		     ((and dups-right dups-left)
+	       
+      (loop
+	 (when (or (= i imax) (= j jmax))
+	 (track-right-dups)
+	 (track-left-dups)
+	 ;; NOTE: Optimize away comparisons when dealing with dups?
+	 (cond ((lisp-compare-equal left right)
+		(vector-push
+		 (merge-set-rows output-map row1 row2) out)
+		(step-on-equal))
+	       ((lisp-compare< left right)
+		(step-on-right-greater))
+	       (t (step-on-left-greater))))
 
 (defun filter-set (fn set rec)
   (let ((offset (position rec (set-recs set) :test #'equal))

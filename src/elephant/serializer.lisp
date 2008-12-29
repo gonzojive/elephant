@@ -26,14 +26,28 @@
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
 ;;  (check-valid-store-controller sc)
-  (funcall (symbol-function (controller-serialize sc)) frob bs sc))
+  (funcall 
+   #+elephant-without-optimize
+   (symbol-function (controller-serialize sc))
+   #-elephant-without-optimize
+   (the function (aif (controller-serialize-fn sc) it
+		      (setf (controller-serialize-fn sc)
+			    (symbol-function (controller-serialize sc)))))
+   frob bs sc))
 
 (defun deserialize (bs sc &optional oid-only)
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
 ;;  (check-valid-store-controller sc)
   (handler-case 
-      (funcall (symbol-function (controller-deserialize sc)) bs sc oid-only)
+    (funcall 
+      #+elephant-without-optimize
+     (symbol-function (controller-deserialize sc))
+     #-elephant-without-optimize
+	(the function (aif (controller-deserialize-fn sc) it
+			   (setf (controller-deserialize-fn sc)
+				 (symbol-function (controller-deserialize sc)))))
+     bs sc oid-only)
 ;;    (unbound-slot (u)
 ;;      (signal u))
     (error (e)

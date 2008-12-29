@@ -856,7 +856,8 @@
    sc)
   )
 
-(defmethod persistent-slot-reader ((sc sql-store-controller) instance name)
+(defmethod persistent-slot-reader ((sc sql-store-controller) instance name &optional oid-only)
+  (declare (ignore oid-only))
   (multiple-value-bind (v existsp)
       (sql-get-from-root
        (form-slot-key (oid instance) name)

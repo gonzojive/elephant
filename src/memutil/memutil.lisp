@@ -95,8 +95,9 @@
 
 (eval-when (:compile-toplevel)
   (declaim 
-   #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0))
-   (inline read-int read-uint read-float read-double 
+   #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))
+   (inline read-int read-uint read-float read-double read-int32 read-uint32
+	   read-int64 read-uint64 write-int32 write-uint32 write-int64 write-uint64
 	   write-int write-uint write-float write-double
 	   offset-char-pointer copy-str-to-buf %copy-str-to-buf copy-bufs
 	   ;; resize-buffer-stream 
@@ -104,13 +105,15 @@
 	   ;; buffer-stream-length 
 	   buffer-write-oid buffer-read-oid
 	   reset-buffer-stream
-	   buffer-write-byte 
 	   buffer-write-int32 buffer-write-uint32
 	   buffer-write-int64 buffer-write-uint64
 	   buffer-write-float buffer-write-double buffer-write-string
 	   buffer-read-byte buffer-read-fixnum buffer-read-int32
 	   buffer-read-uint32 buffer-read-int64 buffer-read-uint64
            buffer-read-float buffer-read-double buffer-read-ucs1-string
+	   ;; inline legacy
+	   buffer-write-byte buffer-read-fixnum
+	   buffer-write-int buffer-write-uint buffer-read-int buffer-read-uint
 	   #+(or lispworks (and allegro ics)) buffer-read-ucs2-string
 	   #+(and sbcl sb-unicode) buffer-read-ucs4-string))
   )
@@ -164,11 +167,12 @@
   "Grab a buffer-stream, executes forms, and returns the
 stream to the pool on exit."
   `(let ,(loop for name in names collect (list name '(grab-buffer-stream)))
-    (unwind-protect
-	 (progn ,@body)
-      (progn
-	,@(loop for name in names 
-		collect (list 'return-buffer-stream name))))))
+     (declare (type buffer-stream ,@names))
+     (unwind-protect
+	  (progn ,@body)
+       (progn
+	 ,@(loop for name in names 
+	      collect (list 'return-buffer-stream name))))))
 
 ;;
 ;; Buffer management / pointer arithmetic
@@ -561,7 +565,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 4)))
+    (let ((needed (the fixnum (+ size 4))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-int32 buf i size)
@@ -739,22 +744,27 @@ of a string."
 
 (defun buffer-read-int (bs)
   ;; deprecated, better to use explicit int32 or int64 version
+  (declare (type buffer-stream bs))
   (buffer-read-int32 bs))
 
 (defun buffer-read-fixnum (bs)
   ;; deprecated, better to use explicit int32 or int64 version
+  (declare (type buffer-stream bs))
   (the fixnum (buffer-read-fixnum32 bs)))
 
 (defun buffer-write-int (int bs)
   ;; deprecated, better to use explicit int32 or int64 version
+  (declare (type buffer-stream bs))
   (buffer-write-int32 int bs))
 
 (defun buffer-read-uint (bs)
   ;; deprecated, better to use explicit int32 or int64 version
+  (declare (type buffer-stream bs))
   (buffer-read-uint32 bs))
 
 (defun buffer-write-uint (int bs)
   ;; deprecated, better to use explicit int32 or int64 version
+  (declare (type buffer-stream bs))
   (buffer-write-uint32 int bs))
   
 (defconstant +2^32+ 4294967296)
@@ -763,32 +773,37 @@ of a string."
 (defun buffer-read-fixnum32 (bs)
   "Read a 32-bit signed integer, which is assumed to be a fixnum."
   (declare (type buffer-stream bs))
-  (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 4))
+  (let ((position (the fixnum (buffer-stream-position bs))))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
     (the fixnum (read-int32 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-int32 (bs)
   "Read a 32-bit signed integer."
   (declare (type buffer-stream bs))
-  (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 4))
+  (let ((position (the fixnum (buffer-stream-position bs))))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
     (the (signed-byte 32) (read-int32 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-uint32 (bs)
   "Read a 32-bit unsigned integer."
   (declare (type buffer-stream bs))
-  (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 4))
-    (the (unsigned-byte 32)(read-uint32 (buffer-stream-buffer bs) position))))
+  (let ((position (the fixnum (buffer-stream-position bs))))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
+    (the fixnum (read-uint32 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-fixnum64 (bs)
   (declare (type buffer-stream bs))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 8))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 8)))
     (if (< #.most-positive-fixnum +2^32+)
 	;; 32-bit or less fixnums; need to process as bignums
 	(let ((first (read-int32 (buffer-stream-buffer bs) position))
-	      (second (read-int32 (buffer-stream-buffer bs) (+ position 4))))
+	      (second (read-int32 (buffer-stream-buffer bs) 
+				  (the fixnum (+ position 4)))))
 	  (if (little-endian-p)
 	      (+ first (ash second 32))
 	      (+ second (ash first 32))))
@@ -799,29 +814,33 @@ of a string."
   "Read a 64-bit signed integer."
   (declare (type buffer-stream bs))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 8))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 8)))
     (the (signed-byte 64) (read-int64 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-uint64 (bs)
   "Read a 64-bit unsigned integer."
   (declare (type buffer-stream bs))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 8))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 8)))
     (the (unsigned-byte 64) (read-uint64 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-float (bs)
   "Read a single-float."
   (declare (type buffer-stream bs))
-  (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 4))
-    (read-float (buffer-stream-buffer bs) position)))
+  (let ((position (the fixnum (buffer-stream-position bs))))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
+    (the single-float (read-float (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-double (bs)
   "Read a double-float."
   (declare (type buffer-stream bs))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position 8))
-    (read-double (buffer-stream-buffer bs) position)))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position 8)))
+    (the double-float (read-double (buffer-stream-buffer bs) position))))
 
 ;; A non-back-compatible change was made in SBCL 8 moving to SBCL 9,
 ;; in that the function copy-from-system-area disappeared.
@@ -841,10 +860,11 @@ of a string."
   (declare (type buffer-stream bs)
 	   (type fixnum byte-length))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position byte-length))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position byte-length)))
     #-(and sbcl sb-unicode)
     (convert-from-foreign-string 
-     (offset-char-pointer (buffer-stream-buffer bs) position) 
+     (offset-char-pointer (buffer-stream-buffer bs) position)
      :length byte-length :null-terminated-p nil)
     #+(and sbcl sb-unicode)
     (let ((res (make-string byte-length :element-type 'base-char)))
@@ -888,7 +908,8 @@ of a string."
   (declare (type buffer-stream bs)
 	   (type fixnum byte-length))
   (let ((position (buffer-stream-position bs)))
-    (setf (buffer-stream-position bs) (+ position byte-length))
+    (declare (type fixnum position))
+    (setf (buffer-stream-position bs) (the fixnum (+ position byte-length)))
     (let ((res (make-string (/ byte-length 4) :element-type 'character)))
       #+#.(elephant-memutil::new-style-copy-p)
        (sb-kernel::copy-ub8-from-system-area 
@@ -900,10 +921,10 @@ of a string."
        #-#.(elephant-memutil::new-style-copy-p)
       (sb-kernel::copy-from-system-area 
        (sb-alien:alien-sap (buffer-stream-buffer bs))
-       (* position sb-vm:n-byte-bits)
+       (the fixnum (* position sb-vm:n-byte-bits))
        res 
        (* sb-vm:vector-data-offset sb-vm:n-word-bits)
-       (* byte-length sb-vm:n-byte-bits))
+       (the fixnum (* byte-length sb-vm:n-byte-bits)))
       res)))
 
 ;;

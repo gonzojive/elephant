@@ -229,7 +229,15 @@
 	      :documentation "Accessed by elephant::serialize to
 	      get the entry point to the default serializer or to
 	      a data store specific serializer")
+   (serialize-fn :accessor controller-serialize-fn :initform nil
+	      :documentation "Accessed by elephant::serialize to
+	      get the entry point to the default serializer or to
+	      a data store specific serializer")
    (deserialize :accessor controller-deserialize :initform nil
+		:documentation "Contains the entry point for the
+		specific serializer to be called by
+		elephant::deserialize")
+   (deserialize-fn :accessor controller-deserialize-fn :initform nil
 		:documentation "Contains the entry point for the
 		specific serializer to be called by
 		elephant::deserialize"))
@@ -668,6 +676,8 @@ true."))
 	(controller-schema-classes sc))
   (setf (slot-value sc 'schema-name-index) nil)
   (setf (slot-value sc 'instance-class-index) nil)
+  (setf (slot-value sc 'serialize-fn) nil)
+  (setf (slot-value sc 'deserialize-fn) nil)
   (delete-con-spec (controller-spec sc)))
 
 

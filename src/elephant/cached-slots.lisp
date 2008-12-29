@@ -19,6 +19,11 @@
 
 (in-package :elephant)
 
+#-elephant-without-optimize 
+(declaim (optimize (speed 3) (safety 0) (space 0) (debug 0))
+	 (inline persistent-slot-reader persistent-slot-writer
+		 persistent-slot-boundp persistent-slot-makunbound))
+
 ;;
 ;; Cached slot access protocol
 ;;

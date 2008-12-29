@@ -280,11 +280,12 @@
     (with-postmodern-conn ((active-connection))
       (postmodern:sequence-next 'class_id_seq))))
 
-(defun deserialize-from-database (x sc)
+(defun deserialize-from-database (x sc &optional oids-only)
   (with-buffer-streams (other)
     (deserialize
      (elephant-memutil::buffer-write-byte-vector x other)
-     sc)))
+     sc
+     oids-only)))
 
 (defun form-slot-key (oid name)
   (declare (optimize speed))
@@ -332,8 +333,8 @@
             new-value)))
   new-value)
 
-(defmethod persistent-slot-reader ((sc postmodern-store-controller) instance name)
-  (declare (optimize (debug 3)))
+(defmethod persistent-slot-reader ((sc postmodern-store-controller) instance name &optional oids-only)
+  (declare (optimize (debug 3)) (ignore oids-only))
   (with-controller-for-btree (sc)
     (multiple-value-bind (v existsp)
         (get-value (form-slot-key (oid instance) name)

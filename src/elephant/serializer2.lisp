@@ -54,11 +54,11 @@
 (in-package :elephant-serializer2)
 
 (eval-when (:compile-toplevel)
-  (declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0))
-	   (inline serialize deserialize
-		   slots-and-values
-		   deserialize-bignum
-		   #+cmu %bignum-ref)))
+  (declaim  #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))))
+;;	   (inline slots-and-values
+;;		   deserialize-bignum
+;;		   #+cmu %bignum-ref
+;;		   )))
 
 (uffi:def-type foreign-char :char)
 
@@ -114,7 +114,7 @@
 (defparameter *circularity-hash-queue* (make-array 20 :fill-pointer 0 :adjustable t)
   "Circularity ids for the serializer.")
 
-(defvar *serializer-fast-lock* (ele-make-fast-lock))
+(defparameter *serializer-fast-lock* (ele-make-fast-lock))
 
 (defun get-circularity-hash ()
   "Get a clean hash for object serialization"
@@ -127,7 +127,6 @@
 
 (defun release-circularity-hash (hash)
   "Return the hash to the queue for reuse"
-  (declare (type hash-table hash))
   (unless (= (hash-table-count hash) 0)
     (clrhash hash))
   (ele-with-fast-lock (*serializer-fast-lock*)
@@ -171,6 +170,10 @@
 (defconstant +2^63+ (expt 2 63))
 (defconstant +2^64+ (expt 2 64))
 
+;;(defparameter symbol-package-hash (make-hash-table :size 10000)
+;;  "In SBCL the lookup of packages conses like crazy.  This is a workaround")
+
+
 (defun serialize (frob bs sc)
   "Serialize a lisp value into a buffer-stream."
   (declare (type buffer-stream bs)
@@ -179,6 +182,7 @@
 	(circularity-hash 
 	 (unless (or (stringp frob) (symbolp frob) (numberp frob))
 	   (get-circularity-hash))))
+    (declare (type fixnum lisp-obj-id))
     (labels 
 	((%next-object-id ()
 	   (incf lisp-obj-id))
@@ -207,10 +211,20 @@
 			 (dynamic-extent sym-name))
 		(buffer-write-byte +symbol+ bs)
 		(serialize-string sym-name bs)
-		(let ((package (symbol-package frob)))
-		  (if package
-		      (serialize-string (package-name package) bs)
-		      (buffer-write-byte +nil+ bs)))))
+ 		(let ((package (symbol-package frob)))
+ 		  (declare (dynamic-extent package)
+ 			   (type (or null package) package))
+ 		  (if package
+ 		      (serialize-string (package-name package) bs)
+ 		      (buffer-write-byte +nil+ bs)))))
+;;		(let ((package-name (gethash frob symbol-package-hash)))
+;;		  (unless package-name
+;;		    (setq package-name 
+;;			  (setf (gethash frob symbol-package-hash)
+;;				(package-name (symbol-package frob)))))
+;;		  (if package-name
+;;		      (serialize-string package-name bs)
+;;		      (buffer-write-byte +nil+ bs)))))
 	     (string
 	      (serialize-string frob bs))
 	     (persistent

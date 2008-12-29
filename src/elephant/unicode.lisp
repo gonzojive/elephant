@@ -31,7 +31,7 @@
 
 (in-package :elephant-serializer2)
 
-(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 1)))
+(declaim #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0)))
 
 ;; 
 ;; Serialize string: simplify store by discovering utf8/utf16 and utf32; trade off
@@ -102,7 +102,7 @@
 		    (declare (type fixnum code))
 		    (when (the boolean (> code #xFF)) (fail))
 		    (setf (uffi:deref-array buffer '(:array :unsigned-char) 
-					    (+ i size)) code))))
+					    (the fixnum (+ i size))) code))))
 	    (string
 	     (loop for i fixnum from 0 below characters do 
 		  (let ((code (the fixnum

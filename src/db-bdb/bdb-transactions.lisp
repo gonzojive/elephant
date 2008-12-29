@@ -21,6 +21,9 @@
 
 (in-package :db-bdb)
 
+(declaim #-elephant-without-optimize (optimize (speed 3))
+	 #+elephant-without-optimize (optimize (speed 1) (safety 3) (debug 3)))
+
 (defmethod execute-transaction ((sc bdb-store-controller) txn-fn
 				&key 
 				transaction parent environment
