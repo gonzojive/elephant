@@ -89,12 +89,13 @@
 	      (ensure-class-inherits-from class '(cacheable-persistent-object) direct-superclasses)
 	      (ensure-class-inherits-from class '(persistent-object) direct-superclasses))))
     ;; Call the next method
-    (apply #'call-next-method class slot-names
- 	   :direct-superclasses new-direct-superclasses 
-	   (remove-keywords '(:direct-superclasses :index) args))
-    ;; Make sure we convert the cache argument so it can be used in accessors
-    (when (consp (%cache-style class))
-      (setf (%cache-style class) (first (%cache-style class))))))
+    (prog1
+	(apply #'call-next-method class slot-names
+	       :direct-superclasses new-direct-superclasses 
+	       (remove-keywords '(:direct-superclasses :index) args))
+      ;; Make sure we convert the cache argument so it can be used in accessors
+      (when (consp (%cache-style class))
+	(setf (%cache-style class) (first (%cache-style class)))))))
 
 (defun ensure-class-inherits-from (class from-classnames direct-superclasses)
   (let* ((from-classes (mapcar #'find-class from-classnames))

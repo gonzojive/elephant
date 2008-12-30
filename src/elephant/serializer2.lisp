@@ -55,10 +55,6 @@
 
 (eval-when (:compile-toplevel)
   (declaim  #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))))
-;;	   (inline slots-and-values
-;;		   deserialize-bignum
-;;		   #+cmu %bignum-ref
-;;		   )))
 
 (uffi:def-type foreign-char :char)
 

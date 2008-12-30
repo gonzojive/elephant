@@ -581,7 +581,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 4)))
+    (let ((needed (the fixnum (+ size 4))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-uint32 buf u size)
@@ -596,7 +597,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 8)))
+    (let ((needed (the fixnum (+ size 8))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-int64 buf i size)
@@ -611,7 +613,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 8)))
+    (let ((needed (the fixnum (+ size 8))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-uint64 buf u size)
@@ -626,7 +629,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 4)))
+    (let ((needed (the fixnum (+ size 4))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-float buf d size)
@@ -641,7 +645,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 8)))
+    (let ((needed (the fixnum (+ size 8))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-double buf d size)
@@ -658,7 +663,7 @@ of a string."
 		      (len buffer-stream-length))
     bs		      
     (let* ((str-bytes (byte-length s))
-	   (needed (+ size str-bytes)))
+	   (needed (the fixnum (+ size str-bytes))))
       (declare (type fixnum str-bytes needed)
 	       (dynamic-extent str-bytes needed))
       (when (> needed len)
@@ -681,6 +686,7 @@ of a string."
   "Read a byte."
   (declare (type buffer-stream bs))
   (let ((position (buffer-stream-position bs)))
+    (declare (type fixnum position))
     (incf (buffer-stream-position bs))
     (deref-array (buffer-stream-buffer bs) '(:array :unsigned-char) position)))
 
@@ -701,11 +707,12 @@ of a string."
    "Read the whole buffer into  byte vector."
    (declare (type buffer-stream bs))
    (let* ((position (buffer-stream-position bs))
- 	 (size (buffer-stream-size bs))
- 	 (vlen (length bv))
- 	 (writable (max vlen (- size position))))
- 	  (dotimes (i writable bs) 
- 	      (buffer-write-byte (aref bv i) bs))))
+	  (size (buffer-stream-size bs))
+	  (vlen (length bv))
+	  (writable (max vlen (- size position))))
+     (declare (type fixnum position size vlen writable))
+     (dotimes (i writable bs) 
+       (buffer-write-byte (aref bv i) bs))))
 
 (defun buffer-read-to-array-offset (arry offset bs)
   "Buffer relative; read contents of buffer-stream and write them into array at offset"
@@ -776,7 +783,7 @@ of a string."
   (let ((position (the fixnum (buffer-stream-position bs))))
     (declare (type fixnum position))
     (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
-    (the fixnum (read-int32 (buffer-stream-buffer bs) position))))
+    (read-int32 (buffer-stream-buffer bs) position)))
 
 (defun buffer-read-int32 (bs)
   "Read a 32-bit signed integer."
@@ -792,7 +799,7 @@ of a string."
   (let ((position (the fixnum (buffer-stream-position bs))))
     (declare (type fixnum position))
     (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
-    (the fixnum (read-uint32 (buffer-stream-buffer bs) position))))
+    (read-uint32 (buffer-stream-buffer bs) position)))
 
 (defun buffer-read-fixnum64 (bs)
   (declare (type buffer-stream bs))
@@ -800,7 +807,7 @@ of a string."
     (declare (type fixnum position))
     (setf (buffer-stream-position bs) (the fixnum (+ position 8)))
     (if (< #.most-positive-fixnum +2^32+)
-	;; 32-bit or less fixnums; need to process as bignums
+	;; 32-bit or less fixnums; need to process as bignums64
 	(let ((first (read-int32 (buffer-stream-buffer bs) position))
 	      (second (read-int32 (buffer-stream-buffer bs) 
 				  (the fixnum (+ position 4)))))
@@ -808,7 +815,7 @@ of a string."
 	      (+ first (ash second 32))
 	      (+ second (ash first 32))))
 	;; Native 64-bit fixnums (NOTE: issues with non 32/64 bit fixnums?)
-	(the fixnum (read-int64 (buffer-stream-buffer bs) position)))))
+	(read-int64 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-int64 (bs)
   "Read a 64-bit signed integer."
