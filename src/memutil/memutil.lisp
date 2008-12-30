@@ -97,7 +97,8 @@
   (declaim 
    #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))
    (inline read-int read-uint read-float read-double read-int32 read-uint32
-	   read-int64 read-uint64 write-int32 write-uint32 write-int64 write-uint64
+	   read-int64 read-uint64 write-int32 write-fixnum32 read-fixnum32
+	   write-uint32 write-int64 write-uint64
 	   write-int write-uint write-float write-double
 	   offset-char-pointer copy-str-to-buf %copy-str-to-buf copy-bufs
 	   ;; resize-buffer-stream 
@@ -195,6 +196,14 @@ stream to the pool on exit."
     (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
 		 (* (signed 32))))))
 
+(defun read-fixnum32 (buf offset)
+  "Read a 32-bit signed integer from a foreign char buffer."
+  (declare (type (alien (* unsigned-char)) buf)
+	   (type fixnum offset))
+  (the fixnum
+    (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
+		 (* (signed 32))))))
+
 #+(or cmu sbcl)
 (defun read-int64 (buf offset)
   "Read a 64-bit signed integer from a foreign char buffer."
@@ -246,6 +255,15 @@ stream to the pool on exit."
   "Write a 32-bit signed integer to a foreign char buffer."
   (declare (type (alien (* unsigned-char)) buf)
 	   (type (signed-byte 32) num)
+	   (type fixnum offset))
+  (setf (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
+		     (* (signed 32)))) num))
+
+#+(or cmu sbcl)
+(defun write-fixnum32 (buf num offset)
+  "Write a 32-bit signed integer to a foreign char buffer."
+  (declare (type (alien (* unsigned-char)) buf)
+	   (type fixnum num)
 	   (type fixnum offset))
   (setf (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
 		     (* (signed 32)))) num))
@@ -505,6 +523,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))
     (when (> length len)
       (let ((newlen (max length (* len 2))))
 	(declare (type fixnum newlen))
@@ -526,6 +546,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))
     (when (> length len)
       (let ((newlen (max length (* len 2))))
 	(declare (type fixnum newlen))
@@ -551,7 +573,10 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
-    (let ((needed (+ size 1)))
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))
+    (let ((needed (the fixnum (+ size 1))))
+      (declare (type fixnum needed))
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (setf (deref-array buf '(:array :unsigned-char) size) b)
@@ -573,6 +598,24 @@ of a string."
       (setf size needed)
       nil)))
 
+(defun buffer-write-fixnum32 (i bs)
+  "Write a 32-bit signed integer."
+  (declare (type buffer-stream bs)
+	   (type (signed-byte 32) i))
+  (with-struct-slots ((buf buffer-stream-buffer)
+		      (size buffer-stream-size)
+		      (len buffer-stream-length))
+    bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
+    (let ((needed (the fixnum (+ size 4))))
+      (declare (type fixnum needed))
+      (when (> needed len)
+	(resize-buffer-stream bs needed))
+      (write-fixnum32 buf i size)
+      (setf size needed)
+      nil)))
+
 (defun buffer-write-uint32 (u bs)
   "Write a 32-bit unsigned integer."
   (declare (type buffer-stream bs)
@@ -581,6 +624,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let ((needed (the fixnum (+ size 4))))
       (declare (type fixnum needed))
       (when (> needed len)
@@ -597,6 +642,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let ((needed (the fixnum (+ size 8))))
       (declare (type fixnum needed))
       (when (> needed len)
@@ -613,6 +660,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let ((needed (the fixnum (+ size 8))))
       (declare (type fixnum needed))
       (when (> needed len)
@@ -629,6 +678,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let ((needed (the fixnum (+ size 4))))
       (declare (type fixnum needed))
       (when (> needed len)
@@ -645,6 +696,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let ((needed (the fixnum (+ size 8))))
       (declare (type fixnum needed))
       (when (> needed len)
@@ -662,6 +715,8 @@ of a string."
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
     bs		      
+    (declare (type fixnum size len)
+	     (type (alien (* unsigned-char)) buf))	     
     (let* ((str-bytes (byte-length s))
 	   (needed (the fixnum (+ size str-bytes))))
       (declare (type fixnum str-bytes needed)
@@ -697,6 +752,7 @@ of a string."
    (let* ((position (buffer-stream-position bs))
  	(size (buffer-stream-size bs))
  	(vlen (- size position)))
+     (declare (type fixnum size vlen position))
      (if (>= vlen 0)
  	(let ((v (make-array vlen :element-type '(unsigned-byte 8))))
  	  (dotimes (i vlen v) 
@@ -740,7 +796,7 @@ of a string."
 ;;
 
 (defun buffer-write-oid (i bs)
-  (buffer-write-int32 i bs))
+  (buffer-write-fixnum32 i bs))
 
 (defun buffer-read-oid (bs)
   (buffer-read-fixnum32 bs))
@@ -783,7 +839,7 @@ of a string."
   (let ((position (the fixnum (buffer-stream-position bs))))
     (declare (type fixnum position))
     (setf (buffer-stream-position bs) (the fixnum (+ position 4)))
-    (read-int32 (buffer-stream-buffer bs) position)))
+    (the fixnum (read-fixnum32 (buffer-stream-buffer bs) position))))
 
 (defun buffer-read-int32 (bs)
   "Read a 32-bit signed integer."

@@ -91,6 +91,7 @@
 	(buffer-write-byte +utf8-string+ bstream)
 	(buffer-write-int32 characters bstream)
 	(let ((needed (the fixnum (+ size characters))))
+	  (declare (type fixnum needed))
 	  (when (the boolean (> needed allocated))
 	    (resize-buffer-stream bstream needed))
 	  (etypecase string
@@ -110,7 +111,9 @@
 				 (the character (char string i))))))
 		    (declare (type fixnum code))
 		    (when (> code #xFF) (fail))
-		    (setf (uffi:deref-array buffer '(:array :unsigned-char) (+ i size)) code)))))
+		    (setf (uffi:deref-array buffer '(:array :unsigned-char) 
+					    (the fixnum (+ i size)))
+			  code)))))
 	    (setf (buffer-stream-size bstream) needed)
 	    (succeed))))))
 
