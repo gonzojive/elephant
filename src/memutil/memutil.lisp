@@ -46,6 +46,7 @@
 	   #:buffer-write-byte #:buffer-write-float 
 	   #:buffer-write-double #:buffer-write-string 
            #:buffer-write-int32 #:buffer-write-uint32
+           #:buffer-write-fixnum32 
            #:buffer-write-int64 #:buffer-write-uint64
            #:buffer-write-int #:buffer-write-uint
 

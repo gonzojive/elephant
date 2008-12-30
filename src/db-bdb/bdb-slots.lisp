@@ -30,7 +30,7 @@
 
 (defmethod persistent-slot-reader ((sc bdb-store-controller) instance name)
   (with-buffer-streams (key-buf value-buf)
-    (buffer-write-int (the fixnum (oid instance)) key-buf)
+    (buffer-write-fixnum32 (the fixnum (oid instance)) key-buf)
     (serialize name key-buf sc)
     (let ((buf (db-get-key-buffered (controller-db sc)
 				    key-buf value-buf
@@ -40,7 +40,7 @@
 
 (defmethod persistent-slot-writer ((sc bdb-store-controller) new-value instance name)
   (with-buffer-streams (key-buf value-buf)
-    (buffer-write-int (oid instance) key-buf)
+    (buffer-write-fixnum32 (oid instance) key-buf)
     (serialize name key-buf sc)
     (serialize new-value value-buf sc)
     (db-put-buffered (controller-db sc)
@@ -50,7 +50,7 @@
 
 (defmethod persistent-slot-boundp ((sc bdb-store-controller) instance name)
   (with-buffer-streams (key-buf value-buf)
-    (buffer-write-int (oid instance) key-buf)
+    (buffer-write-fixnum32 (oid instance) key-buf)
     (serialize name key-buf sc)
     (let ((buf (db-get-key-buffered (controller-db sc)
 				    key-buf value-buf
@@ -59,7 +59,7 @@
 
 (defmethod persistent-slot-makunbound ((sc bdb-store-controller) instance name)
   (with-buffer-streams (key-buf)
-    (buffer-write-int (oid instance) key-buf)
+    (buffer-write-fixnum32 (oid instance) key-buf)
     (serialize name key-buf sc)
     (db-delete-buffered (controller-db sc) key-buf
 			:transaction (my-current-transaction sc))))
