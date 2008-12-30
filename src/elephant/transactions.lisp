@@ -72,37 +72,38 @@
 ;;   in the call to execute transaction if the store controllers match, otherwise a new transaction
 ;;   for that store is created
 
-(defun make-transaction-record (sc txn)
+(defun make-transaction-record (sc txn &optional prior)
   "Backends must use this to assign values to *current-transaction* binding"
-  (cons sc txn))
+  (list sc txn prior))
 
 (defun transaction-store (txnrec)
   "Get the store that owns the transaction from a transaction record"
-  (car txnrec))
-
-;;(define-compiler-macro transaction-store (&whole form arg)
-;;  (if (atom arg)
-;;      `(car ,arg)
-;;      form))
+  (first txnrec))
 
 (defun transaction-object (txnrec)
   "Get the backend-specific transaction object"
-  (cdr txnrec))
+  (second txnrec))
 
-;;(define-compiler-macro transaction-object (&whole form arg)
-;;  (if (atom arg)
-;;      `(cdr ,arg)
-;;      form))
+(defun transaction-prior (txnrec)
+  (third txnrec))
 
 (defun transaction-object-p (txnrec)
   (and (not (null txnrec))
        (consp txnrec)
-       (subtypep (type-of (car txnrec)) 'store-controller)))
+       (subtypep (type-of (transaction-store txnrec)) 'store-controller)))
 
-(defun owned-txn-p (sc parent-txn-rec)
-  (and parent-txn-rec
-       (transaction-object-p parent-txn-rec)
-       (eq sc (transaction-store parent-txn-rec))))
+(defun prior-owned-txn (sc parent-txn-rec)
+  "Search for a prior txn owned by this store"
+  (when parent-txn-rec
+    (or (and (transaction-object-p parent-txn-rec)
+	     (eq sc (transaction-store parent-txn-rec))
+	     parent-txn-rec)
+	(prior-owned-txn sc (transaction-prior parent-txn-rec)))))
+
+(defun owned-txn-p (sc rec)
+  "For debugging"
+  (declare (ignore sc rec))
+  (error "Function is deprecated"))
 
 (define-condition transaction-retry-count-exceeded ()
   ((count :initarg :count :accessor retry-count :initform 0)))
@@ -123,9 +124,8 @@
     `(let ((,sc ,store-controller))
        (funcall #'execute-transaction ,sc
 		(lambda () ,@body)
-		:parent (if (owned-txn-p ,sc ,parent)
-			    (transaction-object ,parent)
-			    nil)
+		:parent (awhen (prior-owned-txn ,sc ,parent)
+			  (transaction-object it))
 		:retries ,retries
 		,@(remove-keywords '(:store-controller :parent :retries)
 				   keyargs)))))
@@ -145,7 +145,7 @@
 	(sc (gensym)))
     `(let ((,txn-fn (lambda () ,@body))
 	   (,sc ,store-controller))
-       (if (owned-txn-p ,sc ,parent)
+       (if (prior-owned-txn ,sc ,parent)
 	   (funcall ,txn-fn)
 	   (funcall #'execute-transaction ,sc
 		  ,txn-fn

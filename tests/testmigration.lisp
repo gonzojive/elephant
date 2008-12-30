@@ -274,3 +274,30 @@
 	      (close-store sc2)))))
   3 1 1 1 1 10 20 )
 
+(defpclass nested ()
+  ((slot1 :accessor slot1 :initform 1)
+   (slot2 :accessor slot2 :initarg :slot2)))
+
+(deftest migrate-nested
+    (if (or (not (boundp '*test-spec-secondary*))
+	    (null *test-spec-secondary*))
+	(progn 
+	  (format t "~%Single store mode: ignoring")
+	  (values t))
+	(progn
+	  (let ((sc2 (open-store *test-spec-secondary* :recover t))
+		(sc1 (open-store *test-spec-primary* :recover t))
+		(*store-controller* nil))
+	    (unwind-protect
+		 (progn
+		   (let ((nested1 (make-instance 'nested :sc sc1
+						 :slot2 (make-pset :sc sc1))))
+		     (insert-item 'foo (slot2 nested1))
+		     (migrate sc2 nested1)
+		     (find-item 'foo (slot2 nested1))))
+	      (close-store sc1)
+	      (close-store sc2)))))
+  foo)
+
+		 
+

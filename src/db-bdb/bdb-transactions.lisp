@@ -46,7 +46,7 @@
 					:snapshot snapshot)))
 	 (declare (type pointer-void txn))
 	 (let (result)
-	   (let ((*current-transaction* (make-transaction-record sc txn))
+	   (let ((*current-transaction* (make-transaction-record sc txn *current-transaction*))
 		 (*store-controller* sc))
 	     (declare (special *current-transaction* *store-controller*))
 	     (catch 'transaction

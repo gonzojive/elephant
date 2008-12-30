@@ -91,6 +91,11 @@
 ;;   - set-valued slots are copied as usual
 ;; - Walk the root
 
+#-elephant-without-optimize
+(declaim (optimize (speed 3) (safety 1) (debug 1)))
+#+elephant-without-optimize
+(declaim (optimize (speed 1) (safety 3) (debug 3)))
+
 (defgeneric migrate (dst src)
   (:documentation 
    "Migrate an object from the src object, collection or controller
@@ -123,7 +128,7 @@
   (map-btree (lambda (key value)
 	       (let ((newval (migrate dst value)))
 		 (unless (eq key *elephant-properties-label*)
-		   (ensure-transaction (:store-controller dst :txn-nosync t)
+		   (with-transaction (:store-controller dst :txn-nosync t)
 		     (add-to-root key newval :sc dst)))))
 	     (controller-root src))
   ;; Clean up current memory state
@@ -171,7 +176,7 @@
   (map-btree (lambda (key value)
 	       (let ((newval (migrate dst value)))
 		 (unless (eq key *elephant-properties-label*)
-		   (ensure-transaction (:store-controller dst :txn-nosync t)
+		   (with-transaction (:store-controller dst :txn-nosync t)
 		     (add-to-root key newval :sc dst)))))
 	     (controller-root src))
   ;; Clean up current memory state
@@ -188,7 +193,7 @@
 		 (when (= (mod (1- (incf count)) 1000) 0)
 		   (when (and *migrate-messages* *migrate-verbose*)
 		     (format t "~A objects copied~%" count)))
-		 (ensure-transaction (:store-controller sc)
+		 (with-transaction (:store-controller sc)
 		   (migrate sc oldinst)))
 	       oldidx)))
 
@@ -270,7 +275,7 @@
 
 (defun copy-persistent-slots (dstsc dst class src)
   "Copy only persistent slots from src to dst"
-  (ensure-transaction (:store-controller dstsc)
+  (with-transaction (:store-controller dstsc :txn-nosync t)
     (loop for slot-def in (class-slots class) do
       	 (when (and (not (transient-p slot-def))
 		    (slot-boundp-using-class class src slot-def))
@@ -298,8 +303,7 @@
   (if (object-was-copied-p src)
       (retrieve-copied-object dst src)
       (let ((newbtree  (build-btree dst)))
-	(ensure-transaction (:store-controller dst :txn-nosync t)
-	  (copy-btree-contents dst newbtree src))
+	(copy-btree-contents dst newbtree src)
 	(register-copied-object src newbtree)
 	newbtree)))
 
@@ -308,15 +312,14 @@
   (if (object-was-copied-p src)
       (retrieve-copied-object dst src)
       (let ((newbtree 
-	     (ensure-transaction (:store-controller dst :txn-nosync t)
+	     (with-transaction (:store-controller dst :txn-nosync t)
 	       (build-indexed-btree dst))))
-	(ensure-transaction (:store-controller dst :txn-nosync t)
-	  (copy-btree-contents dst newbtree src))
+	(copy-btree-contents dst newbtree src)
 	(map-indices (lambda (name srciidx)
 		       (when (and *migrate-messages* *migrate-verbose*)
 			 (format t "Adding index: ~A~%" name))
 		       (let ((key-form (key-form srciidx)))
-			 (ensure-transaction (:store-controller dst :txn-nosync t)
+			 (with-transaction (:store-controller dst :txn-nosync t)
 			   (add-index newbtree :index-name name :key-form key-form :populate t))))
 		     src)
 	(register-copied-object src newbtree)
@@ -324,9 +327,10 @@
 
 (defmethod copy-btree-contents ((sc store-controller) dst src)
   (map-btree (lambda (key value)
-	       (let ((newval (migrate sc value))
-		     (newkey (migrate sc key)))
-		   (setf (get-value newkey dst) newval)))
+	       (with-transaction (:store-controller sc :tx-nosync t)
+		 (let ((newval (migrate sc value))
+		       (newkey (migrate sc key)))
+		   (setf (get-value newkey dst) newval))))
 	     src))
 
 ;;
