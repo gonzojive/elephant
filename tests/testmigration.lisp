@@ -283,7 +283,7 @@
 	    (null *test-spec-secondary*))
 	(progn 
 	  (format t "~%Single store mode: ignoring")
-	  (values t))
+	  (values 'foo))
 	(progn
 	  (let ((sc2 (open-store *test-spec-secondary* :recover t))
 		(sc1 (open-store *test-spec-primary* :recover t))
