@@ -361,6 +361,13 @@
 		 (migrate dst value)))))
   src)
 
+
+;; As pathname is subtype of structure-object, have to create a method specialized on it.
+;; Or, the structure-object's migrate method will be called and result in failure.
+(defmethod migrate ((dst store-controller) (src pathname))
+  "Migrate pathname as just return itself"
+  src)
+
 (defmethod migrate ((dst store-controller) (src cons))
   "WARNING: This doesn't work for circular lists"
   (cons (migrate dst (car src))
