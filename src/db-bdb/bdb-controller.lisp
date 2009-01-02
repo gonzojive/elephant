@@ -215,13 +215,20 @@ et cetera."))
 	(setf (slot-value sc 'index-table)
 	      (make-instance 'bdb-btree :from-oid -2 :sc sc))
 
+
 	(setf (slot-value sc 'instance-table)
-	      (if new-p
+	      (if (or new-p (elephant::prior-version-p (database-version sc) '(0 9 1)))
+		  ;; When opening the DB equal or prior to 0.9.1, always get the indices initialized,
+		  ;; regardless of the indices is initialized before.
+		  ;; Even the indices is serialized before(in the case that open the <=0.9.1 DB file for the second time),
+		  ;; it still can not be unserialized here, because its persistent object's oid
+                  ;; does not match the hardcoded one in oid->schema-id, which only work on the DB file
+                  ;; created in release > 0.9.1. 
 		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc :indices (make-hash-table))
 		  (make-instance 'bdb-indexed-btree :from-oid -3 :sc sc)))
 
 	(setf (slot-value sc 'schema-table)
-	      (if new-p
+	      (if (or new-p (elephant::prior-version-p (database-version sc) '(0 9 1)))
 		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc :indices (make-hash-table))
 		  (make-instance 'bdb-indexed-btree :from-oid -4 :sc sc))))
 
