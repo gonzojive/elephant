@@ -47,6 +47,7 @@
     (:berkeley-db-max-locks *berkeley-db-max-locks*)
     (:berkeley-db-max-objects *berkeley-db-max-objects*)
     (:berkeley-db-version *bdb-version*)
+    (:berkeley-db-mvcc *default-mvcc*)
     (:enable-multi-store-indexing *enable-multi-store-indexing*)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -114,6 +115,12 @@
    it to enable transactions to be larger.  Typically for bulk loads or large
    transactions.  See berkeley db docs 'Configuring Locking: sizing the system' 
    for more detail")
+
+(defvar *default-mvcc* nil
+  "Determines whether a BDB database is enabled for multiple version concurrency
+   controller (DB_MULTIVERSION) and transactions are DB_SNAPSHOT by default.
+   These can be overridden on a per-transaction basis using the :mvcc argument
+   to open-store and :snapshot to with-transaction.")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Legacy Thread-local specials

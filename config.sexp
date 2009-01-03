@@ -11,6 +11,7 @@
  (:berkeley-db-max-locks . 2000)
  (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
+ (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
 
@@ -26,6 +27,7 @@
  (:berkeley-db-max-locks . 2000)
  (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
+ (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . nil))
 
@@ -41,6 +43,7 @@
  (:berkeley-db-max-locks . 2000)
  (:berkeley-db-max-objects . 2000)
  (:berkeley-db-map-degree2 . t)
+ (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
  (:prebuilt-libraries . t))
 
@@ -99,3 +102,10 @@
 ;; :berkeley-db-max-objects
 ;;          Number of locked objects to reserve in the transaction environment
 ;;          Can be set to less, memory impact is pretty small though.
+;;
+;; :berkeley-db-mvcc
+;;          Determines whether a BDB database is enabled for multiple version 
+;;          concurrency controller (DB_MULTIVERSION) and transactions are 
+;;          DB_SNAPSHOT by default.  This default can be overridden on a 
+;;          per-transaction basis using the :mvcc argument to open-store and 
+;;          :snapshot to with-transaction.

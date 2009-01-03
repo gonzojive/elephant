@@ -1292,8 +1292,7 @@ get, get-range."
 
 (defun db-transaction-begin (env &key parent
 			     degree-2 read-committed dirty-read read-uncommitted
-			     txn-nosync txn-nowait txn-sync
-			     snapshot)
+			     txn-nosync txn-nowait txn-sync snapshot)
   "Start a transaction.  Transactions may be nested."
   (declare (type pointer-void env parent)
 	   (type boolean degree-2 read-committed dirty-read read-uncommitted 

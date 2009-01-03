@@ -107,10 +107,10 @@ et cetera."))
 (defmethod open-controller ((sc bdb-store-controller) &key (recover t)
 			    (recover-fatal nil) (thread t) (register t) 
 			    (deadlock-detect t)
-			    (multiversion nil)
 			    (cache-size elephant::*berkeley-db-cachesize*)
 			    (max-locks elephant::*berkeley-db-max-locks*)
-			    (max-objects elephant::*berkeley-db-max-objects*))
+			    (max-objects elephant::*berkeley-db-max-objects*)
+			    (mvcc elephant::*default-mvcc*))
   (let ((env (db-env-create))
 	(new-p (not (probe-file (elephant-db-path (second (controller-spec sc)))))))
     (setf (controller-environment sc) env)
@@ -135,7 +135,7 @@ et cetera."))
       (setf (controller-metadata sc) metadata)
       (db-open metadata :file "%ELEPHANT" :database "%METADATA" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :multiversion multiversion)
+	       :multiversion mvcc)
 
 
       ;; Establish database version if new
@@ -149,14 +149,14 @@ et cetera."))
       (setf (controller-db sc) db)
       (db-open db :file "%ELEPHANT" :database "%ELEPHANTDB" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t :multiversion multiversion)
+	       :read-uncommitted t :multiversion mvcc)
 
       ;; Standard btrees
       (setf (controller-btrees sc) btrees)
       (db-bdb::db-set-lisp-compare btrees (controller-serializer-version sc))
       (db-open btrees :file "%ELEPHANT" :database "%ELEPHANTBTREES" 
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t :multiversion multiversion)
+	       :read-uncommitted t :multiversion mvcc)
 
       ;; Indexed btrees
       (setf (controller-indices sc) indices)
@@ -165,7 +165,7 @@ et cetera."))
       (db-set-flags indices :dup-sort t)
       (db-open indices :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
  	       :auto-commit t :type DB-BTREE :create t :thread thread
- 	       :read-uncommitted t :multiversion multiversion)
+ 	       :read-uncommitted t :multiversion mvcc)
       
       (setf (controller-indices-assoc sc) indices-assoc)
       (db-bdb::db-set-lisp-compare indices-assoc (controller-serializer-version sc))
@@ -173,7 +173,7 @@ et cetera."))
       (db-set-flags indices-assoc :dup-sort t)
       (db-open indices-assoc :file "%ELEPHANT" :database "%ELEPHANTINDICES" 
 	       :auto-commit t :type DB-UNKNOWN :thread thread
-	       :read-uncommitted t :multiversion multiversion)
+	       :read-uncommitted t :multiversion mvcc)
       (db-bdb::db-fake-associate btrees indices-assoc :auto-commit t)
       
 
@@ -184,14 +184,14 @@ et cetera."))
       (db-set-flags dup-btrees :dup-sort t)
       (db-open dup-btrees :file "%ELEPHANTDUP" :database "%ELEPHANTDUPS"
 	       :auto-commit t :type DB-BTREE :create t :thread thread
-	       :read-uncommitted t :multiversion multiversion)
+	       :read-uncommitted t :multiversion mvcc)
      
       ;; OIDs
       (let ((db (db-create env)))
 	(setf (controller-oid-db sc) db)
 	(db-open db :file "%ELEPHANTOID" :database "%ELEPHANTOID" 
 		 :auto-commit t :type DB-BTREE :create t :thread thread
-		 :multiversion multiversion)
+		 :multiversion mvcc)
 	(let ((oid-seq (db-sequence-create db)))
 	  (db-sequence-set-cachesize oid-seq 100)
 	  (db-sequence-set-flags oid-seq :seq-inc t :seq-wrap t)

@@ -29,7 +29,7 @@
 				transaction parent environment
 				(retries *default-retries*)
 				degree-2 read-uncommitted txn-nosync 
-				txn-nowait txn-sync snapshot)
+				txn-nowait txn-sync (snapshot elephant::*default-mvcc*))
   (declare (ignorable transaction))
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
@@ -76,7 +76,7 @@
 					 txn-sync
 					 read-uncommitted
 					 degree-2
-					 snapshot
+					 (snapshot elephant::*default-mvcc*)
 					 &allow-other-keys)
   (assert (not *current-transaction*))
   (db-transaction-begin (controller-environment sc)
