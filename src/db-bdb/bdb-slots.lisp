@@ -28,7 +28,8 @@
 
 (declaim #-elephant-without-optimize (optimize (speed 3) (safety 0) (debug 0) (space 0)))
 
-(defmethod persistent-slot-reader ((sc bdb-store-controller) instance name)
+(defmethod persistent-slot-reader ((sc bdb-store-controller) instance name &optional oids-only)
+  (declare (ignore oids-only))
   (with-buffer-streams (key-buf value-buf)
     (buffer-write-fixnum32 (the fixnum (oid instance)) key-buf)
     (serialize name key-buf sc)

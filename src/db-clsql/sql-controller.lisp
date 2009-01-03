@@ -283,19 +283,14 @@
   ;; the table, as long as we have the rights we need!
   (clsql:table-exists-p [version] :database con :owner :all)
   )
+
 (defun sqlite3-harmless-read (sc)
-  (let ((con (controller-db sc)))
-    (if
-     (equal 
-      (car (cadr (controller-spec sc)))
-      :sqlite3)
-     (handler-case 
-	 (clsql:query "select count(*) from keyvalue")
-       ((clsql-sys::sql-database-error () nil)
-	   )
-       )
-     )
-    ))
+;;  (let ((con (controller-db sc)))
+    (when (equal (car (cadr (controller-spec sc))) :sqlite3)
+      (handler-case 
+	  (clsql:query "select count(*) from keyvalue")
+	(clsql-sys::sql-database-error () nil))))
+
 (defun create-version-table (sc)
   (let ((con (controller-db sc)))
     (clsql::create-table [version]

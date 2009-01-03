@@ -703,7 +703,7 @@ true."))
 ;; Low-level support for metaclass protocol 
 ;;
 
-(defgeneric persistent-slot-reader (sc instance name)
+(defgeneric persistent-slot-reader (sc instance name &optional oids-only)
   (:documentation 
    "Data store specific slot reader function"))
 
