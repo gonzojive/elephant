@@ -59,7 +59,7 @@ Slots of the metaclass take the :index and :transient keyword
 arguments and the class accepts the :index keyword argument.
 
 @include includes/macro-elephant-defpclass.texinfo
-@include includes/fun-elephant-drop-pobject.texinfo
+@include includes/fun-elephant-drop-instance.texinfo
 
 @node Persistent Object Indexing API
 @comment node-name, next, previous, up
@@ -80,23 +80,23 @@ arguments and the class accepts the :index keyword argument.
 
 @include includes/fun-elephant-drop-instances.texinfo
 
-@subsection Direct Class Index Manipulation
+@c @subsection Direct Class Index Manipulation
 
-@include includes/fun-elephant-find-class-index.texinfo
-@include includes/fun-elephant-find-inverted-index.texinfo
-@include includes/fun-elephant-make-class-cursor.texinfo
-@include includes/macro-elephant-with-class-cursor.texinfo
-@include includes/fun-elephant-make-inverted-cursor.texinfo
-@include includes/macro-elephant-with-inverted-cursor.texinfo
+@c @include includes/fun-elephant-find-class-index.texinfo
+@c @include includes/fun-elephant-find-inverted-index.texinfo
+@c @include includes/fun-elephant-make-class-cursor.texinfo
+@c @include includes/macro-elephant-with-class-cursor.texinfo
+@c @include includes/fun-elephant-make-inverted-cursor.texinfo
+@c @include includes/macro-elephant-with-inverted-cursor.texinfo
 
-@subsection Dynamic Indexing API
+@c @subsection Dynamic Indexing API
 
-@include includes/fun-elephant-enable-class-indexing.texinfo
-@include includes/fun-elephant-disable-class-indexing.texinfo
-@include includes/fun-elephant-add-class-slot-index.texinfo
-@include includes/fun-elephant-remove-class-slot-index.texinfo
-@include includes/fun-elephant-add-class-derived-index.texinfo
-@include includes/fun-elephant-remove-class-derived-index.texinfo
+@c @include includes/fun-elephant-enable-class-indexing.texinfo
+@c @include includes/fun-elephant-disable-class-indexing.texinfo
+@c @include includes/fun-elephant-add-class-slot-index.texinfo
+@c @include includes/fun-elephant-remove-class-slot-index.texinfo
+@c @include includes/fun-elephant-add-class-derived-index.texinfo
+@c @include includes/fun-elephant-remove-class-derived-index.texinfo
 
 @node Persistent Set API
 @comment node-name, next, previous, up
