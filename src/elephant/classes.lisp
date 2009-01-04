@@ -157,7 +157,7 @@
 
 (defmethod reinitialize-instance :around ((instance persistent-metaclass) &rest initargs 
 					  &key direct-slots &allow-other-keys)
-  (declare (ignore direct-slots))
+  (declare (ignore direct-slots initargs))
   ;; Warnings at class def time:
   ;; - set-valued/assoc (warn!)
   ;; - persistent/indexed/cached (warn?)
@@ -192,6 +192,7 @@
 (defmethod initialize-instance :around ((instance persistent-object) &rest initargs 
 					&key (sc *store-controller*) &allow-other-keys)
   "Ensure instance creation is inside a transaction, huge (5x) performance impact per object"
+  (declare (ignore initargs))
   (assert sc nil "You must have an open store controller to create ~A" instance)
   (ensure-transaction (:store-controller sc)
     (call-next-method)))
@@ -293,30 +294,36 @@ slots."
 ;;  RECREATING A PERSISTENT INSTANCE FROM THE DB
 ;; ================================================
 
+(defmethod recreate-instance-using-class ((class t) &rest initargs &key &allow-other-keys)
+  "Implement a subset of the make-instance functionality to avoid initialize-instance
+   calls after the initial creation time"
+  (apply #'recreate-instance (allocate-instance class) initargs))
+
 (defgeneric recreate-instance (instance &rest initargs &key &allow-other-keys)
-  (:method ((instance persistent-object) &rest args &key from-oid schema (sc *store-controller*))
-    ;; Initialize basic instance data
-    (initial-persistent-setup instance :from-oid from-oid :sc sc)
-    ;; Update db instance data
-    (when schema
-      (let ((official-schema (lookup-schema sc (class-of instance))))
-	(unless (eq (schema-id schema) (schema-id official-schema))
-	  (upgrade-db-instance instance official-schema schema nil))))
-    ;; Load cached slots, set, assoc values, etc.
-    (shared-initialize instance t :from-oid from-oid)))
+  (:method ((instance t) &rest args)
+    (declare (ignore args))
+    instance))
 
-(defmethod recreate-instance-using-class ((class standard-class) &rest initargs &key &allow-other-keys)
+(defmethod recreate-instance ((instance persistent-object) &rest args &key from-oid schema (sc *store-controller*))
+  (declare (ignore args))
+  ;; Initialize basic instance data
+  (initial-persistent-setup instance :from-oid from-oid :sc sc)
+  ;; Update db instance data
+  (when schema
+    (let ((official-schema (lookup-schema sc (class-of instance))))
+      (unless (eq (schema-id schema) (schema-id official-schema))
+	(upgrade-db-instance instance official-schema schema nil))))
+  ;; Load cached slots, set, assoc values, etc.
+  (shared-initialize instance t :from-oid from-oid)
+  instance)
+
+(defmethod recreate-instance ((instance persistent-collection) &rest initargs &key from-oid (sc *store-controller*))
   (declare (ignore initargs))
-  "Simply allocate store, the state of the slots will be filled by the data from the 
-   database.  We do not want to call initialize-instance and re-evaluate the initforms;
-   we are just fetching the object & values from the store"
-  (allocate-instance class))
-
-(defmethod recreate-instance-using-class ((class persistent-metaclass) &rest initargs &key &allow-other-keys)
-  "Persistent-objects bypass initialize-instance"
-    (let ((instance (allocate-instance class)))
-      (apply #'recreate-instance instance initargs)
-      instance))
+  ;; Initialize basic instance data
+  (initial-persistent-setup instance :from-oid from-oid :sc sc)
+  ;; Load cached slots, set, assoc values, etc.
+  (shared-initialize instance t :from-oid from-oid)
+  instance)
 
 ;; ================================
 ;;  CLASS REDEFINITION PROTOCOL
