@@ -71,6 +71,15 @@
   (:documentation 
    "Adds a special value slot to store checkout state"))
 
+;;; collection types -- we're slot-less
+(defclass persistent-collection (persistent) ()
+  (:documentation "Abstract superclass of all collection types."))
+
+;; I don't like having to put this here, as this is only used by
+;; the extending class indexed-btree.  But I can't figure out 
+;; how to make the :transient flag work on that class without 
+;; creating a circularity in the class presidence list...
+
 ;; ================================================
 ;; METACLASS INITIALIZATION 
 ;; ================================================
