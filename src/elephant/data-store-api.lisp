@@ -74,6 +74,7 @@
    #:schema-classname-keyform
    #:default-class-id 
    #:default-class-id-type
+   #:reserved-oid-p
 
    ;; Instance caching
    #:get-cached-instance

@@ -96,6 +96,6 @@
 (defgeneric drop-slot-set (pset)
   (:documentation "Release pset storage to database for reuse")
   (:method ((set default-slot-set))
-    (drop-pset set)))
+    (drop-instance set)))
 
 ;; Inherit insert-item, delete-item, etc from default-pset

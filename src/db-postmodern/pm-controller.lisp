@@ -311,6 +311,9 @@
 	(51 4))  ;  instances and schemas
       (call-next-method)))
 
+(defmethod reserved-oid-p ((sc postmodern-store-controller) oid)
+  (<= oid 51))
+
 (defmethod default-class-id (type (sc postmodern-store-controller))
   (ecase type
     ('pm-btree 1)

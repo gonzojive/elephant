@@ -508,6 +508,11 @@
       ;;      )
       )
   )
+
+(defmethod reserved-oid-p ((sc sql-store-controller) oid)
+  (< oid 3))
+
+	 
 (defmethod connection-ok-p ((sc sql-store-controller))
   (connection-ok-p-con (controller-db sc)))
 

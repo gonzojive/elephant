@@ -193,7 +193,7 @@ et cetera."))
 		 :auto-commit t :type DB-BTREE :create t :thread thread
 		 :multiversion mvcc)
 	(let ((oid-seq (db-sequence-create db)))
-	  (db-sequence-set-cachesize oid-seq 100)
+	  (db-sequence-set-cachesize oid-seq 50)
 	  (db-sequence-set-flags oid-seq :seq-inc t :seq-wrap t)
 	  (db-sequence-set-range oid-seq 0 most-positive-fixnum)
 	  (db-sequence-initial-value oid-seq 0)
@@ -201,7 +201,7 @@ et cetera."))
 	  (setf (controller-oid-seq sc) oid-seq))
 
 	(let ((cid-seq (db-sequence-create db)))
-	  (db-sequence-set-cachesize cid-seq 100)
+	  (db-sequence-set-cachesize cid-seq 50)
 	  (db-sequence-set-flags cid-seq :seq-inc t :seq-wrap t)
 	  (db-sequence-set-range cid-seq 0 most-positive-fixnum)
 	  (db-sequence-initial-value cid-seq 5)
@@ -317,7 +317,9 @@ et cetera."))
     (2 'bdb-dup-btree)
     (3 'bdb-indexed-btree)
     (4 'bdb-btree-index)))
-	 
+
+(defmethod reserved-oid-p ((sc bdb-store-controller) oid)
+  (< oid 2))
 
 ;;
 ;; Store the database version

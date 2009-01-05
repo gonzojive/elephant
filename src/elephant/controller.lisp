@@ -264,13 +264,15 @@
 ;; Maintain persistent instance table
 ;;
 
-(defmethod register-instance ((sc store-controller) class instance)
+(defmethod register-instance ((sc store-controller) cl instance)
   "When creating an instance for the first time, write it to the persistent
    instance table using the controller instance for its class"
-  (set-instance-schema-id sc (oid instance)
-			  (if (subtypep (type-of instance) 'btree)
-			      (default-class-id (type-of instance) sc)
-			      (schema-id (lookup-schema sc class)))))
+  (set-instance-schema-id sc (oid instance) (class-schema-id sc cl)))
+
+(defun class-schema-id (sc class)
+  (if (subtypep (class-name class) 'btree)
+      (default-class-id (class-name class) sc)
+      (schema-id (lookup-schema sc class))))
 
 (defmethod set-instance-schema-id ((sc store-controller) oid cid)
   (let ((table (controller-instance-table sc)))
@@ -369,6 +371,9 @@
 (defgeneric default-class-id-type (id sc)
   (:documentation "A method implemented by the store controller which provides
    the type associated with a default id or nil if the id does not match"))
+
+(defgeneric reserved-oid-p (sc oid)
+  (:documentation "Is this OID reserved by the controller? GC doesn't touch"))
 
 ;; Looking up schemas
 
@@ -823,9 +828,13 @@ true."))
   (let ((sc (get-con inst)))
     (ensure-transaction (:store-controller sc)
       (drop-instance-slots inst)
-      (ele-with-fast-lock ((controller-instance-cache-lock sc))
-	(remcache (oid inst) (controller-instance-cache sc)))
-      (remove-kv (oid inst) (controller-instance-table sc)))))
+      (call-next-method))))
+
+(defmethod drop-instance ((inst persistent))
+  (let ((sc (get-con inst)))
+    (ele-with-fast-lock ((controller-instance-cache-lock sc))
+      (remcache (oid inst) (controller-instance-cache sc)))
+    (remove-kv (oid inst) (controller-instance-table sc))))
 
 (defun drop-instance-slots (instance)
   "A helper function for drop-instance, that deletes the storage of 

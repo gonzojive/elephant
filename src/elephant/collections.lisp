@@ -59,6 +59,12 @@
 (defmethod optimize-layout ((bt t) &key &allow-other-keys)
   t)
 
+(defmethod drop-instance ((bt btree))
+  "The standard method for reclaiming storage of persistent objects"
+  (ensure-transaction (:store-controller *store-controller*)
+    (drop-btree bt)
+    (call-next-method)))
+
 (defgeneric drop-btree (bt)
   (:documentation "Delete all key-value pairs from the btree and
    render it an invalid object in the data store"))
@@ -112,6 +118,13 @@ existing primary entries (may be expensive!)"))
   (ifret (get-index ibt idxname)
 	 (add-index ibt :index-name idxname :key-form key-form :populate populate)))
 
+(defmethod drop-btree ((bt indexed-btree))
+  (map-indices (lambda (name index)
+		 (declare (ignore index))
+		 (remove-index bt name))
+	       bt)
+  (call-next-method))
+
 ;;
 ;; Secondary Indices
 ;;
@@ -126,6 +139,11 @@ existing primary entries (may be expensive!)"))
    (key-fn :type function :accessor key-fn :transient t))
   (:metaclass persistent-metaclass)
   (:documentation "Secondary index to an indexed-btree."))
+
+(defmethod drop-btree ((index btree-index))
+  "Btree indices don't need to have values removed,
+   this happens on the primary when remove-kv is called"
+  nil)
 
 (define-condition invalid-keyform (error)
   ((key-form :reader key-form-of :initarg :key-form))
@@ -577,6 +595,7 @@ not), evaluates the forms, then closes the cursor."
 
 (defmethod map-btree (fn (btree btree) &rest args &key start end (value nil value-set-p) 
 		      from-end collect &allow-other-keys)
+  (declare (ignorable args))
   (validate-map-call start end)
   (cond (value-set-p (map-btree-values fn btree value collect))
 	(from-end (map-btree-from-end fn btree start end collect))

@@ -72,11 +72,12 @@
   (setf (%store-schemas class)
 	(remove (controller-spec sc) (%store-schemas class) :key #'car :test #'equalp)))
 
-(defun class-indexing-enabled-p (class)
-  (when (%class-indexing class) t))
+(defmethod class-indexing-enabled-p ((class persistent-metaclass))
+  (and (not (subtypep (class-name class) 'persistent-collection))
+       (%class-indexing class) t))
 
 (defun migrate-class-index-p (class)
-  (when (eq (%class-indexing class) t) t))
+  (%class-indexing class) t)
 
 ;;
 ;; Top level defclass form - hide metaclass option
@@ -107,10 +108,10 @@
 (defclass persistent-effective-slot-definition (standard-effective-slot-definition persistent-slot-definition)
   ((triggers :accessor derived-slot-triggers :initarg :trigger :initform nil)))
 
-(defgeneric persistent-p (class)
-  (:method ((class t)) nil)
-  (:method ((class persistent-metaclass)) t)
-  (:method ((class persistent-slot-definition)) t))
+(defgeneric persistent-p (mclass)
+  (:method ((mclass t)) nil)
+  (:method ((mclass persistent-metaclass)) t)
+  (:method ((mclass persistent-slot-definition)) t))
 
 (defun persistent-slot-defs (class)
   (find-slot-defs-by-type class 'persistent-effective-slot-definition nil))

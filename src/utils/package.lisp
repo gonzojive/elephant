@@ -46,4 +46,5 @@
    #:awhen
    #:mklist
    #:it
-   #:remove-indexed-element-and-adjust))
+   #:remove-indexed-element-and-adjust
+   #:curry))

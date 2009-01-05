@@ -117,20 +117,20 @@
   (let ((list nil))
     (flet ((collect (item)
 	     (push item list)))
-      (declare (dynamic-extent collect))
       (map-btree (lambda (item dc)
 		   (declare (ignore dc))
 		   (push item list))
 		 (pset-btree pset)))
     list))
 
+(defmethod drop-instance ((pset pset))
+  (drop-pset pset)
+  (call-next-method))
+
 (defmethod drop-pset ((pset default-pset))
   (ensure-transaction (:store-controller *store-controller*)
-    (with-btree-cursor (cur (pset-btree pset))
-      (loop for exists? = (cursor-first cur)
-	    then (cursor-next cur)
-	    while exists?
-            do (cursor-delete cur)))))
+    (awhen (pset-btree pset)
+      (drop-btree it))))
             
             
 	  

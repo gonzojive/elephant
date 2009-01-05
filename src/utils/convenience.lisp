@@ -95,3 +95,8 @@
       (progn
 	(setf (aref array i) (aref array (+ 1 i)))))
     (adjust-array array last)))
+
+(defun curry (fn arg)
+  #'(lambda (&rest args)
+      (apply fn (cons arg args))))
+

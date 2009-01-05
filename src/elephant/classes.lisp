@@ -52,8 +52,8 @@
   (register-instance sc class instance))
 
 (defun check-valid-store-controller (sc)
-  (unless (subtypep (type-of sc) 'store-controller)
-    (error "This function requires a valid store controller")))
+  (ifret (subtypep (type-of sc) 'store-controller)
+	 (error "This function requires a valid store controller")))
 
 (defclass persistent-object (persistent) ()
   (:metaclass persistent-metaclass)
