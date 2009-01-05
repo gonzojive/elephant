@@ -55,23 +55,15 @@
     (setf *mark-table* (make-btree sc))
     (setf *max-oid* (oid *mark-table*))
 
-    ;; Clean up stale memory references
-    #+sbcl (sb-ext:gc :full t)
-    #-sbcl (cl-user::gc))
-
     ;; Core of GC
     (mark-all sc)
-    (sweep-all sc test)
+    (sweep-all-classes sc test)
 
     ;; Drop mark table rather than reset?
     (unless test 
       (drop-instance *mark-table*)
-      (setf *mark-table* nil))
+      (setf *mark-table* nil))))
 
-    ;; Final GC to clean up stale mem refs to collections
-    ;; were reclaimed
-    #+sbcl (sb-ext:gc)
-    #-sbcl (cl-user::gc))
 
 ;; MARK
 
@@ -89,17 +81,23 @@
 
 ;; SWEEP
 
-(defun sweep-all (sc &optional test (chunk-size 100))
-  (declare (ignore chunk-size))
+(defun sweep-all-classes (sc &optional test (step 5))
+  "For each unindexed class, sweep all instances that
+   are not on the mark list.  One txn per class for now"
   (dolist (class (unindexed-classes sc))
     (let ((cid (class-schema-id sc class)))
-      (map-index (lambda (k v pk)
-		   (declare (ignore k v))
-		   (if test 
-		       (sweep-debug sc pk)
-		       (sweep-instance sc pk)))
-		 (controller-instance-class-index sc)
-		 :value cid))))
+      (sweep-class sc cid step test))))
+
+(defun sweep-class (sc cid step &optional test)
+  "Sweep over the class and reclaim instances"
+  (declare (ignore step))
+  (map-index (lambda (k v pk)
+	       (declare (ignore k v))
+	       (if test 
+		   (sweep-debug sc pk)
+		   (sweep-instance sc pk)))
+	     (controller-instance-class-index sc)
+	     :value cid))
 
 (defun sweep-instance (sc oid)
   (unless (get-value oid *mark-table*)
@@ -144,7 +142,7 @@
 	       (walk-heap v))
 	     obj))
 
-(defmethod walk-btree ((obj indexed-btree))
+(defmethod walk-heap ((obj indexed-btree))
   "Key values of indices can be persistent objects"
   (map-indices (lambda (name index)
 		 (declare (ignore name))
@@ -222,22 +220,24 @@
      collect (find-class (default-class-id-type i sc))))
 
 
-;; Garbage collection thread
+;;
+;; Pre-packaged garbage collection thread
+;;
 
-(defvar gc-step-size 100
-  "Number of OIDs to mark per invocation")
+;; (defvar gc-step-size 100
+;;   "Number of OIDs to mark per invocation")
 
-(defvar gc-step-interval 500
-  "Number of ms to wait between chunk executions")
+;; (defvar gc-step-interval 500
+;;   "Number of ms to wait between chunk executions")
 
-(defvar gc-oid-interval 1000
-  "Number of OIDs to allocate ")
+;; (defvar gc-oid-interval 1000
+;;   "Number of OIDs to allocate ")
 
-(defvar gc-pass-check-interval 10000
-  "Number of ms to wait between checking for a new pass")
+;; (defvar gc-pass-check-interval 10000
+;;   "Number of ms to wait between checking for a new pass")
 
-(defvar gc-drop-undefined-classes nil
-  "Drop all instances of classes that do not exist in the image")
+;; (defvar gc-drop-undefined-classes nil
+;;   "Drop all instances of classes that do not exist in the image")
 
 ;;(defun gc-loop ()
 ;;  (loop

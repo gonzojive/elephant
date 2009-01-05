@@ -74,10 +74,10 @@
 
 (defmethod class-indexing-enabled-p ((class persistent-metaclass))
   (and (not (subtypep (class-name class) 'persistent-collection))
-       (%class-indexing class) t))
+       (%class-indexing class)))
 
 (defun migrate-class-index-p (class)
-  (%class-indexing class) t)
+  (%class-indexing class))
 
 ;;
 ;; Top level defclass form - hide metaclass option

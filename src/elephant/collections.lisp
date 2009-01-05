@@ -61,7 +61,7 @@
 
 (defmethod drop-instance ((bt btree))
   "The standard method for reclaiming storage of persistent objects"
-  (ensure-transaction (:store-controller *store-controller*)
+  (ensure-transaction (:store-controller (get-con bt))
     (drop-btree bt)
     (call-next-method)))
 
@@ -118,13 +118,6 @@ existing primary entries (may be expensive!)"))
   (ifret (get-index ibt idxname)
 	 (add-index ibt :index-name idxname :key-form key-form :populate populate)))
 
-(defmethod drop-btree ((bt indexed-btree))
-  (map-indices (lambda (name index)
-		 (declare (ignore index))
-		 (remove-index bt name))
-	       bt)
-  (call-next-method))
-
 ;;
 ;; Secondary Indices
 ;;
@@ -139,11 +132,6 @@ existing primary entries (may be expensive!)"))
    (key-fn :type function :accessor key-fn :transient t))
   (:metaclass persistent-metaclass)
   (:documentation "Secondary index to an indexed-btree."))
-
-(defmethod drop-btree ((index btree-index))
-  "Btree indices don't need to have values removed,
-   this happens on the primary when remove-kv is called"
-  nil)
 
 (define-condition invalid-keyform (error)
   ((key-form :reader key-form-of :initarg :key-form))
@@ -427,14 +415,6 @@ not), evaluates the forms, then closes the cursor."
 	  (progn ,@body)
        (cursor-close ,var))))
 
-(defmethod drop-btree ((bt btree))
-  (ensure-transaction (:store-controller *store-controller*)
-    (with-btree-cursor (cur bt)
-      (loop for (exists? key) = (multiple-value-list (cursor-first cur))
-	 then (multiple-value-list (cursor-next cur))
-	 while exists?
-	 do (remove-kv key bt)))))
-
 (defmethod remove-kv-pair (key value (dbt dup-btree))
   "Too bad there isn't a direct way to do this, but with
    ordered duplicates this should be reasonably efficient"
@@ -446,6 +426,27 @@ not), evaluates the forms, then closes the cursor."
 	  (declare (ignore k v))
   	  (when exists? 
 	    (cursor-delete cur)))))))
+
+(defmethod drop-btree ((bt btree))
+  (ensure-transaction (:store-controller (get-con bt))
+    (with-btree-cursor (cur bt)
+      (loop for (exists? key) = (multiple-value-list (cursor-first cur))
+	 then (multiple-value-list (cursor-next cur))
+	 while exists?
+	 do (remove-kv key bt)))))
+
+(defmethod drop-btree ((bt indexed-btree))
+  (with-transaction (:store-controller (get-con bt))
+    (map-indices (lambda (name index)
+		   (declare (ignore index))
+		   (remove-index bt name))
+		 bt)
+    (call-next-method)))
+
+(defmethod drop-btree ((index btree-index))
+  "Btree indices don't need to have values removed,
+   this happens on the primary when remove-kv is called"
+  nil)
 
 ;; =======================================
 ;;   Generic Mapping Functions
@@ -700,6 +701,7 @@ not), evaluates the forms, then closes the cursor."
 (defmethod map-index (fn (index btree-index) &rest args
 		      &key start end (value nil value-set-p) from-end collect 
 		      &allow-other-keys)
+  (declare (ignore args))
   (validate-map-call start end)
   (cond (value-set-p (map-index-values fn index value collect))
 	(from-end (map-index-from-end fn index start end collect))
