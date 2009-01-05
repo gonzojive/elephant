@@ -13,7 +13,7 @@
 ;; BDB 4.5
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defpackage db-bdb-c45 
+(defpackage :db-bdb-c45 
   (:use :cl :uffi :elephant-utils))
 
 (in-package :db-bdb-c45)

@@ -30,12 +30,12 @@
 (defvar inst3)
 
 (defun wipe-class (name)
-  (let ((class (find-class name nil)))
-    (handler-case 
-	(when (elephant::persistent-p class)
-	  (drop-instances (get-instances-by-class class)))
-      (program-error ()
-	nil))))
+  (handler-case 
+   (let ((class (find-class name nil)))
+     (when (elephant::persistent-p class)
+       (drop-instances (get-instances-by-class class))))
+   (program-error () nil)
+   (error () nil)))
 
 (defun wipe-all ()
   (mapc #'wipe-class

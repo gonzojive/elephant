@@ -24,7 +24,7 @@
 
 (declaim 
  #-elephant-without-optimize (optimize (speed 3) (safety 1) (debug 1) (space 1))
- #-lispworks
+ #-(or lispworks ccl)
  (inline %db-get-key-buffered db-get-key-buffered 
 		 %db-get-buffered db-get-buffered db-get 
 		 %db-put-buffered db-put-buffered 
