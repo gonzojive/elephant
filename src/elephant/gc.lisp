@@ -44,40 +44,120 @@
 ;; Global GC
 ;; =====================================
 
-(defvar *mark-table* nil)
-(defvar *max-oid* nil)
-
 (defun mark-and-sweep-gc (sc &optional test)
   ;; Context variables
   (assert (check-valid-store-controller sc))
   (let ((*store-controller* sc))
     (declare (special *store-controller*))
-    (setf *mark-table* (make-btree sc))
-    (setf *max-oid* (oid *mark-table*))
+    (setup-gc sc)
 
-    ;; Core of GC
-    (mark-all sc)
+    ;; MARK
+    (mark-memory sc)
+    (mark-roots sc)
+    (setf (controller-marking-p sc) nil)
+    (mark-memory-final sc)
+
+    ;; AND SWEEP
     (sweep-all-classes sc test)
 
-    ;; Drop mark table rather than reset?
-    (unless test 
-      (drop-instance *mark-table*)
-      (setf *mark-table* nil))))
+    (cleanup-gc sc test)))
+
+(defun setup-gc (sc)
+  ;; Setup the GC state
+  (setf (controller-mark-table sc) (make-btree sc))
+  (setf (controller-max-oid sc) 
+	(oid (controller-mark-table sc)))
+  (setf (controller-mark-list sc) nil))
+
+(defun cleanup-gc (sc test)
+  (unless test
+    (setf (controller-mark-table sc) nil)))
 
 
 ;; MARK
 
-(defun mark-all (sc &key (chunk-size 100))
+(defun mark-memory (sc)
+  "Inhibit loading new objects while we extract the live items
+   from the cache and then walk them from outside the lockup.
+   The cache lock is acquired for any lookup of an object from
+   the cache - i.e. when the system is reading in a new object."
+  (mapc #'walk-heap
+	(ele-with-lock ((controller-instance-cache-lock sc))
+	  (multiple-value-bind (oids insts) (live-memory-objects sc)
+	    (setf (controller-mark-list sc) oids)
+	    (setf (controller-marking-p sc) t)
+	    insts))))
+
+(defun mark-memory-final (sc)
+  "We need to ensure that any loaded objects that are unlinked
+   and not yet written back to a live variable are marked prior
+   to the sweep.  This locks the cache up for the longest period
+   as we want to be completely quiescent (no new objects) until
+   we have an accurate mark list for the system"
+  (ele-with-lock ((controller-instance-cache-lock sc))
+    (multiple-value-bind (oids insts) (live-memory-objects sc)
+      (let ((final (nset-difference oids (controller-mark-list sc))))
+	(dolist (inst insts)
+	  (when (member (oid inst) final)
+	    (with-transaction (:read-committed t)
+	      (walk-heap inst)))))
+      (setf (controller-mark-list sc) nil)
+      (setf (controller-marking-p sc) nil))))
+
+(defun live-memory-objects (sc)
+  "Return the list of oids and list of instances currently
+   in memory.  This should be equal to the set of live objects."
+  (let ((oids nil)
+	(insts nil))
+    (map-cache (lambda (oid inst)
+		 (unless (reserved-oid-p sc oid)
+		   (push oid oids)
+		   (push inst insts)))
+	       (controller-instance-cache sc))
+    (values oids insts)))
+
+
+(defun mark-roots (sc &key (chunk-size 100))
   (declare (ignore chunk-size))
-  (map-cache (lambda (oid inst)
-	       (unless (reserved-oid-p sc oid)
-		 (walk-heap inst)))
-	     (controller-instance-cache sc))
   (walk-btree (controller-root sc))
   (walk-indexed-classes sc))
 
 (defun mark-object (obj)
-  (setf (get-value (oid obj) *mark-table*) t))
+  (setf (get-value (oid obj) (controller-mark-table *store-controller*))
+	t))
+
+
+(defvar *serializer-mark-list* 'error
+  "A placeholder for serializers to push
+   new oids to mark.  Should be bound dynamically")
+
+(defvar *serializer-inst-list* 'error
+  "A placeholder for serializers to push
+   new objects to mark.  Should be bound dynamically")
+
+(defmacro in-gc-mark-context ((sc) &body body)
+  "Establish binding for serializer to push instances and oids
+   Walk the objects when the form exists if necessary"
+  `(let ((*serializer-mark-list* nil)
+	 (*serializer-inst-list* nil))
+     (declare (special *serializer-mark-list*))
+     ;; How to handle txn aborts?
+     ,@body
+     (when (controller-marking-p ,sc)
+       (mark-new-writes ,sc *serializer-mark-list* *serializer-inst-list*))))
+
+(defmacro gc-mark-new-write (inst)
+  `(progn 
+     (pushnew (oid ,inst) *serializer-mark-list*)
+     (pushnew ,inst *serializer-inst-list*)))
+
+(defun mark-new-writes (sc oids insts)
+  "Mark newly written objects, walking if not already marked"
+  (let ((new (nset-difference oids (controller-mark-list sc))))
+    (dolist (oid new)
+      (awhen (find oid insts :key #'oid)
+	(unless (get-value oid (controller-mark-table sc))
+	  (walk-heap it))))))
 
 ;; SWEEP
 
@@ -100,11 +180,13 @@
 	     :value cid))
 
 (defun sweep-instance (sc oid)
-  (unless (get-value oid *mark-table*)
+  "Drop an instance unless it is marked"
+  (unless (or (get-value oid (controller-mark-table sc))
+	      (dropped-instance-p sc oid))
     (drop-instance (controller-recreate-instance sc oid))))
 
 (defun sweep-debug (sc oid)
-  (unless (get-value oid *mark-table*)
+  (unless (get-value oid (controller-mark-table sc))
     (print (controller-recreate-instance sc oid))))
 
 ;; ================================
@@ -132,7 +214,7 @@
 
 (defmethod walk-heap ((obj btree))
   (mark-object obj)
-  (when (and (< (oid obj) *max-oid*)
+  (when (and (< (oid obj) (controller-max-oid *store-controller*))
 	     (not (reserved-oid-p *store-controller* (oid obj))))
     (walk-btree obj)))
 

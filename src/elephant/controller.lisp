@@ -210,7 +210,7 @@
 		   "This is an instance cache and part of the
                     metaclass protocol.  Data stores should not
                     override the default behavior.")
-   (instance-cache-lock :accessor controller-instance-cache-lock :initform (ele-make-fast-lock)
+   (instance-cache-lock :accessor controller-instance-cache-lock :initform (ele-make-lock)
 			:documentation "Protection for updates to
 			the cache from multiple threads.  Do not
 			override.")
@@ -243,7 +243,23 @@
    (deserialize-fn :accessor controller-deserialize-fn :initform nil
 		:documentation "Contains the entry point for the
 		specific serializer to be called by
-		elephant::deserialize"))
+		elephant::deserialize")
+   ;; Garbage collection support
+   (gc-marking-p :accessor controller-marking-p :initform nil
+		 :documentation "Used by the online GC to keep
+                 track of whether we're in the mark phase of a
+                 mark and sweep pass")
+   (gc-mark-list :accessor controller-mark-list :initform nil
+		:documentation "During a mark pass, we need to
+                mark any objects we write to the store.  This
+                maintains a local cache so we don't do redundant
+                writes and increase contention")
+   (gc-max-oid :accessor controller-max-oid :initform nil
+	       :documentation "We conservatively mark any 
+               oid created after the GC mark pass starts")
+   (gc-mark-table :accessor controller-mark-table :initform nil
+		  :documentation "This keeps track of the mark
+                  table used by the GC during the GC run"))
   (:documentation 
    "Superclass for the data store controller, the main interface
     to any book-keeping, references to DB handles, the instance
@@ -336,7 +352,7 @@
 (defmethod cache-instance ((sc store-controller) obj)
   "Cache a persistent object with the controller."
   (declare (type store-controller sc))
-  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+  (ele-with-lock ((controller-instance-cache-lock sc))
     (setf (get-cache (oid obj) (controller-instance-cache sc)) obj)))
 
 (defmethod get-cached-instance ((sc store-controller) oid)
@@ -347,14 +363,14 @@
     it))
 
 (defmethod uncache-instance ((sc store-controller) oid)
-  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+  (ele-with-lock ((controller-instance-cache-lock sc))
     (remcache oid (controller-instance-cache sc))))
 
 (defmethod flush-instance-cache ((sc store-controller))
   "Reset the instance cache (flush object lookups).  Useful 
    for testing.  Does not reclaim existing objects so there
    will be duplicate instances with identical functionality"
-  (ele-with-fast-lock ((controller-instance-cache-lock sc))
+  (ele-with-lock ((controller-instance-cache-lock sc))
     (setf (controller-instance-cache sc)
 	  (make-cache-table :test 'eql))))
 
@@ -837,17 +853,9 @@ true."))
 
 (defmethod drop-instance ((inst persistent))
   (let ((sc (get-con inst)))
-    (ele-with-fast-lock ((controller-instance-cache-lock sc))
+    (ele-with-lock ((controller-instance-cache-lock sc))
       (remcache (oid inst) (controller-instance-cache sc)))
     (remove-kv (oid inst) (controller-instance-table sc))))
-
-(defun drop-instance-slots (instance)
-  "A helper function for drop-instance, that deletes the storage of 
-   persistent slots of instance from the db"
-  (let ((class (class-of instance)))
-    (loop for slot-def in (class-slots class)
-       when (persistent-p slot-def)
-       do (slot-makunbound-using-class class instance slot-def))))
 
 (defun drop-instances (instances &key (sc *store-controller*) (txn-size 500))
   "Removes a list of persistent objects from all class indices
@@ -858,6 +866,21 @@ true."))
     (do-subsets (subset txn-size it)
       (ensure-transaction (:store-controller sc)
 	(mapc #'drop-instance subset)))))
+
+(defun drop-instance-slots (instance)
+  "A helper function for drop-instance, that deletes the storage of 
+   persistent slots of instance from the db"
+  (let ((class (class-of instance)))
+    (loop for slot-def in (class-slots class)
+       when (persistent-p slot-def)
+       do (slot-makunbound-using-class class instance slot-def))))
+
+(defun dropped-instance-p (sc oid)
+  "An instance has not been dropped if it is in the instance
+   table and has a valid class id"
+  (multiple-value-bind (cid found?)
+      (get-value oid (controller-instance-table sc))
+    (and cid found?)))
 
 ;;
 ;; DATABASE PROPERTY INTERFACE (Not used by system as of 0.6.1, but supported)

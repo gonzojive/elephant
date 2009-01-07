@@ -49,7 +49,9 @@
 		signal-cross-reference-error
 		elephant-type-deserialization-error
 		controller-recreate-instance
-                recreate-instance-using-class))
+                recreate-instance-using-class
+		controller-marking-p
+		gc-mark-new-write))
 
 (in-package :elephant-serializer2)
 
@@ -226,6 +228,8 @@
 	     (persistent
 	      (unless (valid-persistent-reference-p frob sc)
 		(signal-cross-reference-error frob sc))
+	      (when (controller-marking-p sc)
+		(gc-mark-new-write frob))
 	      (buffer-write-byte +persistent-ref+ bs)
 	      (buffer-write-int32 (oid frob) bs))
 	     #+lispworks

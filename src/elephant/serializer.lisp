@@ -26,14 +26,15 @@
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"
 ;;  (check-valid-store-controller sc)
-  (funcall 
-   #+elephant-without-optimize
-   (symbol-function (controller-serialize sc))
-   #-elephant-without-optimize
-   (the function (aif (controller-serialize-fn sc) it
-		      (setf (controller-serialize-fn sc)
-			    (symbol-function (controller-serialize sc)))))
-   frob bs sc))
+  (in-gc-mark-context (sc)
+    (funcall 
+     #+elephant-without-optimize
+     (symbol-function (controller-serialize sc))
+     #-elephant-without-optimize
+     (the function (aif (controller-serialize-fn sc) it
+			(setf (controller-serialize-fn sc)
+			      (symbol-function (controller-serialize sc)))))
+     frob bs sc)))
 
 (defun deserialize (bs sc &optional oid-only)
   "Generic interface to serialization that dispatches based on the 
