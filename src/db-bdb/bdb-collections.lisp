@@ -205,6 +205,7 @@
 		 (serialize secondary-key secondary-buf sc)
 		 (db-put-buffered (controller-indices sc)
 				  secondary-buf key-buf
+				  :no-dup t
 				  :transaction (my-current-transaction sc))
 		 (reset-buffer-stream secondary-buf))))
 	  value)))))

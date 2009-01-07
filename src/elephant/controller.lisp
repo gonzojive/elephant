@@ -443,13 +443,18 @@
   (assert (typep db-schema 'db-schema))
   (assert (schema-id db-schema))
   (let ((schema-id (schema-id db-schema)))
-    (setf (get-value schema-id (controller-schema-table sc))
-	  db-schema)
+    (set-controller-schema sc schema-id db-schema)
     (when update-cache
       (ele-with-fast-lock ((controller-schema-cache-lock sc))
 	(setf (get-cache schema-id (controller-schema-cache sc)) db-schema))
       (awhen (find-class (schema-classname db-schema) nil)
 	(add-class-controller-schema sc (find-class (schema-classname db-schema)) db-schema)))))
+
+
+(defmethod set-controller-schema ((sc store-controller) schema-id db-schema)
+  "Insert a new schema into the controller table"
+  (setf (get-value schema-id (controller-schema-table sc))
+	db-schema))
 
 (defmethod remove-controller-schema ((sc store-controller) schema-id)
   "Remove a schema from the controller table; uncache separately"
