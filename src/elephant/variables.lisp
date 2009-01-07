@@ -146,6 +146,18 @@
    transaction before the expression passes the error up the stack")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Garbage collection support
+
+(defvar *serializer-mark-list* 'error
+  "A placeholder for serializers to push
+   new oids to mark.  Should be bound dynamically")
+
+(defvar *serializer-inst-list* 'error
+  "A placeholder for serializers to push
+   new objects to mark.  Should be bound dynamically")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Enables warnings of various kinds
 
 (defparameter *warn-on-manual-class-finalization* nil

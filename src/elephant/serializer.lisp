@@ -22,6 +22,42 @@
 
 (in-package :elephant)
 
+
+;;
+;; Some GC-related macros for the serializer
+;;   
+
+
+(defmacro in-gc-mark-context ((sc) &body body)
+  "Establish binding for serializer to push instances and oids
+   Walk the objects when the form exists if necessary"
+  `(let ((*serializer-mark-list* nil)
+	 (*serializer-inst-list* nil))
+     (declare (special *serializer-mark-list*))
+     ;; How to handle txn aborts?
+     (prog1
+	 (progn ,@body)
+       (when (controller-marking-p ,sc)
+	 (mark-new-writes ,sc *serializer-mark-list* *serializer-inst-list*)))))
+
+(defmacro gc-mark-new-write (inst)
+  `(progn 
+     (pushnew (oid ,inst) *serializer-mark-list*)
+     (pushnew ,inst *serializer-inst-list*)))
+
+(defun mark-new-writes (sc oids insts)
+  "Mark newly written objects, walking if not already marked"
+  (let ((new (nset-difference oids (controller-mark-list sc))))
+    (dolist (oid new)
+      (awhen (find oid insts :key #'oid)
+	(unless (get-value oid (controller-mark-table sc))
+	  (walk-heap it))))))
+
+
+;;
+;; Main serializer entry point
+;;
+
 (defun serialize (frob bs sc)
   "Generic interface to serialization that dispatches based on the 
    current Elephant version"

@@ -54,11 +54,10 @@
     ;; MARK
     (mark-memory sc)
     (mark-roots sc)
-    (setf (controller-marking-p sc) nil)
     (mark-memory-final sc)
 
     ;; AND SWEEP
-    (sweep-all-classes sc test)
+    (sweep-unindexed-classes sc test)
 
     (cleanup-gc sc test)))
 
@@ -81,6 +80,7 @@
    from the cache and then walk them from outside the lockup.
    The cache lock is acquired for any lookup of an object from
    the cache - i.e. when the system is reading in a new object."
+  ;; NOTE: What happens if there is a GC during this phase?
   (mapc #'walk-heap
 	(ele-with-lock ((controller-instance-cache-lock sc))
 	  (multiple-value-bind (oids insts) (live-memory-objects sc)
@@ -94,7 +94,10 @@
    to the sweep.  This locks the cache up for the longest period
    as we want to be completely quiescent (no new objects) until
    we have an accurate mark list for the system"
+  ;; NOTE: What happens if there is a GC during this phase?
+  ;; NOTE: What happens with concurrent writes during this phase?
   (ele-with-lock ((controller-instance-cache-lock sc))
+    (setf (controller-marking-p sc) nil)
     (multiple-value-bind (oids insts) (live-memory-objects sc)
       (let ((final (nset-difference oids (controller-mark-list sc))))
 	(dolist (inst insts)
@@ -127,41 +130,9 @@
 	t))
 
 
-(defvar *serializer-mark-list* 'error
-  "A placeholder for serializers to push
-   new oids to mark.  Should be bound dynamically")
-
-(defvar *serializer-inst-list* 'error
-  "A placeholder for serializers to push
-   new objects to mark.  Should be bound dynamically")
-
-(defmacro in-gc-mark-context ((sc) &body body)
-  "Establish binding for serializer to push instances and oids
-   Walk the objects when the form exists if necessary"
-  `(let ((*serializer-mark-list* nil)
-	 (*serializer-inst-list* nil))
-     (declare (special *serializer-mark-list*))
-     ;; How to handle txn aborts?
-     ,@body
-     (when (controller-marking-p ,sc)
-       (mark-new-writes ,sc *serializer-mark-list* *serializer-inst-list*))))
-
-(defmacro gc-mark-new-write (inst)
-  `(progn 
-     (pushnew (oid ,inst) *serializer-mark-list*)
-     (pushnew ,inst *serializer-inst-list*)))
-
-(defun mark-new-writes (sc oids insts)
-  "Mark newly written objects, walking if not already marked"
-  (let ((new (nset-difference oids (controller-mark-list sc))))
-    (dolist (oid new)
-      (awhen (find oid insts :key #'oid)
-	(unless (get-value oid (controller-mark-table sc))
-	  (walk-heap it))))))
-
 ;; SWEEP
 
-(defun sweep-all-classes (sc &optional test (step 5))
+(defun sweep-unindexed-classes (sc &optional test (step 5))
   "For each unindexed class, sweep all instances that
    are not on the mark list.  One txn per class for now"
   (dolist (class (unindexed-classes sc))
