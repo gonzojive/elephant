@@ -52,6 +52,8 @@
    #:open-controller
    #:close-controller
    #:database-version
+   #:up-to-date-p
+   #:controller-database-version
    #:controller-spec
    #:controller-serializer-version
    #:controller-serialize

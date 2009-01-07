@@ -141,6 +141,17 @@ et cetera."))
       ;; Establish database version if new
       (when new-p (set-database-version sc))
 
+      ;; Auto upgrade 0 9 2 dbs
+      (when (equal (database-version sc) '(0 9 2))
+	(set-database-version sc))
+		 
+      ;; Set the controller-database-version number
+      (destructuring-bind (maj min inc) (database-version sc)
+	(setf (controller-database-version sc)
+	      (+ (* 100 maj)
+		 (* 10 min)
+		 inc)))
+
       ;; Initialize serializer so we can load proper sorting C function
       ;; based on serializer type
       (initialize-serializer sc)

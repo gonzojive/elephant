@@ -40,7 +40,7 @@
   (initial-persistent-setup instance :from-oid from-oid :sc sc))
 
 (defun initial-persistent-setup (instance &key from-oid sc)
-  (check-valid-store-controller sc)
+  (assert sc)
   (if from-oid
       (setf (oid instance) from-oid)
       (register-new-instance instance (class-of instance) sc))

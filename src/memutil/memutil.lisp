@@ -95,30 +95,31 @@
     :returning :void))
 
 (eval-when (:compile-toplevel)
-  (declaim 
-   #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))
-   #-(or ccl lispworks)
-   (inline read-int read-uint read-float read-double read-int32 read-uint32
-	   read-int64 read-uint64 write-int32 write-fixnum32 read-fixnum32
-	   write-uint32 write-int64 write-uint64
-	   write-int write-uint write-float write-double
-	   offset-char-pointer copy-str-to-buf %copy-str-to-buf copy-bufs
-	   ;; resize-buffer-stream 
-	   ;; buffer-stream-buffer buffer-stream-size buffer-stream-position
-	   ;; buffer-stream-length 
-	   buffer-write-oid buffer-read-oid
-	   reset-buffer-stream
-	   buffer-write-int32 buffer-write-uint32
-	   buffer-write-int64 buffer-write-uint64
-	   buffer-write-float buffer-write-double buffer-write-string
-	   buffer-read-byte buffer-read-fixnum buffer-read-int32
-	   buffer-read-uint32 buffer-read-int64 buffer-read-uint64
-           buffer-read-float buffer-read-double buffer-read-ucs1-string
-	   ;; inline legacy
-	   buffer-write-byte buffer-read-fixnum
-	   buffer-write-int buffer-write-uint buffer-read-int buffer-read-uint
-	   #+(or lispworks (and allegro ics)) buffer-read-ucs2-string
-	   #+(and sbcl sb-unicode) buffer-read-ucs4-string))
+   #-elephant-without-optimize 
+   (declaim 
+    (optimize (speed 3) (safety 0) (space 0) (debug 0))
+    #-(or ccl lispworks)
+    (inline read-int read-uint read-float read-double read-int32 read-uint32
+	    read-int64 read-uint64 write-int32 write-fixnum32 read-fixnum32
+	    write-uint32 write-int64 write-uint64
+	    write-int write-uint write-float write-double
+	    offset-char-pointer copy-str-to-buf %copy-str-to-buf copy-bufs
+	    ;; resize-buffer-stream 
+	    ;; buffer-stream-buffer buffer-stream-size buffer-stream-position
+	    ;; buffer-stream-length 
+	    buffer-write-oid buffer-read-oid
+	    reset-buffer-stream
+	    buffer-write-int32 buffer-write-uint32
+	    buffer-write-int64 buffer-write-uint64
+	    buffer-write-float buffer-write-double buffer-write-string
+	    buffer-read-byte buffer-read-fixnum buffer-read-int32
+	    buffer-read-uint32 buffer-read-int64 buffer-read-uint64
+	    buffer-read-float buffer-read-double buffer-read-ucs1-string
+	    ;; inline legacy
+	    buffer-write-byte buffer-read-fixnum
+	    buffer-write-int buffer-write-uint buffer-read-int buffer-read-uint
+	    #+(or lispworks (and allegro ics)) buffer-read-ucs2-string
+	    #+(and sbcl sb-unicode) buffer-read-ucs4-string))
   )
 
 ;; Constants and Flags

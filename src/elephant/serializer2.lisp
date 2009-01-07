@@ -463,7 +463,7 @@
 	     ((= tag +symbol+)
 	      (let ((name (%deserialize bs))
 		    (package (%deserialize bs)))
-		(translate-and-intern-symbol name package (database-version sc))))
+		(translate-and-intern-symbol sc name package)))
 	     ((= tag +persistent+)
 	      (let ((oid (buffer-read-fixnum32 bs))
 		    (cname (%deserialize bs)))

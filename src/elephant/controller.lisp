@@ -179,6 +179,9 @@
 	 :documentation "Data store initialization functions are
 	 expected to initialize :spec on the call to
 	 make-instance")
+   (db-version :type fixnum
+	       :accessor controller-database-version
+	       :initform 100)
    ;; Generic support for the object, indexing and root protocols
    (root :reader controller-root 
 	 :documentation "This is an instance of the data store
@@ -499,9 +502,10 @@
 ;;
 
 (defparameter *elephant-upgrade-table*
-  '( ((0 9 2) (0 6 0))
-     ((0 9 2) (0 9 0))
-     ((0 9 2) (0 9 1))
+  '( ((1 0 0) (0 6 0))
+     ((1 0 0) (0 9 0))
+     ((1 0 0) (0 9 1))
+     ((1 0 0) (0 9 2))
    ))
 
 (defmethod up-to-date-p ((sc store-controller))
@@ -608,13 +612,14 @@
 	(values new-name new-package)
 	(values symbol-name (map-legacy-package-names package-name old-version)))))
 
-(defun translate-and-intern-symbol (symbol-name package-name db-version)
+(defun translate-and-intern-symbol (sc symbol-name package-name)
   "Service for the serializer to translate any renamed packages or symbols
    and then intern the decoded symbol."
   (if package-name 
       (multiple-value-bind (sname pname)
-	  (if (or *always-convert* (not (equal db-version *elephant-code-version*)))
-	      (map-legacy-names symbol-name package-name db-version)
+	  (if (or *always-convert* (not (= (controller-database-version sc)
+					   *elephant-code-version-int*)))
+	      (map-legacy-names symbol-name package-name (database-version sc))
 	      (values symbol-name package-name))
 	(let ((package (find-package pname)))
 	  (if package

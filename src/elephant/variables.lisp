@@ -25,7 +25,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Versioning Support
 
-(defvar *elephant-code-version* '(0 9 2)
+(defvar *elephant-code-version* '(1 0 0)
+  "The current database version supported by the code base")
+
+(defvar *elephant-code-version-int* 100
   "The current database version supported by the code base")
 
 (defvar *elephant-unmarked-code-version* '(0 6 0)
