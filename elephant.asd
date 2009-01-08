@@ -116,7 +116,9 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status) 
 		    (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
-        #+sbcl (setf exit-status (run-shell-command command))
+        #+sbcl (setf exit-status
+                     (run-shell-command
+                      (format nil "cd ~S && ~A" (namestring directory) command)))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))
 
@@ -127,7 +129,9 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status) 
                       (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
-        #+sbcl (setf exit-status (run-shell-command command))
+        #+sbcl (setf exit-status
+                     (run-shell-command
+                      (format nil "cd ~S && ~A" (namestring directory) command)))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))
 
@@ -143,7 +147,9 @@
         #+allegro (multiple-value-setq (stdout-lines stderr-lines exit-status)
                       (excl.osi:command-output command :directory directory))
         #+lispworks (setf exit-status (system:call-system-showing-output command :current-directory directory))
-        #+sbcl (setf exit-status (run-shell-command command))
+        #+sbcl (setf exit-status
+                     (run-shell-command
+                      (format nil "cd ~S && ~A" (namestring directory) command)))
         (unless (zerop exit-status)
           (error 'operation-error :component c :operation o)))))
 
