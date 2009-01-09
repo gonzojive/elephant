@@ -412,6 +412,7 @@ primary key."))
 not), evaluates the forms, then closes the cursor."
   (declare (inline make-cursor))
   `(let ((,var (make-cursor ,bt)))
+     (declare (dynamic-extent ,var))
      (unwind-protect
 	  (progn ,@body)
        (cursor-close ,var))))
@@ -538,7 +539,7 @@ not), evaluates the forms, then closes the cursor."
        (flet ((,collector (,k ,v)
 		(push (funcall ,fn ,k ,v) results)))
 	 (declare (dynamic-extent (function ,collector)))
-	 (let ((,fn (if ,collect-p #',collector ,fn))) 
+	 (let ((,fn (if ,collect-p #',collector ,fn)))
 	   ,@body)))))
 
 (defmacro with-map-wrapper ((fn btree collect cur) &body body)
@@ -556,7 +557,7 @@ not), evaluates the forms, then closes the cursor."
   "Binds exists?, skey, val and pkey from expression assuming
    expression returns a set of cursor operation values or nil"
   `(multiple-value-bind (exists? skey val pkey)
-       ,expr
+       (the (values boolean t t t) ,expr)
      (declare (ignorable exists? skey val pkey))
      ,@body))
 
@@ -570,6 +571,7 @@ not), evaluates the forms, then closes the cursor."
   `(labels ((continue-p (key)
 	      (declare (ignorable key))
 	      ,continue))
+     (declare (dynamic-extent (function continue-p)))
      (handler-case 
 	 (with-cursor-values ,start
 	   (when (and exists? (continue-p skey))
@@ -657,7 +659,7 @@ not), evaluates the forms, then closes the cursor."
        (flet ((,collector (,k ,v ,pk)
 		(push (funcall ,fn ,k ,v ,pk) results)))
 	 (declare (dynamic-extent (function ,collector)))
-	 (let ((,fn (if ,collect-p #',collector ,fn))) 
+	 (let ((,fn (if ,collect-p #',collector ,fn)))
 	   ,@body)))))
 
 (defmacro iterate-map-index (&key start continue step)
@@ -670,6 +672,7 @@ not), evaluates the forms, then closes the cursor."
   `(labels ((continue-p (key)
 	      (declare (ignorable key))
 	      ,continue))
+     (declare (dynamic-extent (function continue-p)))
      (with-cursor-values ,start
        (when (and exists? (continue-p skey))
 	 (funcall fn skey val pkey)

@@ -3,7 +3,8 @@
 (require :sb-posix)
 
 
-(asdf:operate 'asdf:load-op 'elephant :force t)
+;;(asdf:operate 'asdf:load-op 'elephant :force t)
+(asdf:operate 'asdf:load-op 'elephant)
 (in-package :elephant)
 
 (load (merge-pathnames 

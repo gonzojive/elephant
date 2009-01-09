@@ -22,6 +22,9 @@
 
 (in-package "ELEPHANT")
 
+(declaim #-elephant-without-optimize
+	 (optimize speed (safety 1) (debug 0) (space 1)))
+
 ;;
 ;; TRACKING OBJECT STORES
 ;;

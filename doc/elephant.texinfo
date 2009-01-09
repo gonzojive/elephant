@@ -17,7 +17,7 @@ Portions copyright respective contributors (see @file{CREDITS}). @*
 Elephant Manual @*
 Original Version, Copyright @copyright{} 2004 Ben Lee. @*
 Versions 0.5-0.6, Copyright @copyright{} 2006 Robert L. Read. @*
-Version 1.0, Copyright @copyright{} 2006-2007 Ian Eslick, Glenn Tarcea and Robert L. Read @*
+Version 1.0, Copyright @copyright{} 2006-2009 Ian Eslick, Glenn Tarcea and Robert L. Read @*
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License.  See the

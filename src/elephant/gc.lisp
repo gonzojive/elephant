@@ -137,11 +137,11 @@
    are not on the mark list.  One txn per class for now"
   (dolist (class (unindexed-classes sc))
     (let ((cid (class-schema-id sc class)))
-      (sweep-class sc cid step test))))
+      (sweep-class sc cid step :test test))))
 
-(defun sweep-class (sc cid step &optional test)
+(defun sweep-class (sc cid step &key test (start 0))
   "Sweep over the class and reclaim instances"
-  (declare (ignore step))
+  (declare (ignore step start))
   (map-index (lambda (k v pk)
 	       (declare (ignore k v))
 	       (if test 

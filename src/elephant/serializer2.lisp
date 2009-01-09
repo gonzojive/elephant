@@ -55,8 +55,8 @@
 
 (in-package :elephant-serializer2)
 
-(eval-when (:compile-toplevel)
-  (declaim  #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))))
+#-elephant-without-optimize 
+(declaim  (optimize (speed 3) (safety 0) (space 0) (debug 0)))
 
 (uffi:def-type foreign-char :char)
 

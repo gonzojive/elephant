@@ -624,7 +624,7 @@ of a string."
 		      (len buffer-stream-length))
     bs		      
     (declare (type fixnum size len)
-	     #-ccl (type (alien (* unsigned-char)) buf))	     
+	     #-ccl (type (alien (* unsigned-char)) buf))
     (let ((needed (the fixnum (+ size 4))))
       (declare (type fixnum needed))
       (when (> needed len)
