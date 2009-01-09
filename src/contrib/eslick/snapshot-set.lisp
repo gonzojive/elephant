@@ -230,9 +230,10 @@
 	     hash)
     proxy))
 
-(defun reify-class-p (obj)
-  (or (standard-object-subclass-p obj)
-      (hash-table-p obj)))
+(defgeneric reify-class-p (obj)
+  (:method ((obj t)) nil)
+  (:method ((obj standard-object)) t)
+  (:method ((obj hash-table)) t))
 
 (defun reify-value (obj set)
   (multiple-value-bind (obj id) 
