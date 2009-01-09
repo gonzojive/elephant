@@ -22,8 +22,8 @@
 
 (in-package :db-bdb)
 
-(declaim  #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0)))
-
+(declaim  #-elephant-without-optimize (optimize (speed 3) (safety 0) (space 0) (debug 0))
+	  #+elephant-without-optimize (optimize (speed 1) (safety 3) (space 1) (debug 3)))
 (defclass bdb-btree (btree) ()
   (:documentation "A BerkleyDB implementation of a BTree"))
 

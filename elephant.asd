@@ -287,8 +287,8 @@
 (defsystem elephant
   :name "elephant"
   :author "Ben Lee <blee@common-lisp.net>"
-  :version "0.9"
-  :maintainer "Robert Read <read@robertlread.net>"
+  :version "1.0a1"
+  :maintainer "Ian Eslick <ieslick@common-lisp.net, Robert Read <read@robertlread.net>"
   :licence "LLGPL"
   :description "Object database for Common Lisp"
   :long-description "An object-oriented database based on Berkeley DB, for CMUCL/SBCL, OpenMCL, and Allegro."

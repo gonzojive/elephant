@@ -55,6 +55,9 @@
   (ifret (subtypep (type-of sc) 'store-controller)
 	 (error "This function requires a valid store controller")))
 
+(defclass persistent-collection (persistent) ()
+  (:documentation "Abstract superclass of all collection types."))
+
 (defclass persistent-object (persistent) ()
   (:metaclass persistent-metaclass)
   (:documentation 
@@ -70,15 +73,6 @@
   (:metaclass persistent-metaclass)
   (:documentation 
    "Adds a special value slot to store checkout state"))
-
-;;; collection types -- we're slot-less
-(defclass persistent-collection (persistent) ()
-  (:documentation "Abstract superclass of all collection types."))
-
-;; I don't like having to put this here, as this is only used by
-;; the extending class indexed-btree.  But I can't figure out 
-;; how to make the :transient flag work on that class without 
-;; creating a circularity in the class presidence list...
 
 ;; ================================================
 ;; METACLASS INITIALIZATION 
@@ -230,7 +224,7 @@ slots."
       (cond (from-oid ;; If re-starting, make sure we read the cached values
 ;;	     (refresh-cached-slots instance cached-slots)) ;; old model dependency
 	     nil)
-	    (t        ;; If new instance, initialize all slots
+	    (t  ;; If new instance, initialize all slots
 	     (setq transient-slots (union transient-slots cached-slots))
 	     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)))
       ;; Always initialize transients

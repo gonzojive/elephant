@@ -29,7 +29,8 @@
 				transaction parent environment
 				(retries *default-retries*)
 				degree-2 read-uncommitted txn-nosync 
-				txn-nowait txn-sync (snapshot elephant::*default-mvcc*))
+				txn-nowait txn-sync (snapshot elephant::*default-mvcc*)
+				inhibit-rollback-fn)
   (declare (ignorable transaction))
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
@@ -52,15 +53,36 @@
 	     (catch 'transaction
 	       (unwind-protect
 		    (progn
-		      (setf result (multiple-value-list (funcall txn-fn)))
+		      ;; Run body, capture any conditions
+		      (handler-case
+			  (setf result (multiple-value-list (funcall txn-fn)))
+			(condition (c)
+			  (if (and inhibit-rollback-fn (funcall inhibit-rollback-fn c))
+			      ;; Commit if non-local exit is OK
+			      (progn
+				(db-transaction-commit txn 
+						       :txn-nosync txn-nosync
+						       :txn-sync txn-sync)
+				(setq success t))
+			      (setq success c))
+			  (throw 'transaction nil)))
+		      ;; Commit on regular exit
 		      (db-transaction-commit txn 
 					     :txn-nosync txn-nosync
 					     :txn-sync txn-sync)
 		      (setq success t))
-		 (unless success 
+		 ;; If unhandled non-local exit or commit failure: abort
+		 (unless success
 		   (db-transaction-abort txn)))))
-	   (when success
-	     (return (values-list result)))))
+	   ;; A positive success is either a legitimate value or a signal
+	   (cond ((eq success t)
+		  (return (values-list result)))
+		 (success 
+		  (break)
+		  (if (subtypep (type-of success) 'error)
+		      (error success) ;; contains an error condition (top-level debugger)
+		      (signal success))) ;; contains a normal condition (no debugger)
+		 (t nil))))
        finally (cerror "Retry transaction again?"
 		       'transaction-retry-count-exceeded
 		       :format-control "Transaction exceeded the ~A retries limit"

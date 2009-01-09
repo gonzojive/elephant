@@ -35,3 +35,39 @@
 	  (close-store sc2))))
   t t t t)
 
+(define-condition inhibit-rollback-test () ())
+
+(defun inhibit-rollback-p (c)
+  (subtypep (type-of c)
+	    'inhibit-rollback-test))
+
+(defpclass rollback-test ()
+  ((slot1 :accessor slot1 :initarg :slot1)))
+
+(deftest inhibit-rollback
+    (if (eq (first (elephant::controller-spec *store-controller*)) :BDB)
+	(let ((test (make-instance 'rollback-test :slot1 1))
+	      test1 test2 errorp)
+	  ;; Side effect works, we exit without error; save results
+	  (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
+	    (setf (slot1 test) 2)
+	    (signal 'inhibit-rollback-test))
+	  (setf test1 (slot1 test))
+	  (setf (slot1 test) 2)
+	  ;; Side effect fails (stays 2) and error is signaled
+	  (setf errorp
+	    (signals-error
+	      (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
+		(setf (slot1 test) 3)
+		(error))))
+	  (setf test2 (slot1 test))
+	  (values 
+	   test1 test2 errorp
+	   ;; works plain too
+	   (with-transaction ()
+	     (setf (slot1 test) 10))))
+	(values 2 2 t 10))
+  2 2 t 10)
+						    
+	    
+
