@@ -35,7 +35,7 @@
   (let ((env (if environment environment (controller-environment sc))))
     (loop 
        for count fixnum from 0 to retries
-       for success of-type boolean = nil
+       for success = nil
        do
        (let ((txn (db-transaction-begin env
 					:parent (if parent parent +NULL-VOID+)
@@ -63,26 +63,24 @@
 				(db-transaction-commit txn 
 						       :txn-nosync txn-nosync
 						       :txn-sync txn-sync)
-				(setq success t))
-			      (setq success c))
-			  (throw 'transaction nil)))
+				(setq success :yes))
+			      ;; Indicate a condition if not
+			      (setq success :condition))
+			  ;; Re-signal to find other handlers
+			  (signal c)
+			  ;; No other handlers; invoke debugger
+			  (invoke-debugger c)))
 		      ;; Commit on regular exit
 		      (db-transaction-commit txn 
 					     :txn-nosync txn-nosync
 					     :txn-sync txn-sync)
-		      (setq success t))
+		      (setq success :yes))
 		 ;; If unhandled non-local exit or commit failure: abort
-		 (unless success
+		 (unless (eq success :yes)
 		   (db-transaction-abort txn)))))
 	   ;; A positive success is either a legitimate value or a signal
-	   (cond ((eq success t)
-		  (return (values-list result)))
-		 (success 
-		  (break)
-		  (if (subtypep (type-of success) 'error)
-		      (error success) ;; contains an error condition (top-level debugger)
-		      (signal success))) ;; contains a normal condition (no debugger)
-		 (t nil))))
+	   (when (eq success :yes)
+	     (return (values-list result)))))
        finally (cerror "Retry transaction again?"
 		       'transaction-retry-count-exceeded
 		       :format-control "Transaction exceeded the ~A retries limit"

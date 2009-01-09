@@ -48,36 +48,55 @@
     default; use the :transient flag otherwise.  Slots can also
     be indexed for by-value retrieval."))
 
+(defmethod get-class-schema (pm) (slot-value pm '%class-schema))
+(defmethod set-class-schema (pm value)
+  (setf (slot-value pm '%class-schema) value))
+(defsetf get-class-schema set-class-schema)
+
+(defmethod get-store-schemas (pm) (slot-value pm '%store-schemas))
+(defmethod set-store-schemas (pm value) 
+  (setf (slot-value pm '%store-schemas) value))
+(defsetf get-store-schemas set-store-schemas)
+
+(defmethod get-class-indexing (pm) (slot-value pm '%class-indexing))
+(defsetf get-class-indexing (pm) (value)
+  `(setf (slot-value ,pm '%class-indexing) ,value))
+
+(defmethod get-cache-style (pm) (slot-value pm '%cache-style))
+(defsetf get-cache-style (pm) (value)
+  `(setf (slot-value ,pm '%cache-style) ,value))
+
 (defmethod has-class-schema-p ((class persistent-metaclass))
-  (and (%class-schema class)
-       (eq (class-name (class-of (%class-schema class)))
+  (and (get-class-schema class)
+       (eq (class-name (class-of (get-class-schema class)))
 	   'persistent-schema)))
 
 (defmethod has-class-controller-schema-p (sc (class persistent-metaclass))
   (and (get-class-controller-schema sc class) t))
 
 (defmethod get-class-controller-schema (sc (class persistent-metaclass))
-  (awhen (assoc (controller-spec sc) (%store-schemas class))
+  (awhen (assoc (controller-spec sc) (get-store-schemas class))
     (cdr it)))
 
 (defmethod add-class-controller-schema (sc (class persistent-metaclass) schema)
   ;; NOTE: Needs to be lock protected
   (pushnew (class-name class) (controller-schema-classes sc))
   (remove-class-controller-schema sc class)
-  (setf (%store-schemas class)
-	(acons (controller-spec sc) schema (%store-schemas class))))
+  (setf (get-store-schemas class)
+	(acons (controller-spec sc) schema (get-store-schemas class))))
 
 (defmethod remove-class-controller-schema (sc (class persistent-metaclass))
   ;; NOTE: Needs to be lock protected
-  (setf (%store-schemas class)
-	(remove (controller-spec sc) (%store-schemas class) :key #'car :test #'equalp)))
+  (setf (get-store-schemas class)
+	(remove (controller-spec sc) (get-store-schemas class) 
+		:key #'car :test #'equalp)))
 
 (defmethod class-indexing-enabled-p ((class persistent-metaclass))
   (and (not (subtypep (class-name class) 'persistent-collection))
-       (%class-indexing class)))
+       (get-class-indexing class)))
 
 (defun migrate-class-index-p (class)
-  (%class-indexing class))
+  (get-class-indexing class))
 
 ;;
 ;; Top level defclass form - hide metaclass option

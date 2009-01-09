@@ -241,7 +241,7 @@
 	 (map-oid-fn (cidx pcidx oid)
 	   (declare (ignore cidx pcidx))
 	   (funcall fn oid)))
-;;    (declare (dynamic-extent map-fn))
+    (declare (dynamic-extent (function map-fn) (function map-oid-fn)))
     (let* ((classobj (if (symbolp class) (find-class class) class))
 	   (classname (if (symbolp class) class (class-name class)))
 	   (db-schemas (get-db-schemas sc classname))

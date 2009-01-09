@@ -97,8 +97,8 @@
 	       :direct-superclasses new-direct-superclasses 
 	       (remove-keywords '(:direct-superclasses :index) args))
       ;; Make sure we convert the cache argument so it can be used in accessors
-      (when (consp (%cache-style class))
-	(setf (%cache-style class) (first (%cache-style class)))))))
+      (when (consp (get-cache-style class))
+	(setf (get-cache-style class) (first (get-cache-style class)))))))
 
 (defun ensure-class-inherits-from (class from-classnames direct-superclasses)
   (let* ((from-classes (mapcar #'find-class from-classnames))
@@ -126,17 +126,17 @@
 
 (defmethod finalize-inheritance :after ((instance persistent-metaclass))
   "Constructs the metaclass schema when the class hierarchy is valid"
-  (let* ((old-schema (%class-schema instance))
+  (let* ((old-schema (get-class-schema instance))
 	 (new-schema (compute-schema instance)))
     ;; Update schema chain
     (setf (schema-predecessor new-schema) old-schema)
-    (setf (%class-schema instance) new-schema)
+    (setf (get-class-schema instance) new-schema)
     (and *store-controller* (not (subtypep (class-name instance) 'btree))
       (lookup-schema *store-controller* instance)) ; ensure db schema of user-defined classes
     ;; Cleanup some slot values
-    (let ((idx-state (%class-indexing instance)))
+    (let ((idx-state (get-class-indexing instance)))
       (when (consp idx-state)
-	(setf (%class-indexing instance) (first idx-state))))
+	(setf (get-class-indexing instance) (first idx-state))))
     ;; Compute derived index triggers
     (awhen (derived-index-slot-defs instance)
       (compute-derived-index-triggers instance it))

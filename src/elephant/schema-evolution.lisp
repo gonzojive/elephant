@@ -47,7 +47,7 @@
 	       (declare (ignore cid))
 	       (let ((classname (schema-classname db-schema)))
 		 (awhen (find-class classname)
-		   (let ((class-schema (%class-schema it)))
+		   (let ((class-schema (get-class-schema it)))
 		     (unless (match-schemas class-schema db-schema)
 		       	(synchronize-store-class sc class-schema db-schema)
 			(unless *lazy-db-instance-upgrading*
@@ -59,8 +59,8 @@
 (defmethod synchronize-stores-for-class (class)
   "Synchronize all stores connected to a given class.  Meant to be
    called during class redefinition to keep all DB instances in sync."
-  (let ((class-schema (%class-schema class)))
-    (loop for (spec . db-schema) in (%store-schemas class) do
+  (let ((class-schema (get-class-schema class)))
+    (loop for (spec . db-schema) in (get-store-schemas class) do
 	 (unless (match-schemas class-schema db-schema)
 	   (let ((store (lookup-con-spec spec)))
 	     (synchronize-store-class store class-schema db-schema)
@@ -135,7 +135,7 @@
     (unless (match-schemas class-schema db-schema)
       (synchronize-store-class sc class-schema db-schema))
     ;; Update the instances oldest to newest
-    (loop for schema in (get-db-schemas sc classname) 
+    (loop for schema in (get-db-schemas sc classname)
 	 unless (eq (schema-id schema) (schema-id db-schema)) do
 	 (progn
 	   (map-index (lambda (cidx pcidx oid)
@@ -326,7 +326,7 @@
 
 (defun dump-class-schema-status (sc classname &optional (stream t))
   (let* ((class (find-class classname))
-	 (class-schema (%class-schema class))
+	 (class-schema (get-class-schema class))
 	 (cached-store (get-class-controller-schema sc class))
 	 (db-schema-chain (get-db-schemas sc classname)))
     (format stream "Schema status dump for: ~A~%" classname)

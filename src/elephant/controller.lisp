@@ -430,7 +430,7 @@
 (defmethod create-controller-schema ((sc store-controller) class)
   "We don't have a cached version, so create a new one"
   (ensure-finalized class)
-  (let ((db-schema (make-db-schema (next-cid sc) (%class-schema class))))
+  (let ((db-schema (make-db-schema (next-cid sc) (get-class-schema class))))
     ;; Add to database
     (setf (get-value (schema-id db-schema) (controller-schema-table sc))
 	  db-schema)

@@ -410,6 +410,7 @@ primary key."))
 (defmacro with-btree-cursor ((var bt) &body body)
   "Macro which opens a named cursor on a BTree (primary or
 not), evaluates the forms, then closes the cursor."
+  (declare (inline make-cursor))
   `(let ((,var (make-cursor ,bt)))
      (unwind-protect
 	  (progn ,@body)
