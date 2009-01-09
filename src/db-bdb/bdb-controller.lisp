@@ -22,7 +22,7 @@
 
 (in-package :db-bdb)
 
-(declaim  #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0)))
+(declaim #-elephant-without-optimize (optimize (speed 3) (safety 1) (space 0) (debug 0)))
 
 (defclass bdb-store-controller (store-controller)
   ((environment :type (or null pointer-void) 
@@ -105,7 +105,7 @@ et cetera."))
 ;;
 
 (defmethod open-controller ((sc bdb-store-controller) &key (recover t)
-			    (recover-fatal nil) (thread t) (register t) 
+			    (recover-fatal nil) (thread t) (register nil) 
 			    (deadlock-detect t)
 			    (cache-size elephant::*berkeley-db-cachesize*)
 			    (max-locks elephant::*berkeley-db-max-locks*)
