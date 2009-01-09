@@ -145,6 +145,7 @@
 	(sc (gensym)))
     `(let ((,txn-fn (lambda () ,@body))
 	   (,sc ,store-controller))
+;;       (declare (dynamic-extent (function ,txn-fn)))
        (if (prior-owned-txn ,sc ,parent)
 	   (funcall ,txn-fn)
 	   (funcall #'execute-transaction ,sc

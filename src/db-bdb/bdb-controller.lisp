@@ -204,7 +204,7 @@ et cetera."))
 		 :auto-commit t :type DB-BTREE :create t :thread thread
 		 :multiversion mvcc)
 	(let ((oid-seq (db-sequence-create db)))
-	  (db-sequence-set-cachesize oid-seq 50)
+	  (db-sequence-set-cachesize oid-seq 100)
 	  (db-sequence-set-flags oid-seq :seq-inc t :seq-wrap t)
 	  (db-sequence-set-range oid-seq 0 most-positive-fixnum)
 	  (db-sequence-initial-value oid-seq 0)
@@ -212,7 +212,7 @@ et cetera."))
 	  (setf (controller-oid-seq sc) oid-seq))
 
 	(let ((cid-seq (db-sequence-create db)))
-	  (db-sequence-set-cachesize cid-seq 50)
+	  (db-sequence-set-cachesize cid-seq 100)
 	  (db-sequence-set-flags cid-seq :seq-inc t :seq-wrap t)
 	  (db-sequence-set-range cid-seq 0 most-positive-fixnum)
 	  (db-sequence-initial-value cid-seq 5)
@@ -394,10 +394,7 @@ a db_deadlock parameter."
 
 (defmethod start-deadlock-detector ((ctrl bdb-store-controller) &key (type :default) (time :on-conflict)
                                                                      (log nil) (external-process-p nil))
-  "Start the deadlock detector. TYPE specifies which locks should be aborted
-(see DB-BDB::*DEADLOCK-TYPE-ALIST*). TIME is either :ON-CONFLICT (the default, recommended) or
-a positive number. LOG must be either NIL (when using on-conflict deadlock detection),
-a stream (when using the threaded interval checker) or a string (when using the external interval
+  "Start the deadlock detector. TYPE specifies which locks should be aborted (see DB-BDB::*DEADLOCK-TYPE-ALIST*). TIME is either :ON-CONFLICT (the default, recommended) or a positive number. LOG must be either NIL (when using on-conflict deadlock detection), a stream (when using the threaded interval checker) or a string (when using the external interval
 checker db_deadlock)."
   (unless (typep log '(or stream string null))
     (error "LOG must be a stream, string or NIL."))
