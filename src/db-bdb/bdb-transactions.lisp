@@ -53,32 +53,28 @@
 	     (catch 'transaction
 	       (unwind-protect
 		    (progn
-		      ;; Run body, capture any conditions
-		      (handler-case
-			  (setf result (multiple-value-list (funcall txn-fn)))
-			(condition (c)
-			  (if (and inhibit-rollback-fn (funcall inhibit-rollback-fn c))
-			      ;; Commit if non-local exit is OK
-			      (progn
-				(db-transaction-commit txn 
-						       :txn-nosync txn-nosync
-						       :txn-sync txn-sync)
-				(setq success :yes))
-			      ;; Indicate a condition if not
-			      (setq success :condition))
-			  ;; Re-signal to find other handlers
-			  (signal c)
-			  ;; No other handlers; invoke debugger
-			  (invoke-debugger c)))
-		      ;; Commit on regular exit
-		      (db-transaction-commit txn 
-					     :txn-nosync txn-nosync
-					     :txn-sync txn-sync)
-		      (setq success :yes))
+		      ;; Run body, inhibit rollback if necessary and resignal
+		      (handler-bind 
+			  ((condition (lambda (c)
+					(when (and inhibit-rollback-fn
+						   (funcall inhibit-rollback-fn c))
+					  ;; Commit if non-local exit is OK
+					  (db-transaction-commit txn 
+								 :txn-nosync txn-nosync
+								 :txn-sync txn-sync)
+					  (setq success :yes))
+					(signal c))))
+			;; Run the body fn
+			(setf result (multiple-value-list (funcall txn-fn)))
+			;; Commit on regular exit
+			(db-transaction-commit txn 
+					       :txn-nosync txn-nosync
+					       :txn-sync txn-sync)
+			(setq success :yes)))
 		 ;; If unhandled non-local exit or commit failure: abort
 		 (unless (eq success :yes)
 		   (db-transaction-abort txn)))))
-	   ;; A positive success is either a legitimate value or a signal
+	   ;; A positive success results in a normal return
 	   (when (eq success :yes)
 	     (return (values-list result)))))
        finally (cerror "Retry transaction again?"
