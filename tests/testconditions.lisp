@@ -47,12 +47,11 @@
 (deftest inhibit-rollback
     (if (eq (first (elephant::controller-spec *store-controller*)) :BDB)
 	(let ((test (make-instance 'rollback-test :slot1 1))
-	      test1 test2 errorp)
+	      test1 test2 errorp finishes)
 	  ;; Side effect works, we exit without error; save results
-	  (finishes
-	    (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
-	      (setf (slot1 test) 2)
-	      (signal 'inhibit-rollback-test)))
+	  (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
+	    (setf (slot1 test) 2)
+	    (signal 'inhibit-rollback-test))
 	  (setf test1 (slot1 test))
 	  (setf (slot1 test) 2)
 	  ;; Side effect fails (stays 2) and error is signaled
@@ -63,12 +62,12 @@
 		(error))))
 	  (setf test2 (slot1 test))
 	  (values 
-	   test1 test2 errorp
+	   finishes test1 errorp test2
 	   ;; works plain too
 	   (with-transaction ()
 	     (setf (slot1 test) 10))))
-	(values 2 2 t 10))
-  2 2 t 10)
+	(values t 2 t 2 10))
+  t 2 t 2 10)
 						    
 	    
 
