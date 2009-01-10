@@ -49,9 +49,10 @@
 	(let ((test (make-instance 'rollback-test :slot1 1))
 	      test1 test2 errorp)
 	  ;; Side effect works, we exit without error; save results
-	  (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
-	    (setf (slot1 test) 2)
-	    (signal 'inhibit-rollback-test))
+	  (finishes
+	    (with-transaction (:inhibit-rollback-fn 'inhibit-rollback-p)
+	      (setf (slot1 test) 2)
+	      (signal 'inhibit-rollback-test)))
 	  (setf test1 (slot1 test))
 	  (setf (slot1 test) 2)
 	  ;; Side effect fails (stays 2) and error is signaled
