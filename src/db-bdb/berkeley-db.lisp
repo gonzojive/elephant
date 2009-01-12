@@ -71,7 +71,7 @@
 ;; EXTERNAL LIBRARY DEPENDENCIES - LOAD DURING LOAD/COMPILATION
 ;;
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :load-toplevel)
 
   (def-function ("db_strerr" %db-strerror)
       ((error :int))
