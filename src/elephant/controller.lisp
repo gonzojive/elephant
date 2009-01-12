@@ -339,10 +339,14 @@
   "Called by the deserializer to return an instance"
   (handler-case 
       (progn 
+	;; Quick test since only the GC deletes object references
 	(awhen (get-cached-instance sc oid)
 	  (return-from controller-recreate-instance it))
-	(multiple-value-bind (class schema) (get-instance-class sc oid classname)
-	  (recreate-instance-using-class class :from-oid oid :sc sc :schema schema)))
+	;; Update cache unless someone has before us!
+	(ele-with-lock ((controller-instance-cache-lock sc))
+	  (aif (get-cached-instance sc oid) it
+	       (multiple-value-bind (class schema) (get-instance-class sc oid classname)
+		 (recreate-instance-using-class class :from-oid oid :sc sc :schema schema)))))
     (missing-persistent-instance (e)
       (unless *return-null-on-missing-instance*
 	(signal e)))))

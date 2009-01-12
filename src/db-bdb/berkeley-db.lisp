@@ -385,13 +385,14 @@
 	    :flags (force)
 	    :documentation "Make a checkpoint.")
 
-;;(def-function ("db_set_error_file" %db-set-error-file)
-;;    ((db :pointer-void)
-;;     (file :cstring)))
+(def-function ("db_env_set_errfile" %db-env-set-error-file)
+    ((db :pointer-void)
+     (file :cstring))
+  :returning :int)
 
-;;(defun db-set-error-file (db filename)
-;;  (with-cstrings ((fname filename))
-;;    (%db-set-error-file db fname)))
+(wrap-errno db-env-set-error-file (db file) 
+	    :cstrings (file)
+	    :documentation "Set the error log for printing error data")
 
 ;; Database
 

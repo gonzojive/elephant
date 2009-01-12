@@ -114,14 +114,10 @@
   pset)
 
 (defmethod pset-list ((pset default-pset))
-  (let ((list nil))
-    (flet ((collect (item)
-	     (push item list)))
-      (map-btree (lambda (item dc)
-		   (declare (ignore dc))
-		   (push item list))
-		 (pset-btree pset)))
-    list))
+  (map-btree #'(lambda (k v) 
+		 (declare (ignore v))
+		 k) 
+	     (pset-btree pset) :collect t))
 
 (defmethod drop-instance ((pset pset))
   (drop-pset pset)

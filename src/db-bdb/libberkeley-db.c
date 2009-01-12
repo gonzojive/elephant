@@ -182,6 +182,10 @@ int db_env_txn_checkpoint(DB_ENV *dbenv, u_int32_t kbyte, u_int32_t min,
   return dbenv->txn_checkpoint(dbenv, kbyte, min, flags);
 }
 
+void db_env_set_errfile(DB *dbenv, char *filename) {
+  /*  FILE *errfile = fopen(filename, "w+"); */
+  return dbenv->set_errfile(dbenv, stderr);
+}
 
 /* Database */
 
@@ -231,10 +235,6 @@ int db_set_pagesize(DB *db, u_int32_t pagesize) {
 
 int db_get_pagesize(DB *db, u_int32_t *pagesizep) {
   return db->get_pagesize(db, pagesizep);
-}
-
-void db_set_error_file(DB *db, char *filename) {
-  return db->set_errfile(db, fopen(filename, "w+"));
 }
 
 /* Accessors */

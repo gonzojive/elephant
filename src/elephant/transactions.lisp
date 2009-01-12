@@ -120,14 +120,16 @@
    aborted.  If the body deadlocks, the body is re-executed in
    a new transaction, retrying a fixed number of iterations.
    If nested, the backend must support nested transactions."
-  (let ((sc (gensym)))
-    `(let ((,sc ,store-controller))
+  (let ((sc (gensym))
+	(txn-fn (gensym)))
+    `(let ((,sc ,store-controller)
+	   (,txn-fn (lambda () ,@body)))
        (funcall #'execute-transaction ,sc
-		(lambda () ,@body)
+		,txn-fn
 		:parent (awhen (prior-owned-txn ,sc ,parent)
 			  (transaction-object it))
 		:retries ,retries
-		,@(remove-keywords '(:store-controller :parent :retries)
+		,@(remove-keywords '(:store-controller :parent :transaction :retries)
 				   keyargs)))))
 
 (defmacro ensure-transaction ((&rest keyargs &key
