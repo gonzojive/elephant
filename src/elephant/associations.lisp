@@ -77,7 +77,7 @@
     (flet ((map-obj (value oid)
 	     (declare (ignore value))
 	     (controller-recreate-instance sc oid)))
-      (declare (dynamic-extent map-obj))
+      (declare (dynamic-extent (function map-obj)))
       (map-btree #'map-obj index :value (oid instance) :collect t))))
 
 
