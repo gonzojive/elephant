@@ -121,11 +121,12 @@ et cetera."))
     (db-env-set-max-objects env max-objects)
     (db-env-set-timeout env 100000 :set-transaction-timeout t)
     (db-env-set-timeout env 100000 :set-lock-timeout t)
-;;    (db-env-set-error-file env error-log)
     (db-env-open env (namestring (second (controller-spec sc)))
 		 :create t :init-rep nil :init-mpool t :thread thread
 		 :init-lock t :init-log t :init-txn t :register register
 		 :recover recover :recover-fatal recover-fatal)
+    (when error-log
+      (db-env-set-error-file env error-log))
     (let ((metadata (db-create env))
 	  (db (db-create env))
 	  (btrees (db-create env))

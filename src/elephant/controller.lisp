@@ -359,8 +359,7 @@
 (defmethod cache-instance ((sc store-controller) obj)
   "Cache a persistent object with the controller."
   (declare (type store-controller sc))
-  (ele-with-lock ((controller-instance-cache-lock sc))
-    (setf (get-cache (oid obj) (controller-instance-cache sc)) obj)))
+  (setf (get-cache (oid obj) (controller-instance-cache sc)) obj))
 
 (defmethod get-cached-instance ((sc store-controller) oid)
   "Get a cached instance, or instantiate!"

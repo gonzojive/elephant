@@ -24,6 +24,7 @@
 
 (declaim 
  #-elephant-without-optimize (optimize (speed 3) (safety 1) (debug 1) (space 1))
+ #+elephant-without-optimize (optimize (speed 1) (safety 3) (debug 3) (space 1))
  #-(or lispworks ccl)
  (inline %db-get-key-buffered db-get-key-buffered 
 		 %db-get-buffered db-get-buffered db-get 
@@ -71,7 +72,7 @@
 ;; EXTERNAL LIBRARY DEPENDENCIES - LOAD DURING LOAD/COMPILATION
 ;;
 
-(eval-when (:compile-toplevel :load-toplevel)
+(eval-when (:compile-toplevel :load-toplevel :execute)
 
   (def-function ("db_strerr" %db-strerror)
       ((error :int))
@@ -390,7 +391,7 @@
      (file :cstring))
   :returning :int)
 
-(wrap-errno db-env-set-error-file (db file) 
+(wrap-errno db-env-set-error-file (db file)
 	    :cstrings (file)
 	    :documentation "Set the error log for printing error data")
 

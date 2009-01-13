@@ -71,7 +71,7 @@
 
 (defmethod build-pset ((sc store-controller))
   "Default pset method; override if backend has better policy"
-  (let ((btree (make-btree sc)))
+  (let ((btree (make-dup-btree sc)))
     (make-instance 'default-pset :btree btree :sc sc)))
 
 (defun make-pset (&key items pset (sc *store-controller*))

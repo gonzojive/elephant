@@ -183,8 +183,8 @@ int db_env_txn_checkpoint(DB_ENV *dbenv, u_int32_t kbyte, u_int32_t min,
 }
 
 void db_env_set_errfile(DB *dbenv, char *filename) {
-  /*  FILE *errfile = fopen(filename, "w+"); */
-  return dbenv->set_errfile(dbenv, stderr);
+  FILE *errfile = fopen(filename, "w+"); 
+  return dbenv->set_errfile(dbenv, errfile);
 }
 
 /* Database */
