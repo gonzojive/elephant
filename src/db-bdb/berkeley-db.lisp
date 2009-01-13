@@ -86,7 +86,7 @@
     ((errno :type fixnum :initarg :errno :reader db-error-errno))
     (:report
      (lambda (condition stream)
-       (declare (type bdb-db-error condition) (type stream stream))
+;;       (declare (type bdb-db-error condition) (type stream stream))
        (format stream "Berkeley DB error #~A: ~A"
 	       (db-error-errno condition)
 	       (db-strerror (db-error-errno condition)))))

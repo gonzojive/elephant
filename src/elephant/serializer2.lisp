@@ -191,16 +191,16 @@
 	      (if (< #.most-positive-fixnum +2^31+) ;; should be compiled away
 		  (progn
 		    (buffer-write-byte +fixnum32+ bs)
-		    (buffer-write-int32 frob bs))
+		    (buffer-write-fixnum32 frob bs))
 		  (progn
 		    (assert (eq (< #.most-positive-fixnum +2^63+) t))
 		    (if (< (abs frob) +2^31+)
 			(progn
 			  (buffer-write-byte +fixnum32+ bs)
-			  (buffer-write-int32 frob bs))
+			  (buffer-write-fixnum32 frob bs))
 			(progn
 			  (buffer-write-byte +fixnum64+ bs)
-			  (buffer-write-int64 frob bs))))))
+			  (buffer-write-fixnum64 frob bs))))))
 	     (null
 	      (buffer-write-byte +nil+ bs))
 	     (symbol
@@ -231,7 +231,7 @@
 	      (when (controller-marking-p sc)
 		(gc-mark-new-write frob))
 	      (buffer-write-byte +persistent-ref+ bs)
-	      (buffer-write-int32 (oid frob) bs))
+	      (buffer-write-oid (oid frob) bs))
 	     #+lispworks
 	     (short-float
 	      (buffer-write-byte +short-float+ bs)
@@ -469,12 +469,12 @@
 		    (package (%deserialize bs)))
 		(translate-and-intern-symbol sc name package)))
 	     ((= tag +persistent+)
-	      (let ((oid (buffer-read-fixnum32 bs))
+	      (let ((oid (buffer-read-oid bs))
 		    (cname (%deserialize bs)))
 		(if oid-only oid
 		    (controller-recreate-instance sc oid cname))))
 	     ((= tag +persistent-ref+)
-	      (let ((oid (buffer-read-fixnum32 bs)))
+	      (let ((oid (buffer-read-oid bs)))
 		(if oid-only oid
 		    (controller-recreate-instance sc oid))))
 	     #+lispworks
@@ -489,9 +489,9 @@
 	     ((= tag +pathname+)
 	      (parse-namestring (or (%deserialize bs) "")))
 	     ((= tag +positive-bignum+) 
-	      (deserialize-bignum bs (buffer-read-fixnum32 bs) t))
+	      (deserialize-bignum bs (buffer-read-uint32 bs) t))
 	     ((= tag +negative-bignum+) 
-	      (deserialize-bignum bs (buffer-read-fixnum32 bs) nil))
+	      (deserialize-bignum bs (buffer-read-uint32 bs) nil))
 	     ((= tag +rational+) 
 	      (/ (the integer (%deserialize bs)) 
 		 (the integer (%deserialize bs))))
@@ -500,7 +500,7 @@
 ;;		(setf (oid-pair-left pair) (buffer-read-fixnum32 bs))
 ;;		(setf (oid-pair-right pair) (buffer-read-fixnum32 bs))))
 	     ((= tag +cons+)
-	      (let* ((id (buffer-read-fixnum bs))
+	      (let* ((id (buffer-read-int32 bs))
 		     (maybe-cons (lookup-id id)))
 		(declare (type fixnum id))
 		(if maybe-cons maybe-cons
@@ -514,7 +514,7 @@
 		    (ipart (%deserialize bs)))
 		(complex rpart ipart)))
 	     ((= tag +hash-table+)
-	      (let* ((id (buffer-read-fixnum bs))
+	      (let* ((id (buffer-read-int32 bs))
 		     (maybe-hash (lookup-id id)))
 		(declare (type fixnum id))
 ;;		(format t "~A ~A~%" maybe-hash id)
@@ -534,7 +534,7 @@
 				  (%deserialize bs)))
 		      h))))
 	     ((= tag +object+)
-	      (let* ((id (buffer-read-fixnum bs))
+	      (let* ((id (buffer-read-int32 bs))
 		     (maybe-o (lookup-id id)))
 		(if maybe-o maybe-o
 		    (let ((typedesig (%deserialize bs)))
@@ -563,7 +563,7 @@
 					  (%deserialize bs)))
 			      o)))))))
 	     ((= tag +array+)
-	      (let* ((id (buffer-read-fixnum32 bs))
+	      (let* ((id (buffer-read-int32 bs))
 		     (maybe-array (lookup-id id)))
 		(if maybe-array maybe-array
 		    (let* ((flags (buffer-read-byte bs))
@@ -585,7 +585,7 @@
 			    (setf (row-major-aref a i) (%deserialize bs)))
 		      a))))
 	     ((= tag +struct+)
-	      (let* ((id (buffer-read-fixnum bs))
+	      (let* ((id (buffer-read-int32 bs))
 		     (maybe-o (lookup-id id)))
 		(if maybe-o maybe-o
 		    (let ((typedesig (%deserialize bs)))
@@ -625,6 +625,6 @@
 	 #+(or allegro sbcl cmu lispworks openmcl) (byte 32 (* 32 i))
        with num of-type integer = 0 
        do
-	 (setq num (dpb (buffer-read-uint bs) byte-spec num))
+	 (setq num (dpb (buffer-read-uint32 bs) byte-spec num))
        finally 
 	 (return (if positive num (- num))))))
