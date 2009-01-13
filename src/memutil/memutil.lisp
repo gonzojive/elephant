@@ -46,7 +46,7 @@
 	   #:buffer-write-byte #:buffer-write-float 
 	   #:buffer-write-double #:buffer-write-string 
            #:buffer-write-int32 #:buffer-write-uint32
-           #:buffer-write-fixnum32 
+           #:buffer-write-fixnum32 #:buffer-write-fixnum64
            #:buffer-write-int64 #:buffer-write-uint64
            #:buffer-write-int #:buffer-write-uint
 
@@ -273,6 +273,15 @@ stream to the pool on exit."
 		     (* (signed 32)))) num))
 
 #+(or cmu sbcl)
+(defun write-uint32 (buf num offset)
+  "Write a 32-bit unsigned integer to a foreign char buffer."
+  (declare (type (alien (* unsigned-char)) buf)
+	   (type (unsigned-byte 32) num)
+	   (type fixnum offset))
+  (setf (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
+		     (* (unsigned 32)))) num))
+
+#+(or cmu sbcl)
 (defun write-int64 (buf num offset)
   "Write a 64-bit signed integer to a foreign char buffer."
   (declare (type (alien (* unsigned-char)) buf)
@@ -282,13 +291,13 @@ stream to the pool on exit."
 		     (* (signed 64)))) num))
 
 #+(or cmu sbcl)
-(defun write-uint32 (buf num offset)
-  "Write a 32-bit unsigned integer to a foreign char buffer."
+(defun write-fixnum64 (buf num offset)
+  "Write a 32-bit signed integer to a foreign char buffer."
   (declare (type (alien (* unsigned-char)) buf)
-	   (type (unsigned-byte 32) num)
+	   (type fixnum num)
 	   (type fixnum offset))
   (setf (deref (cast (sap-alien (sap+ (alien-sap buf) offset) (* unsigned-char))
-		     (* (unsigned 32)))) num))
+		     (* (signed 64)))) num))
 
 #+(or cmu sbcl)
 (defun write-uint64 (buf num offset)
@@ -388,6 +397,13 @@ stream to the pool on exit."
 
 #-(or cmu sbcl)
 (def-function ("write_int64" write-int64)
+    ((buf array-or-pointer-char)
+     (num :long)
+     (offset :int))
+  :returning :void)
+
+#-(or cmu sbcl)
+(def-function ("write_int64" write-fixnum64)
     ((buf array-or-pointer-char)
      (num :long)
      (offset :int))
@@ -666,6 +682,24 @@ of a string."
       (when (> needed len)
 	(resize-buffer-stream bs needed))
       (write-int64 buf i size)
+      (setf size needed)
+      nil)))
+
+(defun buffer-write-fixnum64 (i bs)
+  "Write a 64-bit signed integer."
+  (declare #-ccl (type buffer-stream bs)
+	   (type (signed-byte 32) i))
+  (with-struct-slots ((buf buffer-stream-buffer)
+		      (size buffer-stream-size)
+		      (len buffer-stream-length))
+    bs		      
+    (declare (type fixnum size len)
+	     #-ccl (type (alien (* unsigned-char)) buf))
+    (let ((needed (the fixnum (+ size 8))))
+      (declare (type fixnum needed))
+      (when (> needed len)
+	(resize-buffer-stream bs needed))
+      (write-fixnum64 buf i size)
       (setf size needed)
       nil)))
 
