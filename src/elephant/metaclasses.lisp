@@ -417,6 +417,7 @@
 ;; Slot MOP support: compute slot definition types
 ;;
 
+#-ccl
 (defmethod slot-definition-allocation ((slot-definition persistent-slot-definition))
   :database)
 
@@ -496,7 +497,7 @@ definition class depending on the keyword."
     (cond ((ensure-transient-chain slot-definitions initargs)
 	   (setf initargs (append initargs '(:transient t))))
 	  ((not (eq (type-of parent-direct-slot) 'cached-direct-slot-definition))
-	   (setf (getf initargs :allocation) :database)))
+	   #-ccl (setf (getf initargs :allocation) :database)))
     (when (eq (type-of parent-direct-slot) 'set-valued-direct-slot-definition)
       (setf (getf initargs :set-valued) t))
     (when (eq (type-of parent-direct-slot) 'cached-direct-slot-definition)

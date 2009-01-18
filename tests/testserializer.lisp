@@ -206,7 +206,7 @@
     (are-not-null
      (in-out-equal (make-string 0 :element-type 'base-char))
      (in-out-equal (coerce "this is a test" 'base-string))
-     (in-out-equal (make-array 3 :initial-element #\’ :fill-pointer 2
+     (in-out-equal (make-array 3 :initial-element #\a :fill-pointer 2
                                :element-type 'character)) ; test non-simple Unicode string, where supported
      (in-out-equal (make-string 400 :initial-element (code-char 127)
 				:element-type 'base-char)))

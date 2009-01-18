@@ -472,6 +472,15 @@ slots."
 ;; =========================================================
 
 ;;
+;; CLOZURE CL
+;;
+
+#+ccl
+(defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
+  (declare (ignore initargs))
+  (finalize-inheritance class))
+
+;;
 ;; ALLEGRO 
 ;;
 

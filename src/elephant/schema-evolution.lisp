@@ -63,17 +63,18 @@
     (loop for (spec . db-schema) in (get-store-schemas class) do
 	 (unless (match-schemas class-schema db-schema)
 	   (let ((store (lookup-con-spec spec)))
-	     (synchronize-store-class store class-schema db-schema)
+	     (synchronize-store-class store class-schema db-schema class)
 	     (unless *lazy-memory-instance-upgrading*
 	       (upgrade-all-memory-instances store))
 	     (unless *lazy-db-instance-upgrading*
 	       (upgrade-all-db-instances store class-schema)))))))
 
-(defmethod synchronize-store-class ((sc store-controller) class-schema old-schema)
+(defmethod synchronize-store-class ((sc store-controller) class-schema old-schema 
+				    &optional class)
   "Synchronizing a store means adding/removing indices, upgrading
    the default schema if necessary, etc."
   (format t "Synchronizing ~A in ~A~%" (schema-classname class-schema) (controller-spec sc))
-  (let* ((class (find-class (schema-classname class-schema)))
+  (let* ((class (or class (find-class (schema-classname class-schema))))
 	 (new-schema (create-controller-schema sc class))
 	 (diff (schema-diff new-schema old-schema)))
     ;; Chain schemas
@@ -120,8 +121,8 @@
    upgrade-instance.  This should be called after a redefinition."
   (loop for inst being the hash-value of (controller-instance-cache sc) do
        #+(or cmu sbcl)(oid (weak-pointer-value inst))
-       #-(or cmu sbcl)(oid inst)
-       #+openmcl (value value)))
+       #+openmcl (oid (value inst))
+       #-(or cmu sbcl openmcl) (oid inst)))
 
 (defmethod upgrade-all-db-instances ((sc store-controller) class-schema)
   "This does a scan and upgrades each instance of the class referred to

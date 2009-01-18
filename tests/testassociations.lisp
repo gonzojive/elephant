@@ -65,6 +65,8 @@
 (test (simple-explicit-assoc :depends-on simple-explicit-assoc-setup)
       (is (= (count-explicit-persons) (* NUM_JOBS PERSONS_PER_JOB))))
 
+(defpclass person ()())
+(defpclass job ()())
 
 (defgeneric holders (instance))
 

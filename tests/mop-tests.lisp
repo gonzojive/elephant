@@ -13,6 +13,24 @@
 
 (in-package :ele-tests)
 
+;; For ccl; ensure the class is in the appropriate place
+(defpclass pineapple ()())
+(defpclass p-initform-test ()())
+(defpclass p-initform-test-2 ()())
+(defpclass no-eval-initform ()())
+(defpclass class-one ()())
+(defpclass p-class ()())
+(defpclass make-persistent2 ()())
+(defpclass mix-1 ()())
+(defpclass mix-2 ()())
+(defpclass mix-3 ()())
+(defpclass mix-4 ()())
+(defpclass mix-5 ()())
+(defpclass mix-6 ()())
+(defpclass update-class ()())
+(defpclass class-two ()())
+(defpclass redef ()())
+
 (deftest non-transient-class-slot-1
     (signals-condition
       ;; This should fail (principle of least surprise)
@@ -188,6 +206,7 @@
 (deftest redefclass
     (progn
       (defclass redef () () (:metaclass persistent-metaclass))
+      (finalize-inheritance (find-class 'redef))
       (defclass redef () () (:metaclass persistent-metaclass))
       (is-not-null (subtypep 'redef 'persistent-object)))
   t)

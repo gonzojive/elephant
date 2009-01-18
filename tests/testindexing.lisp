@@ -30,6 +30,10 @@
 (defvar inst3)
 
 (defclass idx-two () () (:metaclass persistent-metaclass))
+(defclass idx-two-base () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub1-1 () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub1 () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub2 () () (:metaclass persistent-metaclass))
 (defclass idx-three () () (:metaclass persistent-metaclass))
 (defclass idx-one-a () () (:metaclass persistent-metaclass))
 (defclass idx-one-b () () (:metaclass persistent-metaclass))
@@ -46,7 +50,6 @@
 (defclass idx-five () () (:metaclass persistent-metaclass))
 (defclass idx-six () () (:metaclass persistent-metaclass))
 (defclass idx-seven () () (:metaclass persistent-metaclass))
-(defclass idx-eight () () (:metaclass persistent-metaclass))
 
 (defun wipe-class (name)
   (handler-case 
