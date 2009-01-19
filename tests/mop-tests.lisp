@@ -30,6 +30,12 @@
 (defpclass update-class ()())
 (defpclass class-two ()())
 (defpclass redef ()())
+(defpclass p-class ()())
+(defpclass minus-p-class ()())
+(defclass nonp-class ()())
+(defpclass switch-transient ()())
+(defpclass make-persistent ()())
+
 
 (deftest non-transient-class-slot-1
     (signals-condition

@@ -472,10 +472,10 @@ slots."
 ;; =========================================================
 
 ;;
-;; CLOZURE CL
+;; CLOZURE CL / OpenMCL
 ;;
 
-#+ccl
+#+openmcl
 (defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
   (declare (ignore initargs))
   (finalize-inheritance class))
