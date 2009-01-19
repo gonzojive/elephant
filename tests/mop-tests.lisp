@@ -178,7 +178,7 @@
 	(:metaclass persistent-metaclass))
       )
   t)
-      
+
 (deftest redefinition-initform
     (progn
       (defclass pineapple () ()

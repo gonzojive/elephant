@@ -475,7 +475,7 @@ slots."
 ;; CLOZURE CL / OpenMCL
 ;;
 
-#+openmcl
+#+(or openmcl allegro)
 (defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
   (declare (ignore initargs))
   (finalize-inheritance class))
@@ -500,7 +500,8 @@ slots."
   (ensure-finalized class)
   (loop with persistent-slots = (union (persistent-slot-names class)
 				       (union (cached-slot-names class)
-					      (indexed-slot-names class)))
+					      (union (indexed-slot-names class)
+						     (association-end-slot-names class))))
      for slot-def in (class-direct-slots class)
      when (member (slot-definition-name slot-def) persistent-slots)
      do (initialize-accessors slot-def class))

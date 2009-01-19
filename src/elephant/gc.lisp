@@ -175,8 +175,7 @@
      aggregate objects to leaf elements (persistent objects and scalara values)")
   (:method ((obj t)) obj)
   (:method ((obj symbol)) obj)
-  (:method ((obj string)) obj)
-  (:method ((obj base-string)) obj))
+  (:method ((obj string)) obj))
 
 (defmethod walk-heap ((obj persistent-object))
   (mark-object obj))
