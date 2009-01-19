@@ -9,6 +9,32 @@
   (do-symbols (sym srcpkg)
     (shadowing-import (list sym) dstpkg)))
 
+(def-enum DB-LOCKOP ((:DUMP 0) :GET :GET-TIMEOUT :INHERIT 
+		     :PUT :PUT-ALL :PUT-OBJ :PUT-READ
+		     :TIMEOUT :TRADE :UPGRADE-WRITE))
+
+(def-enum DB-LOCKMODE ((:NG 0) :READ :WRITE :WAIT 
+		       :IWRITE :IREAD :IWR :DIRTY :WWRITE))
+
+(def-struct DB-LOCK
+    (off :unsigned-int)
+  (ndx :unsigned-int)
+  (gen :unsigned-int)
+  (mode DB-LOCKMODE))
+
+#+openmcl
+(ccl:def-foreign-type DB-LOCK (:struct DB-LOCK))
+
+(def-struct DB-LOCKREQ
+    (op DB-LOCKOP)
+  (mode DB-LOCKMODE)
+  (timeout :unsigned-int)
+  (obj (:array :char))
+  (lock (* DB-LOCK)))
+
+#+openmcl
+(ccl:def-foreign-type DB-LOCKREQ (:struct DB-LOCKREQ))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; BDB 4.5
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -121,36 +147,11 @@
 (defconstant DB_LOCK_YOUNGEST        9)
 
 
-(def-enum DB-LOCKOP ((:DUMP 0) :GET :GET-TIMEOUT :INHERIT 
-		     :PUT :PUT-ALL :PUT-OBJ :PUT-READ
-		     :TIMEOUT :TRADE :UPGRADE-WRITE))
-
-(def-enum DB-LOCKMODE ((:NG 0) :READ :WRITE :WAIT 
-		       :IWRITE :IREAD :IWR :DIRTY :WWRITE))
-
-(def-struct DB-LOCK
-    (off :unsigned-int)
-  (ndx :unsigned-int)
-  (gen :unsigned-int)
-  (mode DB-LOCKMODE))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCK (:struct DB-LOCK))
-
-(def-struct DB-LOCKREQ
-    (op DB-LOCKOP)
-  (mode DB-LOCKMODE)
-  (timeout :unsigned-int)
-  (obj (:array :char))
-  (lock (* DB-LOCK)))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCKREQ (:struct DB-LOCKREQ))
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; BDB 4.6
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(in-package :db-bdb)
 
 (defpackage :db-bdb-c46
   (:use :cl :uffi))
@@ -616,37 +617,11 @@
 (defconstant	DB_SEQ_WRAP		#x00000008)
 (defconstant	DB_SEQ_WRAPPED		#x00000010)
 
-(def-enum DB-LOCKOP ((:DUMP 0) :GET :GET-TIMEOUT :INHERIT 
-		     :PUT :PUT-ALL :PUT-OBJ :PUT-READ
-		     :TIMEOUT :TRADE :UPGRADE-WRITE))
-
-(def-enum DB-LOCKMODE ((:NG 0) :READ :WRITE :WAIT 
-		       :IWRITE :IREAD :IWR :DIRTY :WWRITE))
-
-(def-struct DB-LOCK
-    (off :unsigned-int)
-  (ndx :unsigned-int)
-  (gen :unsigned-int)
-  (mode DB-LOCKMODE))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCK (:struct DB-LOCK))
-
-(def-struct DB-LOCKREQ
-    (op DB-LOCKOP)
-  (mode DB-LOCKMODE)
-  (timeout :unsigned-int)
-  (obj (:array :char))
-  (lock (* DB-LOCK)))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCKREQ (:struct DB-LOCKREQ))
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; BDB 4.7
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(in-package :db-bdb)
 
 (defpackage :db-bdb-c47
   (:use :cl :uffi))
@@ -1238,28 +1213,3 @@
 (defconstant DB_DIRTY_READ DB_READ_UNCOMMITTED)
 (defconstant DB_JOINENV #x0)
 
-(def-enum DB-LOCKOP ((:DUMP 0) :GET :GET-TIMEOUT :INHERIT 
-		     :PUT :PUT-ALL :PUT-OBJ :PUT-READ
-		     :TIMEOUT :TRADE :UPGRADE-WRITE))
-
-(def-enum DB-LOCKMODE ((:NG 0) :READ :WRITE :WAIT 
-		       :IWRITE :IREAD :IWR :DIRTY :WWRITE))
-
-(def-struct DB-LOCK
-    (off :unsigned-int)
-  (ndx :unsigned-int)
-  (gen :unsigned-int)
-  (mode DB-LOCKMODE))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCK (:struct DB-LOCK))
-
-(def-struct DB-LOCKREQ
-    (op DB-LOCKOP)
-  (mode DB-LOCKMODE)
-  (timeout :unsigned-int)
-  (obj (:array :char))
-  (lock (* DB-LOCK)))
-
-#+openmcl
-(ccl:def-foreign-type DB-LOCKREQ (:struct DB-LOCKREQ))
