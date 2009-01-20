@@ -14,27 +14,26 @@
 (in-package :ele-tests)
 
 ;; For ccl; ensure the class is in the appropriate place
-(defpclass pineapple ()())
-(defpclass p-initform-test ()())
-(defpclass p-initform-test-2 ()())
-(defpclass no-eval-initform ()())
-(defpclass class-one ()())
-(defpclass p-class ()())
-(defpclass make-persistent2 ()())
-(defpclass mix-1 ()())
-(defpclass mix-2 ()())
-(defpclass mix-3 ()())
-(defpclass mix-4 ()())
-(defpclass mix-5 ()())
-(defpclass mix-6 ()())
-(defpclass update-class ()())
-(defpclass class-two ()())
-(defpclass redef ()())
-(defpclass p-class ()())
-(defpclass minus-p-class ()())
+(defclass pineapple ()() (:metaclass persistent-metaclass))
+(defclass p-initform-test ()() (:metaclass persistent-metaclass))
+(defclass p-initform-test-2 ()() (:metaclass persistent-metaclass))
+(defclass no-eval-initform ()() (:metaclass persistent-metaclass))
+(defclass class-one ()() (:metaclass persistent-metaclass))
+(defclass p-class ()() (:metaclass persistent-metaclass))
+(defclass make-persistent2 ()() (:metaclass persistent-metaclass))
+(defclass mix-1 ()() (:metaclass persistent-metaclass))
+(defclass mix-2 ()() (:metaclass persistent-metaclass))
+(defclass mix-3 ()() (:metaclass persistent-metaclass))
+(defclass mix-4 ()() (:metaclass persistent-metaclass))
+(defclass mix-5 ()() (:metaclass persistent-metaclass))
+(defclass mix-6 ()() (:metaclass persistent-metaclass))
+(defclass update-class ()() (:metaclass persistent-metaclass))
+(defclass class-two ()() (:metaclass persistent-metaclass))
+(defclass redef ()() (:metaclass persistent-metaclass))
+(defclass minus-p-class ()() (:metaclass persistent-metaclass))
 (defclass nonp-class ()())
-(defpclass switch-transient ()())
-(defpclass make-persistent ()())
+(defclass switch-transient ()() (:metaclass persistent-metaclass))
+(defclass make-persistent ()() (:metaclass persistent-metaclass))
 
 
 (deftest non-transient-class-slot-1
@@ -62,7 +61,8 @@
   t)
 
 (deftest class-definers
-    (finishes
+    (progn
+;;    (finishes
      (defclass p-class ()
        ((slot1 :accessor slot1)
 	(slot2 :accessor slot2 :transient t)
@@ -88,7 +88,8 @@
      (defclass make-persistent ()
        ((slot2 :accessor slot2))
        (:metaclass persistent-metaclass))
-     (finalize-inheritance (find-class 'make-persistent)))
+     (finalize-inheritance (find-class 'make-persistent))
+     t)
   t)
 
 (deftest (bad-inheritence :depends-on class-definers)
@@ -98,7 +99,8 @@
   t)
 
 (deftest (mixes :depends-on class-definers)
-    (finishes
+    (progn
+;;    (finishes
      ;; but this should be fine
      (defclass mix-1 (p-class nonp-class) ()
        (:metaclass persistent-metaclass))
@@ -122,7 +124,8 @@
      ;; should work
      (defclass mix-6 (make-persistent p-class) ()
        (:metaclass persistent-metaclass))
-     (finalize-inheritance (find-class 'mix-6)))
+     (finalize-inheritance (find-class 'mix-6))
+     t)
   t)
 
 (deftest (mixes-right-slots :depends-on mixes)
@@ -148,12 +151,14 @@
   t t t t t t t t t t t t t t t t t t)
 
 (deftest (inherit :depends-on class-definers)
-    (finishes
+;;    (finishes
+    (progn
      (defclass make-persistent2 (p-class)
        ((slot2 :accessor slot2)
 	(slot4 :accessor slot4 :transient t))
        (:metaclass persistent-metaclass))
-     (finalize-inheritance (find-class 'make-persistent2)))
+     (finalize-inheritance (find-class 'make-persistent2))
+     t)
   t)
 
 (deftest (inherit-right-slots :depends-on inherit)
@@ -169,14 +174,17 @@
   t t t t)
 
 (deftest initform-classes
-    (finishes
+    (progn
+;;    (finishes
       (defclass p-initform-test () 
 	((slot1 :initform 10)) 
 	(:metaclass persistent-metaclass))
+      (finalize-inheritance (find-class 'p-initform-test))
       (defclass p-initform-test-2 () 
 	((slot1 :initarg :slot1 :initform 10)) 
 	(:metaclass persistent-metaclass))
-      )
+      (finalize-inheritance (find-class 'p-initform-test-2))
+      t)
   t)
 
 (deftest redefinition-initform
@@ -194,14 +202,15 @@
     (slot-value (make-instance 'p-initform-test :sc *store-controller*) 'slot1)
   10)
 
-(deftest (initarg-test :depends-on initform-classes)
+(deftest (initarg-test :depends-on initform-test)
     (values
      (slot-value (make-instance 'p-initform-test-2 :sc *store-controller*) 'slot1)
      (slot-value (make-instance 'p-initform-test-2 :slot1 20 :sc *store-controller*) 'slot1))
   10 20)
 
 (deftest no-eval-initform
-    (finishes
+;;    (finishes
+    (progn
       (defclass no-eval-initform ()
 	((slot1 :initarg :slot1 :initform (error "Shouldn't be called")))
 	(:metaclass persistent-metaclass))

@@ -494,7 +494,8 @@ slots."
 			 (slot-makunbound-using-class class instance slot)
 			 (call-next-method)))))
 
-#+nil
+
+#+nil 
 (defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
   (declare (ignore initargs))
   (ensure-finalized class)
