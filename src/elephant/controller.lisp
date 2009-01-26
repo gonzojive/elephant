@@ -31,6 +31,7 @@
 
 (defparameter *elephant-data-stores*
   '((:bdb (:ele-bdb))
+    (:clp (:ele-clp))
     (:clsql (:ele-clsql))
     (:prevalence ())
     (:postmodern (:ele-postmodern))

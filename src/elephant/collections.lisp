@@ -492,7 +492,12 @@ not), evaluates the forms, then closes the cursor."
 
 (defun lisp-compare-equal (a b)
   "A lisp compare equal in same spirit as lisp-compare<.  Case insensitive for strings."
-  (equalp a b))
+  (handler-case
+      (typecase a
+	(persistent (eq (oid a) (oid b)))
+	(t (equalp a b)))
+    (error ()
+      (equalp a b))))
 
 (defun lisp-compare>= (a b)
   (not (lisp-compare< a b)))
