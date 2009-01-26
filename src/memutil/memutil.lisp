@@ -634,7 +634,7 @@ of a string."
 (defun buffer-write-fixnum32 (i bs)
   "Write a 32-bit signed integer."
   (declare #-ccl (type buffer-stream bs)
-	   (type (signed-byte 32) i))
+	   (type fixnum i))
   (with-struct-slots ((buf buffer-stream-buffer)
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
@@ -688,7 +688,7 @@ of a string."
 (defun buffer-write-fixnum64 (i bs)
   "Write a 64-bit signed integer."
   (declare #-ccl (type buffer-stream bs)
-	   (type (signed-byte 32) i))
+	   (type fixnum i))
   (with-struct-slots ((buf buffer-stream-buffer)
 		      (size buffer-stream-size)
 		      (len buffer-stream-length))
