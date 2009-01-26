@@ -41,7 +41,10 @@
 (defclass idx-one-d () () (:metaclass persistent-metaclass))
 (defclass idx-one-e () () (:metaclass persistent-metaclass))
 (defclass idx-one-f () () (:metaclass persistent-metaclass))
-(defclass idx-two () () (:metaclass persistent-metaclass))
+(defclass idx-two-base () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub1 () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub1-1 () () (:metaclass persistent-metaclass))
+(defclass idx-two-sub2 () () (:metaclass persistent-metaclass))
 (defclass idx-cslot () () (:metaclass persistent-metaclass))
 (defclass idx-three () () (:metaclass persistent-metaclass))
 (defclass idx-four () () (:metaclass persistent-metaclass))
@@ -50,6 +53,8 @@
 (defclass idx-five () () (:metaclass persistent-metaclass))
 (defclass idx-six () () (:metaclass persistent-metaclass))
 (defclass idx-seven () () (:metaclass persistent-metaclass))
+(defclass idx-eight () () (:metaclass persistent-metaclass))
+(defclass idx-nine () () (:metaclass persistent-metaclass))
 
 (defun wipe-class (name)
   (handler-case 
@@ -63,7 +68,7 @@
   (mapc #'wipe-class
 	'(idx-one-a idx-one-b idx-one-c idx-one-d idx-one-e idx-one-f
 	  idx-two idx-cslot idx-three idx-four idx-unbound-del
-	  idx-five-del idx-five idx-six idx-seven idx-eight)))
+	  idx-five-del idx-five idx-six idx-seven idx-eight idx-nine)))
 
 (deftest index-reset
     (listp (wipe-all))

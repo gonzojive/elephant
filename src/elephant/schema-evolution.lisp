@@ -49,7 +49,7 @@
 		 (awhen (find-class classname)
 		   (let ((class-schema (get-class-schema it)))
 		     (unless (match-schemas class-schema db-schema)
-		       	(synchronize-store-class sc class-schema db-schema)
+		       	(synchronize-store-class sc it class-schema db-schema)
 			(unless *lazy-db-instance-upgrading*
 			  (upgrade-all-db-instances sc class-schema)))))))
 	     (controller-schema-table sc))
@@ -63,14 +63,13 @@
     (loop for (spec . db-schema) in (get-store-schemas class) do
 	 (unless (match-schemas class-schema db-schema)
 	   (let ((store (lookup-con-spec spec)))
-	     (synchronize-store-class store class-schema db-schema class)
+	     (synchronize-store-class store class class-schema db-schema)
 	     (unless *lazy-memory-instance-upgrading*
 	       (upgrade-all-memory-instances store))
 	     (unless *lazy-db-instance-upgrading*
 	       (upgrade-all-db-instances store class-schema)))))))
 
-(defmethod synchronize-store-class ((sc store-controller) class-schema old-schema 
-				    &optional class)
+(defmethod synchronize-store-class ((sc store-controller) class class-schema old-schema)
   "Synchronizing a store means adding/removing indices, upgrading
    the default schema if necessary, etc."
   (format t "Synchronizing ~A in ~A~%" (schema-classname class-schema) (controller-spec sc))
@@ -134,7 +133,7 @@
 	 (db-schema (get-current-db-schema sc classname)))
     ;; When the db-schema is not up to date, make it so
     (unless (match-schemas class-schema db-schema)
-      (synchronize-store-class sc class-schema db-schema))
+      (synchronize-store-class sc (find-class classname) class-schema db-schema))
     ;; Update the instances oldest to newest
     (loop for schema in (get-db-schemas sc classname)
 	 unless (eq (schema-id schema) (schema-id db-schema)) do
