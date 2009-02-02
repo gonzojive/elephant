@@ -1,0 +1,8 @@
+See elephant-dev email archive announcement from 2/2/09 for more details...
+
+Obvious next steps, in order of increasing difficulty:
+- Implement cursor API
+- Fix red-black or splay tree implementation in cl-containers
+- Figure out how to load from a snapshot
+- Use with-transaction to improve performance
+- Read transaction optimizations
