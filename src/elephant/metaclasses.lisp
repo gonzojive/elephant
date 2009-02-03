@@ -584,7 +584,7 @@ definition class depending on the keyword."
 (defmethod excl::valid-slot-allocation-list ((class persistent-metaclass))
   '(:instance :class :database))
 
-#+lispworks
+#+(or :lispworks3 :lispworks4 (and :lispworks5 :lispworks5.0))
 (defmethod (setf slot-definition-allocation) (allocation (slot-def persistent-slot-definition))
   (unless (eq allocation :database)
     (error "Invalid allocation type ~A for slot-definition-allocation" allocation))
