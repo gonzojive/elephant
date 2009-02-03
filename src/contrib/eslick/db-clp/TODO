@@ -6,3 +6,6 @@ Obvious next steps, in order of increasing difficulty:
 - Figure out how to load from a snapshot
 - Use with-transaction to improve performance
 - Read transaction optimizations
+- Remove controller object caching 
+  (controller instance index already caches by definition)
+

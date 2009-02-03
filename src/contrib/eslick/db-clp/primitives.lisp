@@ -94,7 +94,8 @@
 
 (defun proxy-slot-value (proxy oid slotname)
   (awhen (containers:find-item proxy (list oid slotname))
-    (cddr (containers:element it))))
+    (values (cddr (containers:element it)) t)))
+
 
 (defun proxy-set-slot-value (proxy oid slotname value)
   (let ((ref (cons oid (cons slotname value))))

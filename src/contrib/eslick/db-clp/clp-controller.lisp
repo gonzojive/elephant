@@ -194,7 +194,10 @@
   (declare (ignore oids-only))
   (with-prev-store (sc)
     (let ((proxy (get-root-object *clp* :slots)))
-      (proxy-slot-value proxy (oid instance) name))))
+      (multiple-value-bind (value found?) 
+	  (proxy-slot-value proxy (oid instance) name)
+	(if found? value
+	    (slot-unbound (class-of instance) instance name))))))
 
 (defmethod persistent-slot-writer ((sc clp-controller) new-value instance name)
   (declare (ignore oids-only))
@@ -541,7 +544,7 @@
 ;;
 
 (defmethod make-cursor ((bt clp-btree))
-  (error "Cursors not support in prevalence stores"))
+  (error "Cursors not supported in prevalence stores"))
 
 ;; NOTE: Can deprecate cursor API or reproduce as we choose
 
