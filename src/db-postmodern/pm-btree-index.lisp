@@ -5,10 +5,6 @@
   (:metaclass persistent-metaclass)
   (:documentation "Postmodern secondary index to an indexed-btree"))
 
-(defmethod create-table-from-first-values :before ((bt pm-btree-index) key value)
-  (declare (ignorable key))
-  (setf (value-type-of bt) (data-type value)))
-
 (defmethod build-btree-index ((sc postmodern-store-controller) &key primary key-form)
   (make-instance 'pm-btree-index :primary primary :key-form key-form :sc sc))
 

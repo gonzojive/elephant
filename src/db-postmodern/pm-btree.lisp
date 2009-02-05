@@ -314,6 +314,10 @@ and make the old instance refer to the new database table"
 
 (defmethod duplicates-allowed-p ((bt pm-dup-btree)) t)
 
+(defmethod create-table-from-first-values :before ((bt pm-dup-btree) key value)
+  (declare (ignorable key))
+  (setf (value-type-of bt) (data-type value)))
+
 (defmethod prepare-local-queries :after ((bt pm-dup-btree))
   (register-query bt 'delete-both (format nil "delete from ~a where qi=$1 and value=$2" (table-of bt))))
 
