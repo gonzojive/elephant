@@ -97,6 +97,17 @@
       (and (= (slot1 obj) i)
            (= (slot2 obj) (* i 100))))))
 
+;; test btree with both integer and string keys.
+;; postmodern needs type upgrade in this case.
+(test (btree-mixed) 
+  (let ((btr (make-btree)))
+    (setf (get-value 1 btr) 1)
+    (setf (get-value "a" btr) "a")
+    (flush-instance-cache *store-controller*)
+    (is (equal (get-value 1 btr) 1))
+    (is (equal (get-value "a" btr) "a"))))
+
+
 (defvar first-key (first keys))
 
 

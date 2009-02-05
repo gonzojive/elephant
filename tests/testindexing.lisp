@@ -123,6 +123,30 @@
       (is (equal (first (get-instances-by-value 'idx-one-f 'slot1 (+ 1 n))) inst3))
       (is (= 3 (length (get-instances-by-range 'idx-one-f 'slot1 n (+ 1 n)))))))
 
+;; test case when slot values have different types
+(test (indexing-mixed :depends-on index-reset)
+  (defclass idx-one-f ()
+    ((slot1 :initarg :slot1 :accessor slot1 :index t))
+    (:metaclass persistent-metaclass))
+
+  (wipe-class 'idx-one-f)
+
+    (let ((n 105))
+      (with-transaction (:store-controller *store-controller*)
+	(setq inst1 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	(setq inst2 (make-instance 'idx-one-f :slot1 n :sc *store-controller*))
+	(setq inst3 (make-instance 'idx-one-f :slot1 (princ-to-string n) :sc *store-controller*)))
+    
+      (is (= 3 (length (get-instances-by-class 'idx-one-f))))
+
+      (format t "READY FOR ACTION~%")
+      (is (= 2 (length (get-instances-by-value 'idx-one-f 'slot1 n))))
+
+      (is (= 1 (length (get-instances-by-value 'idx-one-f 'slot1 (princ-to-string n)))))))
+
+
+
+
 (test (indexing-with-dupstuff-basic :depends-on index-reset)
   (defclass idx-one-f ()
     ((slot1 :initarg :slot1 :accessor slot1 :index t))
