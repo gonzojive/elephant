@@ -28,7 +28,9 @@
 
 (defun execute-transaction-one-try (sc txn-fn always-rollback)
   (let (tran commited
-	(*txn-value-cache* (make-value-cache sc)))
+	(*txn-value-cache* (make-value-cache sc))
+	(*current-transaction* (make-transaction-record sc nil))
+	(*store-controller* sc))
     (incf (tran-count-of sc))
     (setf tran (controller-start-transaction sc))
     (unwind-protect
