@@ -26,6 +26,9 @@
 (defun txn-cache-clear-value (bt key)
   (cache-clear-value *txn-value-cache* bt key))
 
+(defun fix-and-retry-txn (fn)
+  (invoke-restart 'retry-transaction nil fn))
+
 (defun execute-transaction-one-try (sc txn-fn always-rollback)
   (let (tran commited
 	(*txn-value-cache* (make-value-cache sc))
@@ -66,15 +69,20 @@
 	;; and abort parent transaction too.	
 	(with-concurrency-errors-handler (funcall txn-fn))
 
+	;; HEAVY TRANSACTION MACHINERY
 	(loop named txn-retry-loop
+	  with fix-before-retry-fn = nil
 	  ;; NB: it does (1+ retries) attempts, 1 try + retries.
 	  for try from retries downto 0 
+	  do (when fix-before-retry-fn
+	       (funcall fix-before-retry-fn))
 	  do (block txn-block
 	       (restart-bind ((retry-transaction
-			       (lambda (&optional condition) 
+			       (lambda (&optional condition %fix-before-retry-fn)
 				 (when (and retry-cleanup-fn 
 					    (not (= try 0))) ; cleanup is skipped when we are exiting
 				   (funcall retry-cleanup-fn condition sc))
+				 (setf fix-before-retry-fn %fix-before-retry-fn)
 				 (return-from txn-block))
 			       :report-function (lambda (s) (princ "retry db-postmodern transaction" s)))
 			      (abort-transaction 

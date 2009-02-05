@@ -177,16 +177,20 @@ $$ LANGUAGE plpgsql;
         (ensure-registered-on-class query-identifier)
       (ensure-prepared-on-connection name-symbol name-string sql)
       (with-performance-stat-collector (stat-identifier)
-      (let ((savepoint (princ-to-string (gensym))))
-        ;(set-savepoint (active-connection) savepoint)
         (handler-case
-          (progn
-            ;(format t "Executing prepared query ~A~%" name-string)
-            (exec-prepared name-string))
+	    (progn
+	      (exec-prepared name-string))
           (cl-postgres:database-error (e)
-            (warn "Error while executing prepared statement ~S (params: ~A).~%"
-                  name-string params)
-            (error e))))))))
+	   (warn "Error while executing prepared statement ~S (params: ~A).~%"
+		 name-string params)
+	   (when (and (typep ex 'pm-btree)
+		      (or (string= (cl-postgres:database-error-code e) "42883")  ; function with oid does not exist
+			  (string= (cl-postgres:database-error-code e) "42P01"))) ; UNDEFINED TABLE
+	     ;; chances are that executor is stale, so fix it and retry ..
+	     (fix-and-retry-txn (lambda ()
+				  (btree-read-meta ex)
+				  (setf (queries-of ex) nil))))
+	   (error e)))))))
 
 ;;---------------- Global queries -----------
 
@@ -212,11 +216,14 @@ $$ LANGUAGE plpgsql;
 (define-prepared-query sp-ensure-bid (buffer)
   "select sp_ensure_bid($1)")
 
-(define-prepared-query sp-meta-select (tablename)
-   "select keytype,valuetype from metatree where tablename=$1")
+(define-prepared-query sp-meta-select (oid)
+   "select tablename,keytype,valuetype from metatree where bt_oid=$1")
 
-(define-prepared-query sp-metatree-insert (tablename keytype valuetype)
-   "insert into metatree(tablename,keytype,valuetype) values ($1,$2,$3)")
+(define-prepared-query sp-metatree-insert (oid tablename keytype valuetype)
+   "insert into metatree(bt_oid,tablename,keytype,valuetype) values ($1,$2,$3,$4)")
+
+(define-prepared-query sp-metatree-update (oid tablename keytype valuetype)
+  "UPDATE metatree SET tablename=$2, keytype=$3, valuetype=$4 WHERE bt_oid=$1")
 
 ;; ------------- Misc functions ---------------
 
@@ -253,7 +260,8 @@ bob bytea not null);"
 
                   
                   "create table metatree (
-tablename text primary key not null,
+bt_oid bigint primary key not null,
+tablename text not null,
 keytype text not null,
 valuetype text not null);"
                   "create index idx_blob_bob_md5 on blob (bob_md5);"

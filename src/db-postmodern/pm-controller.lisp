@@ -26,10 +26,10 @@
     et cetera.  This is the Postgresql-specific subclass of store-controller."))
 
 (defmethod build-btree ((sc postmodern-store-controller))
-  (make-instance 'pm-btree :sc sc))
+  (make-instance 'pm-btree-wrapper :sc sc))
 
 (defmethod build-dup-btree ((sc postmodern-store-controller))
-  (make-instance 'pm-dup-btree :sc sc))
+  (make-instance 'pm-dup-btree-wrapper :sc sc))
 
 (defmethod supports-sequence ((sc postmodern-store-controller))
   t)
@@ -104,7 +104,6 @@
 (defmacro with-connection-for-thread ((controller) &body body)
   `(let ((*connection* (or *connection*
                            (controller-connection-for-thread ,controller))))
-    (declare (special *connection*))
     ,@body))
 
 (defun active-connection ()
@@ -192,14 +191,13 @@
 			    (recover-fatal nil)
 			    (thread t))
   (declare (ignore recover recover-fatal thread))  
-  (labels ((make-system-btree (oid name &optional (class 'pm-btree) (data-example t))
-	     (let ((bt (make-instance class :sc sc :from-oid oid :table-name name)))
-	       (setf (key-type-of bt) (data-type data-example))
-	       bt))
+  (labels ((make-system-btree (oid name &optional (class 'pm-special-btree-wrapper) (data-example t))
+	     (make-instance class :sc sc :from-oid oid :table-name name
+				      :key-type (data-type data-example)))
 	   (init-root ()
 	     (setf (slot-value sc 'root) (make-system-btree 0 "root")
-		   (slot-value sc 'instance-table) (make-system-btree 1 "instances" 'pm-indexed-btree 1)
-		   (slot-value sc 'schema-table) (make-system-btree 3 "schemas" 'pm-indexed-btree 1)
+		   (slot-value sc 'instance-table) (make-system-btree 1 "instances" 'pm-special-indexed-btree-wrapper 1)
+		   (slot-value sc 'schema-table) (make-system-btree 3 "schemas" 'pm-special-indexed-btree-wrapper 1)
 		   (slot-value sc 'index-table) (make-system-btree 4 "indices"))))
 	     
     (ensure-thread-table-lock)
@@ -215,7 +213,7 @@
           (initialize-serializer sc)
         
           (setf (persistent-slot-collection-of sc)
-		(make-system-btree 2 "slots" 'pm-btree (form-slot-key 777 'a-typical-slot)))
+		(make-system-btree 2 "slots" 'pm-special-btree-wrapper (form-slot-key 777 'a-typical-slot)))
 
           (if (message-table-existsp con)
 	      (progn
@@ -316,17 +314,17 @@
 
 (defmethod default-class-id (type (sc postmodern-store-controller))
   (ecase type
-    ('pm-btree 1)
-    ('pm-dup-btree 2)
-    ('pm-indexed-btree 3)
-    ('pm-btree-index 4)))
+    (pm-btree-wrapper 1)
+    (pm-dup-btree-wrapper 2)
+    (pm-indexed-btree-wrapper 3)
+    (pm-btree-index-wrapper 4)))
 
 (defmethod default-class-id-type (cid (sc postmodern-store-controller))
   (case cid
-    (1 'pm-btree)
-    (2 'pm-dup-btree)
-    (3 'pm-indexed-btree)
-    (4 'pm-btree-index)))
+    (1 'pm-btree-wrapper)
+    (2 'pm-dup-btree-wrapper)
+    (3 'pm-indexed-btree-wrapper)
+    (4 'pm-btree-index-wrapper)))
 
 
 (defmethod persistent-slot-writer ((sc postmodern-store-controller) new-value instance name)

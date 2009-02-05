@@ -9,9 +9,9 @@
    (rows :accessor cached-rows-of :initform nil)
    (prior-rows :accessor cached-prior-rows-of :initform nil)))
 
-(defmethod make-cursor ((bt pm-btree))
+(defmethod make-cursor ((bt pm-btree-wrapper))
   (make-instance 'pm-cursor
-		 :btree bt
+		 :btree (get-connection-btree bt)
 		 :oid (oid bt)))
 
 (defmethod cursor-duplicate ((cursor pm-cursor))
@@ -211,9 +211,9 @@
 
 (defclass pm-dupb-cursor (pm-cursor) ())
 
-(defmethod make-cursor ((bt pm-dup-btree))
+(defmethod make-cursor ((bt pm-dup-btree-wrapper))
   (make-instance 'pm-dupb-cursor
-		 :btree bt
+		 :btree (get-connection-btree bt)
 		 :oid (oid bt)))
 
 (defmethod cursor-current-query-params-auto ((cursor pm-dupb-cursor))

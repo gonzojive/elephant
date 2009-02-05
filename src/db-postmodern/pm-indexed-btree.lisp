@@ -1,11 +1,16 @@
 (in-package :db-postmodern)
 
-(defclass pm-indexed-btree (indexed-btree pm-btree)
+(defclass pm-indexed-btree-wrapper (indexed-btree pm-btree-wrapper)
   ((indices :accessor indices :initform (make-hash-table)))
   (:metaclass persistent-metaclass)
   (:documentation "Postmodern implementation of a SQL-based BTree that supports secondary indices."))
 
-(defmethod shared-initialize :after ((instance pm-indexed-btree) slot-names
+(defclass pm-special-indexed-btree-wrapper (pm-indexed-btree-wrapper 
+					    pm-special-btree-wrapper)
+  ()
+  (:metaclass persistent-metaclass))
+
+(defmethod shared-initialize :after ((instance pm-indexed-btree-wrapper) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
   ;; questionable workaround to create system tables from oid.
@@ -13,20 +18,20 @@
     (setf (indices instance) (make-hash-table))))
 
 (defmethod build-indexed-btree ((sc postmodern-store-controller))
-  (make-instance 'pm-indexed-btree :sc sc))
+  (make-instance 'pm-indexed-btree-wrapper :sc sc))
 
-(defmethod map-indices (fn (bt pm-indexed-btree))
+(defmethod map-indices (fn (bt pm-indexed-btree-wrapper))
   (maphash fn (indices bt)))
 
-(defmethod get-index ((bt pm-indexed-btree) index-name)
+(defmethod get-index ((bt pm-indexed-btree-wrapper) index-name)
   (gethash index-name (indices bt)))
 
-(defmethod remove-index ((bt pm-indexed-btree) index-name)
+(defmethod remove-index ((bt pm-indexed-btree-wrapper) index-name)
   (let ((indices (indices bt)))
     (remhash index-name indices)
     (setf (indices bt) indices)))
 
-(defmethod add-index ((bt pm-indexed-btree) &key index-name key-form (populate t))
+(defmethod add-index ((bt pm-indexed-btree-wrapper) &key index-name key-form (populate t))
   (with-vars (bt)
     (let ((sc (active-controller)))
       (if (and (not (null index-name))
@@ -45,7 +50,7 @@
             index)        
           (error "Invalid index initargs!")))))
 
-(defmethod populate ((bt pm-indexed-btree) index)
+(defmethod populate ((bt pm-indexed-btree-wrapper) index)
   (with-transaction (:store-controller (active-controller))
     (let ((key-fn (key-fn index)))
       (map-btree
@@ -53,7 +58,7 @@
            (maybe-insert/update-secondary-index index key-fn k v))
        bt))))
 
-(defmethod (setf get-value) (value key (bt pm-indexed-btree))
+(defmethod (setf get-value) (value key (bt pm-indexed-btree-wrapper))
   "Set a key / value pair, and update secondary indices."
   (call-next-method)
   (with-trans-and-vars (bt)
@@ -71,7 +76,7 @@
 ;; TODO: Maybe one could refer directly to the VALUE of the original table instead of the key,
 ;; it would save a roundtrip
 
-(defmethod remove-kv (key (bt pm-indexed-btree))
+(defmethod remove-kv (key (bt pm-indexed-btree-wrapper))
   "Remove a key / value pair, and update secondary indices."
   (with-trans-and-vars (bt)
     (multiple-value-bind (value found) (get-value key bt)

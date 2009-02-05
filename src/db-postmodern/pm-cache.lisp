@@ -88,13 +88,13 @@
 (defmethod cache-clear-all (cache))
 (defmethod value-cache-commit (cache))
 
-(defmethod cache-get-value (cache (bt btree) key)
+(defmethod cache-get-value (cache (bt pm-btree) key)
   (cache-get-value cache (oid bt) key))
 
-(defmethod cache-set-value (cache (bt btree) key value)
+(defmethod cache-set-value (cache (bt pm-btree) key value)
   (cache-set-value cache (oid bt) key value))
 
-(defmethod cache-clear-value (cache (bt btree) key)
+(defmethod cache-clear-value (cache (bt pm-btree) key)
   (cache-clear-value cache (oid bt) key))
 
 ;; hash-table cache
@@ -248,8 +248,9 @@ INNER JOIN update_log ON  transaction_log.txn_id = update_log.txn_id
 WHERE commit_time > ~f LIMIT ~a"
 			  (last-update-of cache) (max-cache-updates cache))
 		 'cl-postgres:list-row-reader)))
-	      (if (>= (length rows) (max-cache-updates cache)) 
-		  (cache-clear-all (parent-cache cache)) ;; too much updates
+	      (if (or (>= (length rows) (max-cache-updates cache)) ; too much updates
+		      (find 0 rows :key #'second))                 ; got special "invalidate-all" mark
+		  (cache-clear-all (parent-cache cache)) 
 		  (loop for (utime id key) in rows
 			;; information about type was lost, so if key _looks like_ number,
                         ;; try converting it to number and deleting that key too.
@@ -260,7 +261,7 @@ WHERE commit_time > ~f LIMIT ~a"
 			when int-key
 			do (cache-clear-value (parent-cache cache) id int-key))))))
 
-      (setf (last-update-of cache) 
+      (setf (last-update-of cache)
 	    (if (and (not (eq last-commited-time :null))
 		     (< (- transaction-start-time last-commited-time)
 					   (max-resync-time cache)))
@@ -271,13 +272,25 @@ WHERE commit_time > ~f LIMIT ~a"
 		(- transaction-start-time (/ (max-resync-time cache) 2)))))))
 
 
-      
+(defparameter +sync-cache-commit-queries+
+  '("LOCK TABLE transaction_log IN EXCLUSIVE MODE"
+    "INSERT INTO transaction_log (txn_id, commit_time) VALUES 
+(currval('txn_id'), EXTRACT (epoch FROM timeofday()::timestamp));"))
+
+(defmethod invalidate-sync-cache (sc &optional (initialize t))
+  (with-connection-for-thread (sc)
+    (dolist (query (list* (if initialize
+			      "SELECT nextval('txn_id')"
+			      "SELECT 1")
+			  "INSERT INTO update_log (txn_id, id, key) VALUES (currval('txn_id'), 0, '');"
+			  +sync-cache-commit-queries+))
+      (cl-postgres:exec-query (active-connection)
+			      query
+			      'cl-postgres:ignore-row-reader))))
 
 (defmethod value-cache-commit ((cache pm-synchonized-cache))
   (with-connection-for-thread ((store-controller-of cache))
-    (dolist (query '("LOCK TABLE transaction_log IN EXCLUSIVE MODE"
-		     "INSERT INTO transaction_log (txn_id, commit_time) VALUES 
-(currval('txn_id'), EXTRACT (epoch FROM timeofday()::timestamp));"))
+    (dolist (query +sync-cache-commit-queries+)
       (cl-postgres:exec-query (active-connection)
 			      query
 			      'cl-postgres:ignore-row-reader))))

@@ -1,16 +1,81 @@
 (in-package :db-postmodern)
 
-(defclass pm-btree (btree pm-executor)
+(defclass pm-btree (pm-executor)
   ((dbtable :accessor table-of :initform nil :initarg :table-name)
-   (key-type :accessor key-type-of :initform nil)
-   (value-type :accessor value-type-of :initform :object))
-  (:documentation "A SQL implementation of a BTree"))
+   (key-type :accessor key-type-of :initform nil :initarg :key-type)
+   (value-type :accessor value-type-of :initform :object :initarg :value-type)
+   (wrapper :accessor wrapper-of :initarg :wrapper))
+  (:documentation "btree object of db-postmodern. used via a wrapper object")) 
 
-(defmethod print-object ((pm-btree pm-btree) stream)
-  (print-unreadable-object (pm-btree stream :type t :identity t)
-    (format stream "db-table:~a"
-	    (when (slot-boundp pm-btree 'dbtable)
-	      (table-of pm-btree)))))
+(defclass pm-btree-wrapper (btree)
+  ()
+  (:documentation "wrapper object for btrees of db-postmodern"))
+
+(defclass pm-special-btree-wrapper (pm-btree-wrapper)
+  ((dbtable :accessor table-of :initform nil :initarg :table-name)
+   (key-type :accessor key-type-of :initarg :key-type)
+   (value-type :accessor value-type-of :initform :object :initarg :value-type ))
+  (:documentation "wrapper for special (fixed) btrees"))
+
+(defmacro with-trans-and-vars ((bt) &body body)
+  `(let ((*sc* (or *sc* (get-con ,bt)))) ;; verify that sc is ours?
+    (ensure-transaction (:store-controller *sc*)
+      (with-connection-for-thread (*sc*)
+	  ,@body))))
+
+(defmacro with-vars ((bt) &body body)
+  `(let ((*sc* (or *sc* (get-con ,bt))))
+    (with-connection-for-thread (*sc*)
+	,@body)))
+
+(defmethod make-connection-btree ((bt pm-btree-wrapper))
+  (make-instance 'pm-btree :wrapper bt))
+
+(defmethod make-connection-btree ((bt pm-special-btree-wrapper))
+  (make-instance 'pm-btree :wrapper bt :table-name (table-of bt) 
+		 :key-type (key-type-of bt) :value-type (value-type-of bt)))
+
+(defmethod get-connection-btree ((bt pm-btree-wrapper))
+  (with-vars (bt)
+    (let ((meta (cl-postgres:connection-meta (active-connection))))
+    (or (gethash bt meta)
+	(setf (gethash bt meta)
+	      (make-connection-btree bt))))))
+
+(defmethod internal-get-value (key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (get-value key (get-connection-btree bt))))
+
+(defmethod get-value (key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (get-value key (get-connection-btree bt))))
+
+(defmethod (setf internal-get-value) (value key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (setf (get-value key (get-connection-btree bt)) value)))
+
+
+(defmethod (setf get-value) (value key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (setf (get-value key (get-connection-btree bt)) value)))
+
+(defmethod remove-kv (key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (remove-kv key (get-connection-btree bt))))
+
+(defmethod get-con ((bt pm-btree))
+  (get-con (wrapper-of bt)))
+
+(defmethod oid ((bt pm-btree))
+  (oid (wrapper-of bt)))
+
+(defmethod existsp (key (bt pm-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (existsp key (get-connection-btree bt))))
+
+(defmethod make-table ((bt pm-btree-wrapper) &key suppress-metainformation) 
+  (make-table (get-connection-btree bt) 
+	      :suppress-metainformation suppress-metainformation))
 
 (define-condition db-error (serious-condition) ())
 (define-condition bad-db-parameter (db-error) ())
@@ -33,35 +98,34 @@
 (defun active-controller ()
   *sc*)
 
-(defmacro with-trans-and-vars ((bt) &body body)
-  `(let ((*sc* (or *sc* (get-con ,bt))))
-    (declare (special *sc*))
-    (ensure-transaction (:store-controller *sc*)
-      (with-connection-for-thread (*sc*)
-        ,@body))))
+(defun btree-read-meta (bt)
+  (with-trans-and-vars (bt)
+    (let ((rows (sp-meta-select (active-connection) (princ-to-string (oid bt)))))
+      (when rows ;; check if meta-data is present
+	(destructuring-bind (tablename keytype valuetype) (first rows)
+	  (setf (table-of bt) tablename
+		(key-type-of bt) (read-from-string keytype)
+		(value-type-of bt) (read-from-string valuetype)))
+	(assert (postmodern:table-exists-p (table-of bt)))
+	t))))
 
-(defmacro with-vars ((bt) &body body)
-  `(let ((*sc* (or *sc* (get-con ,bt))))
-    (declare (special *sc*))
-    (with-connection-for-thread (*sc*)
-        ,@body)))
+(defun check/initialize-btree (bt)
+  (or (initialized-p bt)
+      (with-trans-and-vars (bt)
+	(btree-read-meta bt))))
 
-(defmethod shared-initialize :after ((bt pm-btree) slot-names
-				     &rest rest)
-  (declare (ignore slot-names rest))
-  (unless (table-of bt) ; unless table is given explicitly (for system btrees)
-    (setf (table-of bt) (format nil "tree~a" (oid bt)))
+(defmethod initialize-instance :after ((bt pm-btree) &rest rest)
+  (declare (ignore rest))
+  (unless (table-of bt) ; if table name is given it is a system btree, it has its own initialization protocol
     (with-trans-and-vars (bt)
-      (when (postmodern:table-exists-p (table-of bt))
-        (let ((rows (sp-meta-select (active-connection) (table-of bt))))
-          (destructuring-bind (keytype valuetype) (first rows)
-            (setf (key-type-of bt) (read-from-string keytype))
-            (setf (value-type-of bt) (read-from-string valuetype))))))))
+      (unless (btree-read-meta bt)
+	;; no meta data, initialize table name with a default value
+	(setf (table-of bt) (format nil "tree~a" (oid bt)))))))
 
 (defmethod duplicates-allowed-p ((bt pm-btree))
   nil)
 
-(defmethod make-table ((bt pm-btree))
+(defmethod make-table ((bt pm-btree) &key suppress-metainformation)
   (with-trans-and-vars (bt)
     (unless (table-of bt)
       (error "btree is not initialized properly"))
@@ -74,12 +138,13 @@
                                           ""
                                           " unique ")
                                       (postgres-type (value-type-of bt)))))
-    (sp-metatree-insert (active-connection)
-                        (table-of bt)
-                        (prin1-to-string (key-type-of bt))
-                        (prin1-to-string (value-type-of bt))
-                        :row-reader 'cl-postgres:ignore-row-reader)
-  
+    (unless suppress-metainformation
+      (sp-metatree-insert (active-connection)
+			  (princ-to-string (oid bt))
+			  (table-of bt)
+			  (prin1-to-string (key-type-of bt))
+			  (prin1-to-string (value-type-of bt))
+			  :row-reader 'cl-postgres:ignore-row-reader))  
     (when (duplicates-allowed-p bt)
       (cl-postgres:exec-query (active-connection)
                               (format nil "create unique index ~a_idx on ~a(qi,value);"
@@ -163,7 +228,7 @@ $$ LANGUAGE plpgsql;
                                   
                                   ;; Round up, because it is probably a query in for greater than.
                                   (ceiling parameter))
-                                 (t (signal 'bad-db-parameter)))))
+                                 (t (error 'bad-db-parameter)))))
     (:string (cond
                ((stringp parameter) (if (>= (length parameter) 2000)
                                         (subseq parameter 0 2000)
@@ -199,22 +264,73 @@ $$ LANGUAGE plpgsql;
   (setf (key-type-of bt) (data-type key))
   (make-table bt))
 
-(defmethod upgrade-btree-type ((old-bt pm-btree) data-type)
+(defmethod upgrade-btree-type ((old-bt pm-btree) key-type val-type)
   "We started by guessing the key from the first value. If this was wrong, 
 we need to make a new database table with a new keytype, copy the old values
-and make the old instance refer to the new database table"
-  (let ((bt (make-instance 'pm-btree)))
-    (setf (key-type-of bt) data-type)
-    (make-table bt)
-    (map-btree #'(lambda (k v)
-                   (setf (get-value k bt)
-                         v))
-               old-bt)
-    (loop for slot in '(dbtable key-type value-type queries) do
-         (setf (slot-value old-bt slot)
-               (slot-value bt slot)))
-    (setf bt nil)
-    old-bt))
+and replace old table with new. this is the really evil function."
+  ;; in SERALIZABLE isolation mode data is "fixed" at time of the 
+  ;; first statement in transaction, so to ensure that we're copying
+  ;; latest data we'll have to make sure that we lock table by the first
+  ;; statement. to do this, we'll have to abort current transaction,
+  ;; execute upgrade in a separate transaction and retry current transaction.
+  ;; it is implemented via fix-and-retry-txn mechanism
+  (fix-and-retry-txn
+   (lambda () 
+     ;; disable caching during upgrade, to be sure
+     (let* ((prev-cache-mode *cache-mode*)
+	    (*cache-mode* nil))
+       (with-trans-and-vars (old-bt)
+
+	 ;; lock table so nobody changes data while we're copying it.
+	 (cl-postgres:exec-query (active-connection)
+				 (format nil "LOCK TABLE ~a IN SHARE MODE" 
+					 (table-of old-bt)))
+
+	 (let ((bt (make-instance (class-of old-bt)
+				  :wrapper (wrapper-of old-bt))))
+	   (setf (key-type-of bt) key-type
+		 (value-type-of bt) val-type
+		 (table-of bt) (format nil "table~a"
+				       (next-oid (active-controller))))
+						       
+	       (make-table bt :suppress-metainformation t)
+	       
+	       ;; copy data
+	       (map-btree #'(lambda (k v)
+			      (setf (get-value k bt)
+				    v))
+			  (wrapper-of old-bt))
+
+	       ;; update metainformation
+	       (sp-metatree-update (active-connection)
+				   (prin1-to-string (oid old-bt))
+				   (table-of bt)
+				   (prin1-to-string key-type)
+				   (prin1-to-string val-type)
+				   :row-reader 'cl-postgres:ignore-row-reader)
+
+	       (cl-postgres:exec-query (active-connection)
+				       (format nil "DROP TABLE ~a" 
+					       (table-of old-bt)))
+
+	       (cl-postgres:exec-query (active-connection) 
+			      (format nil "DROP FUNCTION ins_upd_~a(~a, ~a)"
+				      (table-of old-bt)
+				      (postgres-type (key-type-of old-bt))
+				      (postgres-type (value-type-of old-bt))))
+
+	       (setf (key-type-of old-bt) key-type
+		     (value-type-of old-bt) val-type
+		     (table-of old-bt) (table-of bt))
+	       
+	       ;; obliterate query list to refresh it
+	       (setf (queries-of old-bt) nil)
+
+	       #+ele-global-sync-cache
+	       (when (eq prev-cache-mode :global-sync-cache)
+		 (invalidate-sync-cache (active-controller)))
+
+	       old-bt))))))
 
 (defun key-parameter (key bt)
   (postgres-format key (key-type-of bt)))
@@ -242,7 +358,7 @@ and make the old instance refer to the new database table"
 	      exists-p t)))
 
     (when (and (not exists-p)
-               (initialized-p bt)
+               (check/initialize-btree bt)
                key)
       (with-vars (bt)
         (let ((result (btree-exec-prepared bt 'select
@@ -261,14 +377,41 @@ and make the old instance refer to the new database table"
 (defmethod (setf get-value) (value key (bt pm-btree))
   (setf (internal-get-value key bt) value))
 
+(defmethod maybe-upgrade-btree-type ((bt pm-btree) key value)
+  (let ((bt-kt (key-type-of bt))
+	(bt-vt (value-type-of bt)))
+    (flet ((need-upgrade ()
+	     (let ((upgrade-key (not (or (eq bt-kt :object)
+					 (eq bt-kt (data-type key)))))
+		   (upgrade-value (not (or (eq bt-vt :object)
+					   (eq bt-vt (data-type value))))))
+	       (values (or upgrade-key upgrade-value)
+		       upgrade-key
+		       upgrade-value))))
+      (when (need-upgrade)
+	;; it could be that some other process have upgraded btree, but we
+	;; do not know it yet, try re-reading metadata
+	(with-trans-and-vars (bt)
+	  (btree-read-meta bt)
+	  (setf (queries-of bt) nil)
+
+	  (setf bt-kt (key-type-of bt)
+		bt-vt (value-type-of bt))
+	  (multiple-value-bind (need-upgrade upgrade-key upgrade-value)
+	      (need-upgrade)
+	    (when need-upgrade
+	      (upgrade-btree-type bt 
+				  (if upgrade-key :object bt-kt)
+				  (if upgrade-value :object bt-vt)))))))))
+
+
 (defmethod (setf internal-get-value) (value key (bt pm-btree))
   (when key
-    (unless (initialized-p bt)
-      (create-table-from-first-values bt key value))
-    (assert (initialized-p bt)) ;; Should be initialized now
-    (unless (eq :object (key-type-of bt))
-      (unless (eq (key-type-of bt) (data-type key))
-        (upgrade-btree-type bt :object)))
+    (if (initialized-p bt)
+	(maybe-upgrade-btree-type bt key value)
+	(or (check/initialize-btree bt)
+	    (progn (create-table-from-first-values bt key value)
+		   (assert (initialized-p bt))))) ;; Should be initialized now
 
     (txn-cache-set-value bt key value)
 
@@ -283,9 +426,10 @@ and make the old instance refer to the new database table"
   
   (multiple-value-bind (value exists)
       (txn-cache-get-value bt key)
+    (declare (ignore value))
     (when exists (return-from existsp t)))
 
-  (when (initialized-p bt)
+  (when (check/initialize-btree bt)
     (with-vars (bt)
       (when (btree-exec-prepared bt 'select
                                  (list (key-parameter key bt))
@@ -296,7 +440,7 @@ and make the old instance refer to the new database table"
 
   (txn-cache-clear-value bt key)
 
-  (when (initialized-p bt)
+  (when (check/initialize-btree bt)
     (with-vars (bt)
       (btree-exec-prepared bt 'delete
                            (list (key-parameter key bt))
@@ -308,9 +452,10 @@ and make the old instance refer to the new database table"
 
 ;; btree with duplicates
 
-(defclass pm-dup-btree (dup-btree pm-btree)
-  ()
-  (:metaclass persistent-metaclass))
+(defclass pm-dup-btree (pm-btree) ())
+
+(defclass pm-dup-btree-wrapper (dup-btree pm-btree-wrapper)
+  ())
 
 (defmethod duplicates-allowed-p ((bt pm-dup-btree)) t)
 
@@ -321,10 +466,22 @@ and make the old instance refer to the new database table"
 (defmethod prepare-local-queries :after ((bt pm-dup-btree))
   (register-query bt 'delete-both (format nil "delete from ~a where qi=$1 and value=$2" (table-of bt))))
 
-(defmethod remove-kv-pair (k v (bt pm-dup-btree)) ;; TODO: invalidate cache?
-  (when (initialized-p bt)
+(defmethod remove-kv-pair (k v (bt pm-dup-btree-wrapper))
+  (with-trans-and-vars (bt)
+    (remove-kv-pair k v (get-connection-btree bt))))
+
+(defmethod remove-kv-pair (k v (bt pm-dup-btree))
+
+  (txn-cache-clear-value bt k)
+  
+  (when (check/initialize-btree bt)
     (with-trans-and-vars (bt)
       (btree-exec-prepared bt 'delete-both
                            (list (postgres-format k (key-type-of bt))
                                  (postgres-format v (value-type-of bt)))
-                           'cl-postgres:ignore-row-reader))))
+                           'cl-postgres:ignore-row-reader)
+
+       #+ele-global-sync-cache
+       (btree-exec-prepared bt 'notify-update
+			    (list (key-parameter k bt))
+			    'cl-postgres:ignore-row-reader))))

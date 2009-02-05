@@ -4,13 +4,16 @@
   ()
   (:documentation "Cursor for traversing postmodern secondary indices."))
 
-(defmethod make-cursor ((bt pm-btree-index))
+(defmethod make-cursor ((bt pm-btree-index-wrapper))
   "Make a secondary-cursor from a secondary index."
   (make-instance 'pm-secondary-cursor
-		 :btree bt
+		 :btree (get-connection-btree bt)
 		 :oid (oid bt)))
 
 (defvar *cursor-current-internal* nil "disables value dereferencing in cursor-current, useful to implement cursor-p* methods")
+
+(defmethod primary ((cursor pm-secondary-cursor))
+  (primary (wrapper-of (cursor-btree cursor))))
 
 (defmethod cursor-current ((cursor pm-secondary-cursor))
   (if *cursor-current-internal*
@@ -18,7 +21,7 @@
       (multiple-value-bind (has key value)
           (call-next-method)
         (when has
-          (values t key (internal-get-value value (primary (cursor-btree cursor))))))))
+          (values t key (internal-get-value value (primary cursor)))))))
 
 (defmacro def-cursor-p-synonym (name base-name &rest params)
   `(defmethod ,name ((cursor pm-secondary-cursor) ,@params)
@@ -26,7 +29,7 @@
       (multiple-value-bind (found key val)
 	  (,base-name cursor ,@params)
 	(when found
-	  (values t key (internal-get-value val (primary (cursor-btree cursor))) val))))))
+	  (values t key (internal-get-value val (primary cursor)) val))))))
 
 (def-cursor-p-synonym cursor-pfirst cursor-first)
 (def-cursor-p-synonym cursor-plast cursor-last)
@@ -51,7 +54,7 @@
   (if (cursor-initialized-p cursor)
       (let ((pkey (current-value-of cursor)))
         (cursor-close cursor)
-        (remove-kv pkey (primary (cursor-btree cursor))))
+        (remove-kv pkey (primary cursor)))
       (error "Can't delete with uninitialized cursor")))
 
 (defmethod cursor-put ((cursor pm-secondary-cursor) value &rest rest)
