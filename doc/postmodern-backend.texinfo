@@ -2,111 +2,322 @@
 
 @node Postmodern back-end
 @comment node-name, next, previous, up
-@chapter Postmodern back-end
-@cindex Postmodern back-end
+@section Postmodern back-end
 
-@menu
-* Postmodern-Introduction:: The design and status of the Postmodern back-end.
-* Postmodern Cache:: Details about the globally synced cache.
-@end menu
+@subsection Postmodern backend overview
 
-@node Postmodern-Introduction
-@comment node-name, next, previous, up
-@section Postmodern-Introduction
+The Postmodern backend uses PostgreSQL RDBMS as underlying storage
+and uses Postmodern Lisp library (by Marijn Haverbeke,
+http://common-lisp.net/project/postmodern/) which implements
+efficient communication with the database server without need for
+ foreign libraries. (Actually mostly low level parts of the library 
+(cl-postgres) are used,  but the postmodern name is so good that we
+ named the backend after it.) Backend takes avantage using PostgreSQL-specific
+constructs, such as stored procedures, so it is not compatible
+with other SQL databases (but can be adapted, in theory).
 
-The Postmodern backend is yet another sql based backend, but only
-compatible with postgresql. The idea was to take advantages of
-optimization opportunities that exist with vendor specific features
-such as stored procedures. It is based on the postgresql specific Lisp
-library Postmodern by Marijn Haverbeke,
-http://common-lisp.net/project/postmodern/. Or rather its low level
-parts cl-postgres, but the postmodern name is so good we named the
-backend after it.
+Unlike CLSQL backend, db-postmodern tries to map Elephant operations
+to SQL operations directly wherever possible: each btree is stored
+as a SQL table, integers and strings are stored directly in these 
+tables and cursor operations are translated into SQL queries.
 
-The other big implementation difference to the clsql backend is that the
-postmodern backend makes a new database table for each btree, which
-makes it possible to traverse over bigger btrees, since clsql loads
-the whole btree into main memory. 
+This approach lets db-postmodern to avoid overhead associated with
+deserialization and loading vast amounts of data into memory, and
+also it enables totally transparent concurrency model -- multiple
+clients in different threads, processes and even machines can work
+simultaneosly, following SQL's transactional semantics. PostgreSQL uses
+MVCC concurrency model, so clients get blocked only when there is
+an actual conflict.
 
-The elephant (bdb based) cursor model and the sql cursor model are not
-Always the same, so in some cases the postmodern backend needs to do
-some tricks to make it compatible. Particularly if you need flexible
-cursor that move in different directions, the postmodern backend might
-be slow. Also, there is an ugly implementation of the the map-index
-method, see the file pm-btree-index.lisp.
+The drawback of this model is that dynamically typed Lisp (and
+Elephant) sometimes does not play well with statically-typed SQL,
+as they are fundamentally incompatible, which makes some Elephant
+ features associated with dynamic typing either broken or inefficient.
+In most real-world situation such cases can be avoided, however.
+ See next section for details.
 
-The postmodern backend is optimized for use with several parallel Lisp
-processes connected to the same database. For that purpose it contains
-an optional object cache that is synchronized across processes. Note
-that this cache is not shared between threads, so use in several
-threads multiplies the memory usage.
+Another drawback is that SQL queries have considerable overhead
+comparing them to in-process data retrieval (data needs to cross
+process boundaries at least twice), this makes db-postmodern's
+performance inferior to Berkeley DB's in case of large numbers of 
+queries (Elephant operations). (Large tables are not a problem
+for db-postmodern, however, at least in theory.) Some overhead
+is associated with SQL structure in general.
 
-The postmodern backend is faster than clsql but still slower than
-Berkeley DB, and we believe that the bottle neck is with the quite
-heavy context switching. Before you go out and buy a raid server or
-more memory you should do some good performance tests to see were the
-bottleneck is. We have no ambitions to optimize the the postmodern
-backend performance further.
+To alleviate performance issues Postmodern backend implements
+sophisticated cache that is automatically managed and synchonized
+among multiple processes (cache is optional, as it is a tradeoff). 
+See futher sections for more details on performance characteristics 
+and cache configutation.
 
-For installing and configuring postgresql, see the hints in the file
-POSTMODERN-tests.lisp.
+@subsection Type handling
 
+Postmodern backend stores integer and string 
+(once we might add support for floats too) values directly 
+in SQL tables wherever possible; othwerwise it uses 
+indirect storage (called "object", as it is able to store arbitrary
+Lisp objects) -- values themselves are stored in the "blob"
+table in a serialized format, and btree tables reference
+these blobs via blob ids. Only integers that fit in 64-bit range are
+ stored natively, larger ones are stored as objects.
 
-@node Postmodern Cache
-@comment node-name, next, previous, up
-@section Postmodern Cache
-These instructions are from the comments in pm-cache.lisp.
+Storage format is chosen on per btree basis, for keys and
+values separately. Direct storage is used only if
+all keys (or values) have same time.
 
-pluggable implementation of value caching.
-only btree value caching implemented by now (indices don't get cached).
+@strong{Important:} keys (and values) are properly sorted @strong{only}
+when they are in native format. If indirect storage is used,
+they are sorted according to blob ids but not values itself,
+so sort order might seem being random. Thus, range queries
+(like get-instances-by-range) only work properly when keys 
+are in a native format. Direct retrieval (get-value, get-instances-by-value)
+always works correctly, though.
 
-cache should be enabled setting db-postmodern::*cache-mode* to one of available options.
+For a btree key type is initialized according to type
+of key from a first inserted pair, value type is always ``object'' in
+ordinary btrees (because they do not need sorting by value anyway).
+If subsequent key types are different, key type
+ is upgraded to a general "object" storage (and sorting gets random).
+So, if you insert value of wrong type just once, your btree might
+become broken permanently, there is no way back.
 
-two options implemented by now:
+For dup-btree (and btree indices) both key and value types are initialized
+from first pair and are upgraded accordingly. (Thus dup-btree
+supports proper sorting on both keys and values if proper conditions
+are met.)
 
-:per-transaction-cache -- performs caching only inside one transaction.
-cache is not preserved between transactions. 
-this mode has minimal effect on properties on application -- it's unlikely to produce any
-wrong interference, but acceleration from this type of cache is not great too.
-it's possible to enable :per-transaction-cache only for some transactions.
+For object front end this means that range queries are supported
+on indexed slots only if all slots are either intergers or strings
+and values of different types (including NILs) were never inserted
+(slots can be unbound, however). Slots themselves are always
+stored in indirect format, only indices could be in direct one.
 
-:global-sync-cache -- caches data accross boundaries of transactions.
-this caching is much more efficient, but its more likely to introduce some interference.
-(caching is designed to be safe, and tests prove that, but as in any complex product
-elephant/backend can have bugs..)
-all changes to btree values are logged into special database table, so it's oriented only
-on read-instensive applications.
+If you want to avoid indices being botched by some erroneous value
+being inserted, please use Lisp's type declarations to check value
+types before they are passed to Elephant. If you're using object
+front end slot type declaration could help:
 
-it's not possible to switch between global-sync-cache and other modes in "automatic" way.
-it's possible to have global-sync-cache only when code is compiled with :ele-global-sync-cache
-feature, and this feature has to be enabled when creating the store, as it requires some
-additional definitions and instrumentation of btree update stored procedure.
-(so it's not possible to use global-sync-cache with store that is created without this feature).
-however, feature itself does not enable sync cache, it's only gets enabled when you set *cache-mode*
-variable to :global-sync-cache for the first time.
+@lisp
+(defpclass person ()
+   ((name :type string :initarg :name :index t)))
+@end lisp
 
-once global-sync-cache is enabled it cannot be disabled setting variable back. also, it should be
-enabled on all clients using the store -- because otherwise changes will not properly propagate to
-other clients using cache.
+but, unfortunately, slot type declarations do not work in current
+version of Elephant.
 
-it's possible to do initial import with cache disabled (since caching logs all changes to database,
-reducing performance), and then enable cache for actual database clients.
-to disable global-sync-cache safely, you should shutdown all accessing clients, connect to store and
-execute (db-postmodern:disable-sync-cache-trigger), 
-having an active connection (in store transaction, for example)
+Besides making range queries broken, indirect storage also
+is slightly slower and requires more disk space. In current
+version blobs storage is never reclaimed, so in some cases
+database size might grow even if live data in it stays the same.
+Also, btree type upgrades are very complex and were not extensively
+tested to work correctly in multiple thread/process scenarios, that is
+another reason to avoid them in production environment.
 
-when global-sync-cache is enabled, database requires maintenance -- stale log entries should be removed
-from it. with default settings cache gets stale when it's not used for 10 minutes, so it's safe to remove 
-update and transaction log entries older than that:
+If direct storage format is used, btree lookups and range queries
+check values for being compatible with btree key type. If incompatible
+values are used, bad-db-parameter error is signalled: it does not try
+to upgrade btree, neither it tries to answer query in a smart way.
+
+@strong{Important limitation:} PostgreSQL limits size of strings that can
+be used for indices at about 2 kilobytes. To use PostgreSQL table
+indices db-postmodern has to truncate all btree keys to two kilobytes,
+so your data might be truncated if you store long pieces of text as keys.
+You can store arbitrarily long text in values, though, as they are stored
+in indirect format. If you're using object front end, slot values will
+be stored verbatim, but data stored in indices will be truncated (you can
+still lookup data in this case, but comparison will confuse two different
+keys if their first 2000 symbols are same.)
+
+@subsection Performance considerations
+
+As it was noted in overview section, db-postmodern has about 
+constant overhead (on scale of 0.1 milliseconds) for each operation, 
+such as slot read, so for a better performance use as few of them 
+as possible (do not read same values over and over again, for example).
+
+For better performance db-postmodern does consecutive btree
+reads (such as by map-index, range queries etc.) in batches of 10,
+by default (parameter is configurable), so reading significant
+amounts of data via map functions or cursors might be more efficient
+than doing individual get-value queries.
+
+However, simple value (and slot) lookups can be (optionally) cached, please
+see cache discussion in next section. Range queries and maps cannot
+be cached and always go to database, this is a good reason to avoid
+them wherever possible.
+
+Each btree in db-postmodern is mapped to a SQL table, so if you create
+large number btrees, performance might degrade and memory consuption increase.
+
+In theory db-postmodern should handle larger tables just fine,
+but it was not extensively tested. If you experience slowdowns,
+please enable PostgreSQL logging with performance stats and look
+for queries which take long time. Some issues might be fixed
+by PostgreSQL tuning, for example, switching off enable_hashjoing
+(as it might consider loading whole table in memory to do ``efficient join'')
+or setting random_page_cost to a lower value.
+
+@subsection Cache
+
+Db-postmodern implements optional cache for btree value lookups (and, thus, 
+indirectly, slot reads). Note that range queries and scans are never cached.
+
+By default, caching is disabled. You can enable it by setting db-postmodern::*cache-mode*
+variable to one of values:
+
+@itemize
+
+@item :per-transaction-cache -- performs caching only inside one transaction, cache is not
+  preserved between transactions. This mode has minimal effect on properties on
+  application -- it's unlikely to produce any wrong interference, but you get speedup 
+  from this type of cache only if you repeatedly lookup same values inside a 
+  single transaction. You can enable this kind of cache only for some transactions,
+  binding *cache-mode* variable with let.
+
+@item :global-sync-cache -- caches data accross boundaries of transactions. This cache 
+ is much more likely to speed up application, but it is more likely to introduce some interference.
+ (Caching is designed to be safe, and tests prove that, but as in any complex product
+ elephant/backend can have bugs...) In this cache mode db-postmodern is able to keep
+ cache accross transaction boundaries because it tracks all changes -- change log is
+ stored in a special table in a database. This change tracking introduces some overhead,
+ so this cache mode is only good for read-intensive applications that do lots of value lookups.
+@end itemize
+
+Change tracking in global-sync-cache mode also introduces some maintenance difficulties. First
+of all, it should be enabled on all clients that connect to database, and once it was enabled,
+it cannot be simply disabled back (there is a mechanism to do this, but it should be used
+cautiously). Then, you need an external process to clean up change log on a periodic basis
+(such as cron script running psql). With default settings changes get stale in 10 minutes,
+they can be deleted with queries like this:
 
 @lisp
 DELETE FROM transaction_log WHERE commit_time < (extract(epoch from current_timestamp) - 610);
 DELETE FROM update_log WHERE txn_id NOT IN (SELECT txn_id FROM transaction_log);
 @end lisp
 
-for busy environments this values probably should be tuned. On Unix
-you can use the crontab and psql to execute these statements
-periodically. 
+As it was noted above, once cache is enabled, it should stay enabled in all clients that
+connect to database, however, it makes sense to do inital bulk import with cache being disabled
+(to avoid change log cluttering database) and enable it only after import. It might desirable
+to disable cache in some cases (to do bulk import of data, or for benchmarking), but it should
+be done with caution: you should shutdown all accessing clients, connect to store and
+execute: 
+
+@lisp 
+    (with-transaction ()
+     (db-postmodern::with-connection-for-thread (*store-controller*)
+      (db-postmodern:disable-sync-cache-trigger)))      
+@end lisp
+
+There are some performace consideration that might be important to use sync
+cache efficiently. By default cache keeps data in hash table and never
+deletes it (unless whole cache is erased), so huge amounts of data might be accumulated.
+It might be better to use weak hash table, but then performance might be compromised.
+For small stores, default will work fine. For large stores, you might want to switch
+to weak hash tables, see make-backend-cache function in pm-cache.lisp file. (Unforunately,
+no middle solution is currenlty available -- there is not hash-table-like data structure
+that can efficiently evict stale entries.)
+
+A copy of cache is created for each thread working with store simultaneously, and
+ they are independent. So if you have many threads, memory usage will be higher.
+
+Cache is synchronize for each transaction (when first read or write is made), so 
+it makes sense to wrap multiple operations in transactions, as large as possible.
+
+In some cases whole cache is erased:
+@itemize
+@item if last update was longer than max-resync-time (which defaults to 10 minutes)
+      cache is assumed stale and is abandoned.
+@item when more than max-cache-updates (defaults to 150) changes are pending,
+      db-postmodern considers synchronization not worth effort and erases whole cache.
+@item when transaction is aborted (due to error, for example), cache is lost.
+@end itemize
+
+In busy environments default parameters might be tweaked for better performance
+(for example, allowing more changes and reducing resync time to be able to delete
+stale entries more frequently).
+
+@subsection Installation
+
+For db-postmodern to work you need PostgreSQL (version 8.1 or later) to be installed
+and postmodern lisp library to be available. Postmodern uses md5 password identification,
+so you might need to enable it in PostgreSQL (on some systems it is enabled by default):
+edit /var/lib/pgsql/data/pg_hba.conf file and in line for host 127.0.0.1/32 set method to md5, like this:
+@lisp
+host all all 127.0.0.1/32 md5
+@end lisp
+
+You also need to create database (for each store) and a user that will be used for authentication.
+This is typically done as postgres user (via ``su postgres'' or ``sudo -u postgres -i''). To create
+user, execute command like this ``psql -c "create user myuser with password 'mypassword';"''.
+
+To create a new database, run a sequence of commands like this (add ``dropdb elepm;'' if you're re-creating it):
+@lisp
+  createdb elepm;
+  psql -c 'grant all on database elepm to myuser;' postgres;
+  psql -c 'create language plpgsql' elepm;
+@end lisp
+
+Then you should be able to connect to this store via a following connection spec:
+
+@lisp
+(defparameter *sample-postmodern-spec* '(:postmodern (:postgresql "127.0.0.1" "elepm" "myuser" "mypassword")))
+@end lisp
+
+@subsection Transaction handling
+
+Db-postmodern inherits transaction handling traits from PostgreSQL:
+
+@itemize
+@item Transactions cannot be nested. If you place one transaction inside other, only outer transaction boundaries
+will be in effect.
+@item If error happens during transaction, it must be ignored immidiately -- all operations will fail
+until transaction is rolled back.
+@item PostgreSQL uses Multiversion concurrenct control semantics (new and old version can peacefully coexist
+until transaction is commited or rolled back), thus transactions are only blocked when there are conflicting
+updates. Db-postmodern operates on ``serializable'' isolation level, that means that transcations view of data
+is fixed at its start, and in no way it can see data that is commited after its start. This also means
+that conflicting concurrent updates are possible, and in case of conflicts one of transactions is retried. (Before
+that, it is blocked until it is clear that there is unavoidable conflict.) However, this does not mean that transactions
+are totally serialized, please check PostgreSQL's manual for the meaning of ``serializable'' isolation mode.
+@item Deadlocks are possible, if deadlock is detected, one of transactions is retried.
+@end itemize
+
+Since conflicts and deadlocks are possible, sometimes we need to retry transaction. Handling of these retries
+might interfere with application logic, so we'll expose some of internal mechanisms for better interaction with 
+the application. When conflict or deadlock is detected, error is signalled, and these errors are normally
+caught in ensure-transaction (with-transaction), then transaction is retried via calling RETRY-TRANSACTION restart.
+If you catch errors inside with-transaction for your own purposes (like debugging or logging), retrying will not
+work properly unless you either signal error back, or invoke db-postmodern::RETRY-TRANSACTION restart manually (alternatively, 
+you can call db-postmodern::ABORT-TRANSACTION restart to abort it, returning control outside with-transaction).
+You can also interleave db-postmodern's error handles with your own via nested with-transactions, like this:
+
+@lisp
+
+ (with-transaction ()
+   (handler-case 
+    (progn
+       (with-transaction ()
+         ... db-code
+          )
+       ... aplication code
+       (with-transaction ()
+         ... db-code
+          ))
+     (error (e) 
+      (report-error e)
+      (invoke-restart 'db-postmodern::abort-transaction))))
+@end lisp
+
+
+As en extension of Elephant transaction handling, db-postmodern allows you to do application-specific 
+cleanup before transaction is retried via retry-cleanup-fn parameter:
+
+@lisp
+  (with-transaction (:retry-cleanup-fn (lambda (condition controller)
+                                         (log condition)
+                                         (clear-response *current-response*)))
+     ...)
+@end lisp
 
 caching is optimized for single executor thread 
 (it's assumed you have multiple clients with one thread in each)
