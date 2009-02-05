@@ -234,8 +234,7 @@ $$ LANGUAGE plpgsql;
                                         (subseq parameter 0 2000)
                                         parameter))
                ((null parameter)
-                (signal 'bad-db-parameter)
-                "")
+                (error 'bad-db-parameter))
                (t (warn "Suspect string input to postgres-format.")
                   (format nil "~a" parameter))))
     (:object (princ-to-string (ensure-bid (serialize-to-postmodern parameter (active-controller)))))    
@@ -249,7 +248,7 @@ $$ LANGUAGE plpgsql;
 
 (defun data-type (item)
   (typecase item
-    (integer :integer)
+    ((signed-byte 64) :integer)
     (string  :string)
     (t :object)))
 
@@ -457,6 +456,10 @@ and replace old table with new. this is the really evil function."
 (defclass pm-dup-btree-wrapper (dup-btree pm-btree-wrapper)
   ())
 
+(defmethod make-connection-btree ((bt pm-dup-btree-wrapper))
+  (make-instance 'pm-dup-btree :wrapper bt))
+
+  
 (defmethod duplicates-allowed-p ((bt pm-dup-btree)) t)
 
 (defmethod create-table-from-first-values :before ((bt pm-dup-btree) key value)
