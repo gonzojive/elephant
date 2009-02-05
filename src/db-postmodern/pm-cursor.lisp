@@ -195,7 +195,6 @@
 (defmethod cursor-delete ((cursor pm-cursor))
   (if (cursor-initialized-p cursor)
       (let ((key (current-key-of cursor)))
-	(cursor-close cursor)
 	(remove-kv key (cursor-btree cursor))
 	(values))
       (error "Can't delete with uninitialized cursor")))
@@ -270,3 +269,13 @@
     (if (and found (ele::lisp-compare-equal val (current-value-of cursor)))
 	(values t k v)
 	(cursor-close cursor))))
+
+(defmethod cursor-delete ((cursor pm-dupb-cursor))
+  (if (cursor-initialized-p cursor)
+      (progn
+       (remove-kv-pair (current-key-of cursor) $
+                       (current-value-of cursor)
+                       (cursor-btree cursor))
+       (values))
+      (error "Can't delete with uninitialized cursor")))
+
