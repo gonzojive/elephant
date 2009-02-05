@@ -319,13 +319,8 @@ cleanup before transaction is retried via retry-cleanup-fn parameter:
      ...)
 @end lisp
 
-caching is optimized for single executor thread 
-(it's assumed you have multiple clients with one thread in each)
-if you have transactions in more than one thread simultaneously, multiple independent cache instances 
-will be created.
+It is called just before transaction is retried, and can be also useful for database error logging.
 
-in order to implement robust behaviour, in some cases implementation clears whole cache,
- assuming it's stale or broken. this cases are:
-* last update is older than max-resync-time, which defaults to 10 minutes. 
-* too many enties arrived since last update -- defaults to 150 entries.
-* transaction is aborted (in this case cache is assumed broken).
+Another extension is :always-rollback parameter, it is useful when you'd like to avoid actually changing database, for example, when running tests. However, note that Elephant does not always handle rollbacks correctly (due to issues with controller state which is not transactional, it is not a db-postmodern-specific issue), to avoid problems with it you should re-open store for each transaction (with-open-store) and :enable-multi-store-indexing in config.
+                             
+  
