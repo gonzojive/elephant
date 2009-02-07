@@ -22,15 +22,15 @@
   :licence "LLGPL"
   :description "Prevalence style database for Elephant based on CL-PREVALENCE"
   :components
-;  ((:module :src
-;	    :components
-;	    ((:module :db-clp
-;		      :components
+  ((:module :src
+	    :components
+	    ((:module :db-clp
+		      :components
 		      ((:file "package")
 		       (:file "primitives")
-		       (:file "clp-controller"))
-;;   (:file "clprev-slots")
-;;   (:file "clprev-collections")
-;;   (:file "clprev-transactions")
+		       (:file "clp-controller"))))))
+;   (:file "clprev-slots")
+;   (:file "clprev-collections")
+;   (:file "clprev-transactions")
   :serial t
   :depends-on (:elephant :cl-prevalence :cl-containers))
