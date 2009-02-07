@@ -144,9 +144,13 @@
 ;; 	       (return nil))))
 ;;     node))
 
+;;
 ;; Serializer support for persistent objects
+;;
 
-(defmethod s-serialization::serialize-xml-internal ((object persistent-object) stream serialization-state)
+(defmethod s-serialization::serialize-xml-internal ((object persistent) stream serialization-state)
+  (declare (ignore serialization-state))
+;;  (format t "serializing: ~A~%" object)
   (write-string "<PERSISTENT ID=\"" stream)
   (prin1 (oid object) stream)
   (write-string "\" CLASS=\"" stream)
@@ -154,15 +158,13 @@
   (write-string "\" PKG=\"" stream)
   (princ (package-name (symbol-package (type-of object))) stream)
   (write-string "\"/>" stream))
-;  (when (subtypep (type-of object) 'clp-btree)
-;    (s-serialization::serialize-xml-internal (slot-value object 'tree)
-;					     stream serialization-state))
 
 (defmethod s-serialization::deserialize-xml-new-element-aux 
     ((name (eql :persistent)) attributes)
   (let ((oid (parse-integer (s-serialization::get-attribute-value :id attributes)))
 	(classname (intern (s-serialization::get-attribute-value :class attributes)
 			   (find-package (s-serialization::get-attribute-value :pkg attributes)))))
+;;    (format t "deserializing: ~A of class ~A~%" oid classname )
     (aif (gethash oid *load-table*) it
 	 (setf (gethash oid *load-table*)
 	       (ele::initial-persistent-setup
@@ -174,12 +176,25 @@
   (let ((object (gethash (parse-integer 
 			  (s-serialization::get-attribute-value :id attributes))
 			 *load-table*)))
+;;    (format t "deserialized: ~A~%" object)
     object))
 	    
 
+;;
+;; Serializer support for empty RBT nodes
+;;
 
-;;  (elephant::controller-recreate-instance *store-controller* 
-;     (parse-integer (s-serialization::get-attribute-value :id attributes))
-;     (intern (s-serialization::get-attribute-value :class attributes)
-;	     (find-package (s-serialization::get-attribute-value :pkg attributes)))))
+(defmethod s-serialization::serialize-xml-internal 
+    ((node cl-containers::red-black-node) stream state)
+  (if (cl-containers::node-empty-p node)
+      (write-string "<RBT-EMPTY-NODE/>" stream)
+      (call-next-method)))
+
+(defmethod s-serialization::deserialize-xml-finish-element-aux
+    ((name (eql :rbt-empty-node)) attributes parent-seed seed)
+  cl-containers::*rbt-empty-node*)
+
+
+
+
 

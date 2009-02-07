@@ -98,6 +98,7 @@
 	      (setf (get-root-object scprev :cid-counter) 4))
 	    ;; Slot values (we can do better than this! Need MOP upgrade though)
 	    (setf (get-root-object scprev :slots) (make-slot-proxy))
+	    (setf (get-root-object scprev :trees) (make-hash-table))
 
 	    ;; Schema table (save the root tree)
 	    (setf (slot-value sc 'schema-table)
@@ -148,10 +149,9 @@
 		  (get-root-object scprev :root))
 
 	    (maphash (lambda (oid inst)
-		       (when (> oid 3)
-			 (ele::recreate-instance inst :from-oid oid :sc sc)))
+;;		       (when (> oid 3)
+		       (ele::recreate-instance inst :from-oid oid :sc sc))
 		     *load-table*)
-	    (break)
 	    )))))
 
 (defmacro with-prev-store ((sc) &body body)
@@ -306,12 +306,49 @@
 ;; Aggregates
 ;;
 
+
+;;
+;; Save copies of the proxy tree for any collection
+;;
+
+(defun save-proxy-tree (btree)
+  "Make sure we record the proxy trees"
+  (let* ((pc (controller-prevalence-system (get-con btree)))
+	 (tree-hash (get-root-object pc :trees)))
+    (setf (gethash (oid btree) tree-hash)
+	  (tree btree))))
+
+(defun load-proxy-tree (btree)
+  (let* ((pc (controller-prevalence-system (get-con btree)))
+	 (tree-hash (get-root-object pc :trees)))
+    (setf (tree btree)
+	  (gethash (oid btree) tree-hash))))
+
+(defun drop-proxy-tree (btree)
+  (let* ((pc (controller-prevalence-system (get-con btree)))
+	 (tree-hash (get-root-object pc :trees)))
+    (remhash (oid btree) tree-hash)))
+
+;;
 ;; Default btree
+;;
 
 (defclass clp-btree (btree)
   ((tree :accessor tree 
 	 :initarg :tree
 	 :initform (make-btree-proxy))))
+
+(defmethod initialize-instance :after ((btree clp-btree) &rest args)
+  (declare (ignore args))
+  (save-proxy-tree btree))
+
+(defmethod drop-instance ((btree clp-btree))
+  (drop-proxy-tree btree)
+  (call-next-method))
+
+(defmethod ele::recreate-instance :after ((btree clp-btree) &rest args)
+  (declare (ignore args))
+  (load-proxy-tree btree))
 
 (defmethod build-btree ((sc clp-controller))
   (make-instance 'clp-btree))
@@ -391,14 +428,12 @@
 ;; Indexed btree
 
 (defclass clp-indexed-btree (indexed-btree clp-btree)
-  ((indices :accessor indices :initarg :indices)
-   (tree :accessor tree :initarg :tree))
+  ((indices :accessor indices :initarg :indices))
   (:metaclass persistent-metaclass))
 
 (defmethod initialize-instance :after ((obj clp-indexed-btree) &rest initargs)
   (declare (ignore initargs))
-  (setf (indices obj) (make-hash-table))
-  (setf (tree obj) (make-btree-proxy)))
+  (setf (indices obj) (make-hash-table)))
 
 (defmethod build-indexed-btree ((sc clp-controller))
   (make-instance 'clp-indexed-btree :sc sc))
@@ -498,12 +533,13 @@
 ;;
 
 (defclass clp-btree-index (btree-index clp-btree)
-  ((primary :accessor primary :initarg :primary))
+  ((primary :accessor primary :initarg :primary)
+   (tree :accessor tree :initarg :tree :initform (make-btree-proxy :duplicate-keys t)))
   (:metaclass persistent-metaclass))
 
-(defmethod initialize-instance :after ((obj clp-btree-index) &rest initargs)
-  (declare (ignore initargs))
-  (setf (tree obj) (make-btree-proxy :duplicate-keys t)))
+;;(defmethod initialize-instance :after ((obj clp-btree-index) &rest initargs)
+;;  (declare (ignore initargs)))
+;;  (setf (tree obj) (make-btree-proxy :duplicate-keys t)))
 
 (defmethod shared-initialize :after ((obj clp-btree-index) names &rest initargs)
   (declare (ignore names initargs))
@@ -594,11 +630,11 @@
 ;;
 
 (defclass clp-dup-btree (dup-btree clp-btree)
-  ())
+  ((tree :accessor tree :initarg :tree :initform (make-btree-proxy :duplicate-keys t))))
 
 (defmethod build-dup-btree ((sc clp-controller))
-  (make-instance 'clp-dup-btree :sc sc
-		 :tree (make-btree-proxy :duplicate-keys t)))
+  (make-instance 'clp-dup-btree :sc sc))
+;;		 :tree (make-btree-proxy :duplicate-keys t)))
 
 (defmethod get-value (key (bt clp-dup-btree))
   (awhen (containers:find-successor-node (tree bt) (cons key nil))
