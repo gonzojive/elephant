@@ -469,6 +469,8 @@ not), evaluates the forms, then closes the cursor."
 	(symbol (string-not-greaterp (symbol-name a) (symbol-name b)))
 	(pathname (string-not-greaterp (namestring a) (namestring b)))
 	(persistent (<= (oid a) (oid b)))
+	(cons (or (lisp-compare<= (car a) (car b))
+		  (lisp-compare<= (cdr a) (cdr b))))
 	(t nil))
     (error ()
       (type<= a b))))
@@ -486,6 +488,9 @@ not), evaluates the forms, then closes the cursor."
 	(symbol (string-lessp (symbol-name a) (symbol-name b)))
 	(pathname (string-lessp (namestring a) (namestring b)))
 	(persistent (< (oid a) (oid b)))
+	(cons (if (lisp-compare-equal (car a) (car b))
+		  (lisp-compare< (cdr a) (cdr b))
+		  (lisp-compare< (car a) (car b))))
 	(t nil))
     (error () 
       (type< a b))))
@@ -495,9 +500,9 @@ not), evaluates the forms, then closes the cursor."
   (handler-case
       (typecase a
 	(persistent (eq (oid a) (oid b)))
-	(t (equalp a b)))
+	(t (equal a b)))
     (error ()
-      (equalp a b))))
+      (equal a b))))
 
 (defun lisp-compare>= (a b)
   (not (lisp-compare< a b)))

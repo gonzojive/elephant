@@ -2,9 +2,11 @@
 
 (declaim (optimize (speed 1) safety debug))
 
-(defclass btree-proxy (containers:binary-search-tree)
-  ())
+(defvar *load-table* nil
+  "Remember all loaded instances for recreation")
 
+(defclass btree-proxy (containers:red-black-tree)
+  ())
 
 (defun make-btree-proxy (&key duplicate-keys)
   (cond (duplicate-keys 
@@ -40,17 +42,21 @@
 ;; BTREE API
 
 (defun get-item (proxy key)
-  (awhen (containers:find-item proxy (cons key nil))
-    (cdr (containers:element it))))
+  (awhen (containers:find-node proxy (cons key nil))
+    (values (cdr (containers:element it)) t)))
 
-(defun insert-item (proxy key value)
+(defun get-successor-item (proxy key)
+  (awhen (containers:find-successor-node proxy (cons key nil))
+    (values (cdr (containers:element it)) t)))
+
+(defun insert-proxy-item (proxy key value)
   (containers:insert-item proxy (cons key value))
   value)
 
 (defun unique-insert-item (proxy key value)
   (aif (containers:find-item proxy (cons key nil))
        (setf (cdr (containers:element it)) value)
-       (insert-item proxy key value))
+       (insert-proxy-item proxy key value))
   value)
 
 (defun exists (proxy key)
@@ -66,7 +72,7 @@
 
 ;;==================================================
 
-(defclass slot-proxy (containers:binary-search-tree)
+(defclass slot-proxy (containers:red-black-tree)
   ())
 
 (defun make-slot-proxy ()
@@ -109,29 +115,74 @@
     t))
 
 (defmethod proxy-slot-makunbound (proxy oid slotname)
-  (awhen (containers:delete-item proxy (list oid slotname))
-    (containers:element it)))
+  (containers:delete-item proxy (list oid slotname)))
 
 ;; Map Utilities
 
 (defun proxy-find-node (proxy start from-end test)
-  (let ((node (containers:find-successor-node proxy (cons start nil))))
-    (when from-end
-      (loop for next = (containers:successor proxy node) do
-	   (if (funcall test (containers:element node) (containers:element next))
-	       (setf node next)
-	       (return nil))))
-    node))
+  (let* ((elt (cons start nil))
+	 (node (containers:find-successor-node proxy elt)))
+    (if from-end 
+	(if (funcall test (containers:element node) elt)
+	    (find-last-duplicate proxy start test node)
+            (containers:predecessor proxy node))
+	node)))
+
+(defun find-last-duplicate (proxy start test node)
+  (loop 
+     for new = (containers:successor proxy node)
+     while (funcall test (containers:element new) (cons start nil)) 
+     do (setf node new))
+  node)
+
+
+;;   (let ((node 
+;;     (when from-end
+;;       (loop for next = (containers:successor proxy node) do
+;; 	   (if (funcall test (containers:element node) (containers:element next))
+;; 	       (setf node next)
+;; 	       (return nil))))
+;;     node))
 
 ;; Serializer support for persistent objects
 
-(defmethod s-serialization::serialize-xml-internal ((object persistent) stream serialization-state)
-  (declare (ignore serialization-state))
+(defmethod s-serialization::serialize-xml-internal ((object persistent-object) stream serialization-state)
   (write-string "<PERSISTENT ID=\"" stream)
   (prin1 (oid object) stream)
-  (write-string "\"/>" stream))
+  (write-string "\" CLASS=\"" stream)
+  (princ (class-name (class-of object)) stream)
+  (write-string "\" PKG=\"" stream)
+  (princ (package-name (symbol-package (type-of object))) stream)
+  (write-string "\"/>" stream)
+  (when (subtypep (type-of object) 'clp-btree)
+    (s-serialization::serialize-xml-internal (slot-value object 'tree)
+					     stream serialization-state))
+  (write-string "</PERSISTENT>" stream))
 
 (defmethod s-serialization::deserialize-xml-new-element-aux 
     ((name (eql :persistent)) attributes)
-  (elephant::controller-recreate-instance *store-controller* 
-					  (parse-integer (s-serialization::get-attribute-value :id attributes))))
+  (let ((oid (parse-integer (s-serialization::get-attribute-value :id attributes)))
+	(classname (intern (s-serialization::get-attribute-value :class attributes)
+			   (find-package (s-serialization::get-attribute-value :pkg attributes)))))
+    (aif (gethash oid *load-table*) it
+	 (setf (gethash oid *load-table*)
+	       (ele::initial-persistent-setup
+		(allocate-instance (find-class classname))
+		:from-oid oid :sc *store-controller*)))))
+
+(defmethod s-serialization::deserialize-xml-finish-element-aux
+    ((name (eql :persistent)) attributes parent-seed seed)
+  (let ((object (gethash (parse-integer 
+			  (s-serialization::get-attribute-value :id attributes))
+			 *load-table*)))
+    (when (subtypep (type-of object) 'clp-btree)
+      (setf (tree object) seed))
+    object))
+	    
+
+
+;;  (elephant::controller-recreate-instance *store-controller* 
+;     (parse-integer (s-serialization::get-attribute-value :id attributes))
+;     (intern (s-serialization::get-attribute-value :class attributes)
+;	     (find-package (s-serialization::get-attribute-value :pkg attributes)))))
+

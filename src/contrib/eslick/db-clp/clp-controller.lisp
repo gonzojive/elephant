@@ -18,6 +18,9 @@
 
 (in-package :db-clp)
 
+(defvar *loading* nil
+  "Special behavior during snapshot restoration")
+
 (defclass clp-controller (store-controller)
   ((prev-ctrl :accessor controller-prevalence-system)))
 
@@ -44,44 +47,119 @@
 	 (otherwise nil))))
 
 ;;
+;; Override some of the prevalence behavior
+;;  to deal with bootstrapping issues
+;;
+
+(defclass clp-prevalence-system (guarded-prevalence-system)
+  ())
+
+(defmethod restore ((system clp-prevalence-system))
+;;  (unless *loading* 
+    (call-next-method))
+
+
+(defmethod snapshot ((system clp-prevalence-system))
+;;  (with-open-file (out root-snapshot :direction :output
+;;		       :if-does-not-exist :supersede)
+  (call-next-method))
+
+(defmethod execute ((system clp-prevalence-system) (transaction transaction))
+  (if *loading*
+      (apply (cl-prevalence::get-function transaction)
+	     (cons system (cl-prevalence::get-args transaction)))
+      (call-next-method)))
+
+
+;;
 ;; Open and close the controller
 ;;
 
 (defmethod open-controller ((sc clp-controller) &key &allow-other-keys)
-  (let ((*store-controller* sc))
-    (declare (special *store-controller*))
+  (let ((*store-controller* sc)
+	(*loading* t)
+	(*load-table* (make-hash-table)))
+    (declare (special *store-controller* *loading* *load-table*))
+    ;; Restore core data structures
     (let ((scprev 
 	   (make-prevalence-system (second (controller-spec sc))
 				   :prevalence-system-class
-				   'guarded-prevalence-system)))
+				   'clp-prevalence-system)))
       (setf (controller-prevalence-system sc) scprev)
-      (unless (get-root-object scprev :cid-counter)
-	;; Version
-	(set-database-version sc)
-	(initialize-serializer sc)
-	;; IDs
-	(unless (get-root-object scprev :oid-counter)
-	  (setf (get-root-object scprev :oid-counter) 3))
-	(unless (get-root-object scprev :cid-counter)
-	  (setf (get-root-object scprev :cid-counter) 4))
-	;; Slot values (we can do better than this! Need MOP upgrade though)
-	(setf (get-root-object scprev :slots) (make-slot-proxy))
-	(snapshot scprev))
-      ;; Root indices and tables
-      (setf (slot-value sc 'root)
-	    (make-instance 'clp-btree :from-oid 0 :sc sc))
-      (setf (slot-value sc 'index-table)
-	    (make-instance 'clp-btree :from-oid 1 :sc sc))
-      (setf (slot-value sc 'instance-table)
-	    (make-instance 'clp-indexed-btree :from-oid 2 :sc sc))
-      (setf (slot-value sc 'schema-table)
-	    (make-instance 'clp-indexed-btree :from-oid 3 :sc sc))
-      sc)))
-      
+      (if (not (get-root-object scprev :cid-counter))
+	  (progn
+	    ;; Version
+	    (set-database-version sc)
+	    (initialize-serializer sc)
+	    ;; IDs
+	    (unless (get-root-object scprev :oid-counter)
+	      (setf (get-root-object scprev :oid-counter) 3))
+	    (unless (get-root-object scprev :cid-counter)
+	      (setf (get-root-object scprev :cid-counter) 4))
+	    ;; Slot values (we can do better than this! Need MOP upgrade though)
+	    (setf (get-root-object scprev :slots) (make-slot-proxy))
+	    (snapshot scprev)
+
+	    ;; Schema table (save the root tree)
+	    (setf (slot-value sc 'schema-table)
+		  (make-instance 'clp-indexed-btree :from-oid 3 :sc sc))
+	    (setf (get-root-object scprev :schema-table)
+		  (tree (slot-value sc 'schema-table)))
+	    ;; Instance table
+	    (setf (slot-value sc 'instance-table)
+		  (make-instance 'clp-indexed-btree :from-oid 2 :sc sc))
+	    (setf (get-root-object scprev :instance-table)
+		  (tree (slot-value sc 'instance-table)))
+	    ;; Index table
+	    (setf (slot-value sc 'index-table)
+		  (make-instance 'clp-btree :from-oid 1 :sc sc))
+	    (setf (get-root-object scprev :index-table)
+		  (tree (slot-value sc 'index-table)))
+	    ;; Root
+	    (setf (slot-value sc 'root)
+		  (make-instance 'clp-btree :from-oid 0 :sc sc))
+	    (setf (get-root-object scprev :root)
+		  (tree (slot-value sc 'root)))
+	    (setf *loading* nil)
+	    sc)
+
+	  (progn
+	    ;; Schema table cid->schema obj
+	    (setf (slot-value sc 'schema-table)
+		  (make-instance 'clp-indexed-btree :from-oid 3 :sc sc))
+	    (setf (tree (slot-value sc 'schema-table))
+		  (get-root-object scprev :schema-table))
+	    
+	    ;; Instance table
+	    (setf (slot-value sc 'instance-table)
+		  (make-instance 'clp-indexed-btree :from-oid 2 :sc sc))
+	    (setf (tree (slot-value sc 'schema-table))
+		  (get-root-object scprev :schema-table))
+
+	    ;; Index table
+	    (setf (slot-value sc 'index-table)
+		  (make-instance 'clp-btree :from-oid 1 :sc sc))
+	    (setf (tree (slot-value sc 'index-table))
+		  (get-root-object scprev :index-table))
+
+	    ;; Root
+	    (setf (slot-value sc 'root)
+		  (make-instance 'clp-btree :from-oid 0 :sc sc))
+	    (setf (tree (slot-value sc 'root))
+		  (get-root-object scprev :root))
+	    (break)
+	    (maphash (lambda (oid inst)
+		       (format "recreating: ~A ~A~%" oid inst)
+		       (when (> oid 5)
+			 (ele::recreate-instance inst)))
+		     *load-table*)
+	    (break)
+	    )))))
 
 (defmacro with-prev-store ((sc) &body body)
-  `(let ((*clp* (controller-prevalence-system ,sc)))
-     (declare (special *clp*))
+  `(let ((*clp* (controller-prevalence-system ,sc))
+	 (*store-controller* sc))
+     (declare (special *clp* *store-controller*))
      ,@body))
 
 (defmethod close-controller ((sc clp-controller))
@@ -137,7 +215,7 @@
 	(3 3)
 	(4 4)
 	(5 4))
-      oid))
+      (call-next-method)))
 
 (defmethod default-class-id (type (sc clp-controller))
   (ecase type
@@ -200,7 +278,6 @@
 	    (slot-unbound (class-of instance) instance name))))))
 
 (defmethod persistent-slot-writer ((sc clp-controller) new-value instance name)
-  (declare (ignore oids-only))
   (internal-transaction sc 'tx-write-object-slot
     (oid instance) name new-value))
 
@@ -303,7 +380,7 @@
   (cond (value (proxy-find-node proxy value nil test))
 	(from-end
 	 (if end
-	     (proxy-find-node proxy end from-end test)
+	     (proxy-find-node proxy end t test)
 	     (containers::last-node proxy)))
 	(start
 	 (proxy-find-node proxy start nil test))
@@ -329,8 +406,7 @@
   (make-instance 'clp-indexed-btree :sc sc))
 
 (defmethod build-btree-index ((sc clp-controller) &key primary key-form)
-  (make-instance 'clp-btree-index :primary primary :key-form key-form :sc sc
-		 :tree (make-btree-proxy :duplicate-keys t)))
+  (make-instance 'clp-btree-index :primary primary :key-form key-form :sc sc))
 
 (defmethod elephant::add-index ((bt clp-indexed-btree) &key index-name key-form (populate t))
   (if (and (not (null index-name))
@@ -370,7 +446,6 @@
     bt key value))
 
 (defun tx-set-indexed-value (clp bt key value)
-  (declare (ignore clp))
   (let ((old-value (get-value key bt)))
     (unique-insert-item (tree bt) key value)
     (labels ((update-index (name index)
@@ -381,12 +456,12 @@
 		   (multiple-value-bind (index? old-skey)
 		       (funcall key-fn index key old-value)
 		     (when index?
-		       (remove-kv-pair old-skey key tree))))
+		       (tx-remove-index-pair clp tree old-skey key))))
 		 ;; Insert new one
 		 (multiple-value-bind (index? skey)
 		     (funcall key-fn index key value)
 		   (when index? 
-		     (insert-item tree skey key))))))
+		     (insert-proxy-item tree skey key))))))
       (map-indices #'update-index bt))))
 
 (defmethod populate ((bt clp-indexed-btree) index)
@@ -398,7 +473,7 @@
 	       (destructuring-bind (key . value) element
 		 (multiple-value-bind (index? skey)
 		     (funcall key-fn index key value)
-		   (when index? (insert-item itree skey key))))))
+		   (when index? (insert-proxy-item itree skey key))))))
       (containers:iterate-elements ibtree #'popfn))))
 
 (defmethod remove-kv (key (bt clp-indexed-btree))
@@ -406,7 +481,6 @@
       'tx-remove-indexed-kv bt key))
 
 (defun tx-remove-indexed-kv (clp bt key)
-  (declare (ignore clp))
   (let ((old-value (get-value key bt)))
     (remove-kv key (tree bt))
     (labels ((update-index (name index)
@@ -416,7 +490,7 @@
 		 (multiple-value-bind (index? old-skey)
 		     (funcall key-fn index key old-value)
 		   (when index?
-		     (remove-kv-pair old-skey key tree))))))
+		     (tx-remove-index-pair clp tree old-skey key))))))
       (map-indices #'update-index bt))
     (values old-value)))
 
@@ -431,7 +505,11 @@
 
 (defmethod initialize-instance :after ((obj clp-btree-index) &rest initargs)
   (declare (ignore initargs))
-  (setf (tree obj) (make-btree-proxy)))
+  (setf (tree obj) (make-btree-proxy :duplicate-keys t)))
+
+(defmethod shared-initialize :after ((obj clp-btree-index) names &rest initargs)
+  (declare (ignore names initargs))
+  obj)
 
 (defmethod get-value (key (idx clp-btree-index))
   "Returns one of any redundant values"
@@ -440,25 +518,28 @@
       (get-item (tree (primary idx)) key))))
 
 (defmethod get-primary-key (key (idx clp-btree-index))
-  (get-item (tree idx) key))
+  (awhen (containers:find-successor-node (tree idx) (cons key nil))
+    (let ((elt (containers:element it)))
+      (when (lisp-compare-equal key (car elt))
+	(values (cdr elt) t)))))
 
 (defmethod remove-kv (key (idx clp-btree-index))
-  (internal-transaction (get-con idx) 
+  (internal-transaction (get-con idx)
       'tx-index-remove-indexed-kv idx key))
 
 (defun tx-index-remove-indexed-kv (clp idx ikey)
-  (let ((key (get-item (tree idx) ikey)))
-    (unless key
+  (let ((pkey (get-primary-key ikey idx)))
+    (unless pkey
       (error "Index out of sync with primary ~A for key ~A" (primary idx) ikey))
-    (tx-remove-indexed-kv clp (primary idx) key)))
+    (tx-remove-indexed-kv clp (primary idx) pkey)))
 
-(defmethod remove-kv-pair (key value (idx clp-btree-index))
-  (internal-transaction (get-con idx) 'tx-remove-index-pair
-    idx key value))
+;;(defmethod remove-kv-pair (key value (idx clp-btree-index))
+;;  (internal-transaction (get-con idx) 'tx-remove-index-pair
+;;    idx key value))
 
-(defun tx-remove-index-pair (clp idx key value)
+(defun tx-remove-index-pair (clp tree key value)
   (declare (ignore clp))
-  (remove-kv-pair key value (tree idx)))
+  (remove-kv-pair key value tree))
 
 (defmethod map-btree (fn (bt clp-btree-index)
 		      &key start end value from-end collect
@@ -521,13 +602,19 @@
   (make-instance 'clp-dup-btree :sc sc
 		 :tree (make-btree-proxy :duplicate-keys t)))
 
+(defmethod get-value (key (bt clp-dup-btree))
+  (awhen (containers:find-successor-node (tree bt) (cons key nil))
+    (let ((elt (containers:element it)))
+      (when (lisp-compare-equal key (car elt))
+	(values (cdr elt) t)))))
+
 (defmethod (setf get-value) (value key (bt clp-dup-btree))
   (internal-transaction (get-con bt) 'tx-set-dup-bt-value
     bt key value))
 
 (defun tx-set-dup-bt-value (clp bt key value)
   (declare (ignore clp))
-  (insert-item (tree bt) key value))
+  (insert-proxy-item (tree bt) key value))
 
 (defmethod remove-kv-pair (key value (bt clp-dup-btree))
   (internal-transaction (get-con bt) 'tx-remove-dup-pair

@@ -93,7 +93,7 @@
   item)
 
 (defmethod remove-item (item (pset default-pset))
-  (remove-kv item (pset-btree pset))
+  (remove-kv-pair item t (pset-btree pset))
   item)
 
 (defmethod find-item (item (pset default-pset) &key key (test #'equal))
