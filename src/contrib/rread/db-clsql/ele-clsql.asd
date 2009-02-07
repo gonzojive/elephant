@@ -46,10 +46,10 @@
   :description "SQL-based Object respository for Common Lisp"
   :long-description "An experimental CL-SQL based implementation of Elephant"
   :components
-  ((:module :src
-	    :components
-	    ((:module :db-clsql
-		      :components
+;;  ((:module :src
+;;	    :components
+;;	    ((:module :db-clsql
+;;		      :components
 		      ((:file "package")
 		       (:file "sql-controller")
 		       (:file "sql-transaction")
@@ -57,7 +57,8 @@
 		       (:file "sql-dupbtree")
 		       )
 		      :serial t
-		      ))))
+;;		      ))))
+		      
   :depends-on (:elephant :clsql :cl-base64))
 
 

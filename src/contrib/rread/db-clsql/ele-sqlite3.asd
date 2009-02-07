@@ -51,9 +51,9 @@
   :long-description "Including this loads the SQLite3 code; you may have to edit the pathname!"
   
   :components
-  ((:module :src
+;;  ((:module :src
 	    :components
 	    (
 	)
-	    :serial t))
+;;	    :serial t
   :depends-on (:ele-clsql :clsql-sqlite3))

@@ -24,9 +24,9 @@
   :maintainer "Robert L. Read <read@robertlread.net>"
   :licence "GPL"
   :description "PostgreSQL based Object respository for Common Lisp"
-  
-  :components
-  ((:module :src
-	    :components
-	    ()))
+
+  :components ()
+;;  ((:module :src
+;;	    :components
+;;	    ()))
   :depends-on (:ele-clsql :clsql-postgresql-socket))
