@@ -98,7 +98,6 @@
 	      (setf (get-root-object scprev :cid-counter) 4))
 	    ;; Slot values (we can do better than this! Need MOP upgrade though)
 	    (setf (get-root-object scprev :slots) (make-slot-proxy))
-	    (snapshot scprev)
 
 	    ;; Schema table (save the root tree)
 	    (setf (slot-value sc 'schema-table)
@@ -120,45 +119,44 @@
 		  (make-instance 'clp-btree :from-oid 0 :sc sc))
 	    (setf (get-root-object scprev :root)
 		  (tree (slot-value sc 'root)))
-	    (setf *loading* nil)
+	    (snapshot scprev)
 	    sc)
 
 	  (progn
 	    ;; Schema table cid->schema obj
 	    (setf (slot-value sc 'schema-table)
-		  (make-instance 'clp-indexed-btree :from-oid 3 :sc sc))
+		  (ele::controller-recreate-instance sc 3 'clp-indexed-btree))
 	    (setf (tree (slot-value sc 'schema-table))
 		  (get-root-object scprev :schema-table))
 	    
 	    ;; Instance table
 	    (setf (slot-value sc 'instance-table)
-		  (make-instance 'clp-indexed-btree :from-oid 2 :sc sc))
+		  (ele::controller-recreate-instance sc 2 'clp-indexed-btree))
 	    (setf (tree (slot-value sc 'schema-table))
 		  (get-root-object scprev :schema-table))
 
 	    ;; Index table
 	    (setf (slot-value sc 'index-table)
-		  (make-instance 'clp-btree :from-oid 1 :sc sc))
+		  (ele::controller-recreate-instance sc 1 'clp-btree))
 	    (setf (tree (slot-value sc 'index-table))
 		  (get-root-object scprev :index-table))
 
 	    ;; Root
 	    (setf (slot-value sc 'root)
-		  (make-instance 'clp-btree :from-oid 0 :sc sc))
+		  (ele::controller-recreate-instance sc 0 'clp-btree))
 	    (setf (tree (slot-value sc 'root))
 		  (get-root-object scprev :root))
-	    (break)
+
 	    (maphash (lambda (oid inst)
-		       (format "recreating: ~A ~A~%" oid inst)
-		       (when (> oid 5)
-			 (ele::recreate-instance inst)))
+		       (when (> oid 3)
+			 (ele::recreate-instance inst :from-oid oid :sc sc)))
 		     *load-table*)
 	    (break)
 	    )))))
 
 (defmacro with-prev-store ((sc) &body body)
-  `(let ((*clp* (controller-prevalence-system ,sc))
-	 (*store-controller* sc))
+  `(let* ((*store-controller* ,sc)
+	  (*clp* (controller-prevalence-system *store-controller*)))
      (declare (special *clp* *store-controller*))
      ,@body))
 

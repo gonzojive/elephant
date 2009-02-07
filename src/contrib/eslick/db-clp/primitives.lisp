@@ -153,11 +153,10 @@
   (princ (class-name (class-of object)) stream)
   (write-string "\" PKG=\"" stream)
   (princ (package-name (symbol-package (type-of object))) stream)
-  (write-string "\"/>" stream)
-  (when (subtypep (type-of object) 'clp-btree)
-    (s-serialization::serialize-xml-internal (slot-value object 'tree)
-					     stream serialization-state))
-  (write-string "</PERSISTENT>" stream))
+  (write-string "\"/>" stream))
+;  (when (subtypep (type-of object) 'clp-btree)
+;    (s-serialization::serialize-xml-internal (slot-value object 'tree)
+;					     stream serialization-state))
 
 (defmethod s-serialization::deserialize-xml-new-element-aux 
     ((name (eql :persistent)) attributes)
@@ -175,8 +174,6 @@
   (let ((object (gethash (parse-integer 
 			  (s-serialization::get-attribute-value :id attributes))
 			 *load-table*)))
-    (when (subtypep (type-of object) 'clp-btree)
-      (setf (tree object) seed))
     object))
 	    
 

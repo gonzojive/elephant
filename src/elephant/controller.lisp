@@ -697,7 +697,7 @@ true."))
 	  (ensure-index (slot-value sc 'instance-table) 'by-name
 			:key-form 'instance-cidx-keyform))))
 
-(defmethod close-controller :before ((sc store-controller))
+(defmethod close-controller :after ((sc store-controller))
   (map-cache (lambda (schema-id schema) 
 	       (declare (ignore schema))
 	       (handler-case
