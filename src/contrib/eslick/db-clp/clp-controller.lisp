@@ -86,11 +86,11 @@
 				   :prevalence-system-class
 				   'clp-prevalence-system)))
       (setf (controller-prevalence-system sc) scprev)
+      (initialize-serializer sc)
       (if (not (get-root-object scprev :cid-counter))
 	  (progn
 	    ;; Version
 	    (set-database-version sc)
-	    (initialize-serializer sc)
 	    ;; IDs
 	    (unless (get-root-object scprev :oid-counter)
 	      (setf (get-root-object scprev :oid-counter) 3))
