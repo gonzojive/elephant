@@ -31,14 +31,15 @@
 (in-suite* collections-basic :in testcollections)
 
 (test basicpersistence
-  (let ((x (gensym)))
-    (add-to-root "x" x)
-    ;; Clear instances
-    (flush-instance-cache *store-controller*)
-    ;; Are gensyms equal across db instantiations?
-    ;; This forces a refetch of the object from db
-    (is (equal (format nil "~A" x)
-               (format nil "~A" (get-from-root "x"))))))
+  (unless (eq (first (ele::controller-spec *store-controller*)) :CLP)
+    (let ((x (gensym)))
+      (add-to-root "x" x)
+      ;; Clear instances
+      (flush-instance-cache *store-controller*)
+      ;; Are gensyms equal across db instantiations?
+      ;; This forces a refetch of the object from db
+      (is (equal (format nil "~A" x)
+		 (format nil "~A" (get-from-root "x")))))))
 
 (test keysizetest
   (let ((key "0123456789"))
