@@ -54,7 +54,7 @@
 ;;  Compute a schema from a slot definition
 ;; =========================================
 
-(defun compute-schema (class-obj)
+(defun class-instance-schema (class-obj)
   "Compute a schema representation from an instance of persistent-metaclass"
   (make-instance 'schema
 		 :name (class-name class-obj)

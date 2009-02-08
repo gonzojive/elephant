@@ -124,10 +124,30 @@
 (defun has-cached-slot-specification (direct-slot-defs)
   (some #'(lambda (slot) (getf slot :cached)) direct-slot-defs))
 
+(defun warn-on-reinitialization-data-loss (class)
+  "Warnings at class def time:
+   - set-valued/assoc (warn!)
+   - persistent/indexed/cached (warn?)
+   - derived hints?
+   Be nice to be able to restore the slots rather than just
+   avoid updating"
+  (let* ((old-schema (get-class-schema class))
+	 (new-schema (class-instance-schema class))
+	 (diffs (schema-diff new-schema old-schema)))
+    (dolist (diff diffs)
+      (when (eq (diff-type diff) :rem)
+	(warn-about-dropped-slots :rem class
+				  (mapcar #'slot-rec-name (cdr diff)))))))
+
+
 (defmethod finalize-inheritance :after ((instance persistent-metaclass))
   "Constructs the metaclass schema when the class hierarchy is valid"
   (let* ((old-schema (get-class-schema instance))
-	 (new-schema (compute-schema instance)))
+	 (new-schema (class-instance-schema instance)))
+    ;; Stop synchronization if necessary to allow for reversing the
+    ;; interactive re-definition
+    (when *warn-on-manual-class-finalization*
+      (warn-on-reinitialization-data-loss instance))
     ;; Update schema chain
     (setf (schema-predecessor new-schema) old-schema)
     (setf (get-class-schema instance) new-schema)
@@ -157,15 +177,6 @@
 	  (error "Finalization error: derived index dependency hint ~A not a valid slot name"
 		 sname))
 	(push ddef (derived-slot-triggers (find-slot-def-by-name class sname)))))))
-
-(defmethod reinitialize-instance :around ((instance persistent-metaclass) &rest initargs 
-					  &key direct-slots &allow-other-keys)
-  (declare (ignore direct-slots initargs))
-  ;; Warnings at class def time:
-  ;; - set-valued/assoc (warn!)
-  ;; - persistent/indexed/cached (warn?)
-  ;; - derived hints?
-  (call-next-method))
 
 
 ;; ===============================================
@@ -276,6 +287,14 @@ slots."
 	(intersection slotnames slot-names :test #'equal)
 	slotnames)))
 
+(defun warn-about-dropped-slots (op class names)
+  (when (and *warn-when-dropping-persistent-slots* names)
+    (cerror "Drop the slots" 
+	    'dropping-persistent-slot-data
+	    :operation op
+	    :class class
+	    :slotnames names)))
+
 (define-condition dropping-persistent-slot-data ()
   ((operation :initarg :operation :reader persistent-slot-drop-operation)
    (class :initarg :class :reader persistent-slot-drop-class)
@@ -284,14 +303,6 @@ slots."
 	     (with-slots (class slots operation) cond
 	       (format stream "Dropping slot(s) ~A for class ~A in ~A."
 		       slots class operation)))))
-
-(defun warn-about-dropped-slots (op class names)
-  (when (and *warn-when-dropping-persistent-slots* names)
-    (cerror "Drop the slots" 
-	    'dropping-persistent-slot-data
-	    :operation op
-	    :class class
-	    :slotnames names)))
 
 ;; ================================================
 ;;  RECREATING A PERSISTENT INSTANCE FROM THE DB
