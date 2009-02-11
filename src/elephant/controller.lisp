@@ -795,6 +795,8 @@ true."))
   (loop for pair in *dbconnection-spec*
        do (close-store (cdr pair))))
 
+#+sbcl(pushnew 'close-all-stores sb-ext:*exit-hooks*)
+
 (defmacro with-open-store ((spec) &body body)
   "Executes the body with an open controller,
    unconditionally closing the controller on exit."
