@@ -38,7 +38,7 @@
 	   (ignorable lock))
   #+allegro `(mp:with-process-lock (,lock) ,@body)
   #+cmu `(mp:with-lock-held (,lock) ,@body)
-  #+sbcl `(sb-thread:with-mutex (,lock) ,@body)
+  #+sbcl `(sb-thread:with-recursive-lock (,lock) ,@body)
   #+lispworks `(mp:with-lock (,lock) ,@body)
   #+mcl `(ccl:with-lock-grabbed (,lock) ,@body)
   #-(or allegro sbcl cmu lispworks mcl) `(progn ,@body) )
