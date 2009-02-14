@@ -664,8 +664,118 @@
 ;; Cursor API Stub
 ;;
 
+(defclass clp-cursor (cursor)
+  ((node :accessor cursor-node :initarg :initial-node :initform nil)))
+
 (defmethod make-cursor ((bt clp-btree))
-  (error "Cursors not supported in prevalence stores"))
+  (make-instance 'clp-cursor :btree bt))
+
+(defmethod cursor-close ((cursor clp-cursor))
+  (declare (ignore cursor)))
+
+(defmethod cursor-duplicate ((cursor clp-cursor))
+  (make-instance 'clp-cursor :oid (cursor-oid cursor)
+                 :initialized-p (cursor-initialized-p cursor)
+                 :initial-node (cursor-node cursor)))
+
+(defmethod cursor-current ((cursor clp-cursor))
+  (when (cursor-initialized-p cursor)
+    (let ((kv-pair (containers:element (cursor-node cursor))))
+      (values t (car kv-pair) (cdr kv-pair)))))
+
+(defmethod cursor-first ((cursor clp-cursor))
+  (let ((node (containers::first-node (tree (cursor-btree cursor)))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-last ((cursor clp-cursor))
+  (let ((node (containers::last-node (tree (cursor-btree cursor)))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-next ((cursor clp-cursor))
+  (let ((node (containers:successor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-prev ((cursor clp-cursor))
+  (let ((node (containers:predecessor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-set ((cursor clp-cursor) key)
+  (let ((node (containers:find-node (tree (cursor-btree cursor))
+                                    (cons key nil))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-set-range ((cursor clp-cursor) key)
+  (let ((node (containers:find-successor-node (tree (cursor-btree cursor))
+                                              (cons key nil))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-get-both ((cursor clp-cursor) key value)
+  (let ((node (containers:find-node (tree (cursor-btree cursor))
+                                    (cons key value))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-get-both-range ((cursor clp-cursor) key value)
+  ;; the following isn't really correct... we want the node that is
+  ;; greater or equal to value, not simply greater than value
+  (let ((node (containers:find-successor-node (tree (cursor-btree cursor))
+                                              (cons key value))))
+    (if node
+        (let ((kv-pair (containers:element node)))
+          (setf (cursor-initialized-p cursor) t
+                (cursor-node cursor) node)
+          (values t (car kv-pair) (cdr kv-pair)))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-delete ((cursor clp-cursor))
+  (when (cursor-initialized-p cursor)
+    (containers:delete-node (cursor-node cursor))
+    (setf (cursor-initialized-p cursor) nil
+          (cursor-node cursor) nil)))
+
+(defmethod cursor-put ((cursor clp-cursor) value &key (key nil key-specified-p))
+  (if key-specified-p
+      (setf (containers:element
+             (containers:find-node (tree (cursor-btree cursor))
+                                   (cons key nil)))
+            (cons key value))
+      (if (cursor-initialized-p cursor)
+          (setf (containers:element (cursor-node cursor)) (cons key value))
+          (error "Can't put with uninitialized cursor!"))))
 
 ;; NOTE: Can deprecate cursor API or reproduce as we choose
 
