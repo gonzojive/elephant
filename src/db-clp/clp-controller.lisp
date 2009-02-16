@@ -864,7 +864,7 @@
 			(primary-cursor-value cursor (cdr kv-pair)) 
 			(cdr kv-pair)))))
 	      (setf (cursor-initialized-p cursor) nil))
-	(setf (cursor-initialized-p cursor) nil)
+	(setf (cursor-initialized-p cursor) nil)))
 
 (defmethod cursor-pnext-dup ((cursor clp-index-cursor))
   (cursor-next-dup cursor))
@@ -903,7 +903,7 @@
 			(primary-cursor-value cursor (cdr kv-pair)) 
 			(cdr kv-pair)))))
 	      (setf (cursor-initialized-p cursor) nil)))	      
-	(setf (cursor-initialized-p cursor) nil))))
+	(setf (cursor-initialized-p cursor) nil))
 
 (defmethod cursor-pprev-dup ((cursor clp-index-cursor))
   (cursor-prev-dup cursor))
