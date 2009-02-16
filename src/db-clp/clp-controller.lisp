@@ -720,7 +720,7 @@
         (setf (cursor-initialized-p cursor) nil))))
 
 (defmethod cursor-set ((cursor clp-cursor) key)
-  (let ((node (containers:find-node (tree (cursor-btree cursor))
+  (let ((node (containers:find-successor-node (tree (cursor-btree cursor))
                                     (cons key nil))))
     (if node
         (let ((kv-pair (containers:element node)))
@@ -740,8 +740,8 @@
         (setf (cursor-initialized-p cursor) nil))))
 
 (defmethod cursor-get-both ((cursor clp-cursor) key value)
-  (let ((node (containers:find-node (tree (cursor-btree cursor))
-                                    (cons key value))))
+  (let ((node (containers:find-successor-node (tree (cursor-btree cursor))
+					      (cons key value))))
     (if node
         (let ((kv-pair (containers:element node)))
           (setf (cursor-initialized-p cursor) t
@@ -763,20 +763,169 @@
 
 (defmethod cursor-delete ((cursor clp-cursor))
   (when (cursor-initialized-p cursor)
-    (containers:delete-node (cursor-node cursor))
+    (containers:delete-node (cursor-btree cursor) (cursor-node cursor))
     (setf (cursor-initialized-p cursor) nil
           (cursor-node cursor) nil)))
 
 (defmethod cursor-put ((cursor clp-cursor) value &key (key nil key-specified-p))
   (if key-specified-p
       (setf (containers:element
-             (containers:find-node (tree (cursor-btree cursor))
-                                   (cons key nil)))
+             (containers:find-successor-node (tree (cursor-btree cursor))
+					     (cons key nil)))
             (cons key value))
       (if (cursor-initialized-p cursor)
           (setf (containers:element (cursor-node cursor)) (cons key value))
           (error "Can't put with uninitialized cursor!"))))
 
-;; NOTE: Can deprecate cursor API or reproduce as we choose
+;;
+;; Duplicate btree cursor ops
+;;
+
+
+(defclass clp-dup-cursor (clp-cursor)
+  ())
+
+(defmethod make-cursor ((bt clp-dup-btree))
+  (make-instance 'clp-dup-cursor :btree bt))
+
+(defmethod cursor-next-nodup ((cursor clp-dup-cursor))
+  (let ((old-node (cursor-node cursor))
+	(node (containers:successor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+        (let ((old-kv-pair (containers:element old-node))
+	      (kv-pair (containers:element node)))
+	  (setf (cursor-node cursor) node)
+          (if (lisp-compare-equal (car kv-pair) (car old-kv-pair))
+	      (cursor-next-nodup cursor)
+	      (progn
+		(setf (cursor-initialized-p cursor) t)
+		(values t (car kv-pair) (cdr kv-pair)))))
+        (setf (cursor-initialized-p cursor) nil))))
+
+;;
+;; Index cursor
+;;
+
+(defclass clp-index-cursor (clp-cursor)
+  ())
+
+(defmethod make-cursor ((bt clp-btree-index))
+  (make-instance 'clp-index-cursor :btree bt))
+
+(defun primary-cursor-value (idx-cursor pkey)
+  (get-item (tree (primary (cursor-btree idx-cursor))) pkey))
+
+(defmacro def-wrapped-cursor-method (name args &optional other)
+  "Quick sugar to reduce copy & paste"
+  `(defmethod ,name ((cursor clp-index-cursor) ,@args)
+     (multiple-value-bind (found? key pkey)
+	 ,(if other `(,other cursor ,@args)
+	      '(call-next-method))
+       (when found?
+	 (values t key (primary-cursor-value cursor pkey) pkey)))))
+
+(def-wrapped-cursor-method cursor-current ())
+(def-wrapped-cursor-method cursor-pcurrent () cursor-current)
+(def-wrapped-cursor-method cursor-first ())
+(def-wrapped-cursor-method cursor-pfirst () cursor-first)
+(def-wrapped-cursor-method cursor-last ())
+(def-wrapped-cursor-method cursor-plast () cursor-last)
+(def-wrapped-cursor-method cursor-next ())
+(def-wrapped-cursor-method cursor-pnext () cursor-next)
+(def-wrapped-cursor-method cursor-prev ())
+(def-wrapped-cursor-method cursor-pprev () cursor-prev)
+(def-wrapped-cursor-method cursor-set (key))
+(def-wrapped-cursor-method cursor-pset (key) cursor-set)
+(def-wrapped-cursor-method cursor-set-range (key))
+(def-wrapped-cursor-method cursor-pset-range (key) cursor-set-range)
+(def-wrapped-cursor-method cursor-get-both (key value))
+(def-wrapped-cursor-method cursor-pget-both (key pkey) cursor-get-both)
+(def-wrapped-cursor-method cursor-get-both-range (key value))
+(def-wrapped-cursor-method cursor-pget-both-range (key pkey) cursor-get-both-range)
+
+(defmethod cursor-delete ((cursor clp-index-cursor))
+  (when (cursor-initialized-p cursor)
+    (remove-kv (cdr (containers:element (cursor-node cursor)))
+	       (primary (cursor-btree cursor)))
+    (setf (cursor-initialized-p cursor) nil
+          (cursor-node cursor) nil)))
+
+(defmethod cursor-next-dup ((cursor clp-index-cursor))
+  (let ((old-node (cursor-node cursor))
+	(node (containers:successor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+	(let ((old-kv-pair (containers:element old-node))
+	      (kv-pair (containers:element node)))
+	  (if (lisp-compare-equal (car old-kv-pair) (car kv-pair))
+	      (progn
+		(setf (cursor-initialized-p cursor) t
+		      (cursor-node cursor) node)
+		(values t (car kv-pair) 
+			(primary-cursor-value cursor (cdr kv-pair)) 
+			(cdr kv-pair)))))
+	      (setf (cursor-initialized-p cursor) nil))
+	(setf (cursor-initialized-p cursor) nil)
+
+(defmethod cursor-pnext-dup ((cursor clp-index-cursor))
+  (cursor-next-dup cursor))
+
+(defmethod cursor-next-nodup ((cursor clp-index-cursor))
+  (let ((old-node (cursor-node cursor))
+	(node (containers:successor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+        (let ((old-kv-pair (containers:element old-node))
+	      (kv-pair (containers:element node)))
+	  (setf (cursor-node cursor) node)
+          (if (lisp-compare-equal (car kv-pair) (car old-kv-pair))
+	      (cursor-next-nodup cursor)
+	      (progn
+		(setf (cursor-initialized-p cursor) t)
+		(values t (car kv-pair) 
+			(primary-cursor-value cursor (cdr kv-pair)) 
+			(cdr kv-pair)))))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-pnext-nodup ((cursor clp-index-cursor))
+  (cursor-next-nodup cursor))
+
+
+(defmethod cursor-prev-dup ((cursor clp-index-cursor))
+  (let ((old-node (cursor-node cursor))
+	(node (containers:predecessor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+	(let ((old-kv-pair (containers:element old-node))
+	      (kv-pair (containers:element node)))
+	  (if (lisp-compare-equal (car old-kv-pair) (car kv-pair))
+	      (progn
+		(setf (cursor-initialized-p cursor) t
+		      (cursor-node cursor) node)
+		(values t (car kv-pair) 
+			(primary-cursor-value cursor (cdr kv-pair)) 
+			(cdr kv-pair)))))
+	      (setf (cursor-initialized-p cursor) nil)))	      
+	(setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-pprev-dup ((cursor clp-index-cursor))
+  (cursor-prev-dup cursor))
+
+
+(defmethod cursor-prev-nodup ((cursor clp-index-cursor))
+  (let ((old-node (cursor-node cursor))
+	(node (containers:predecessor (tree (cursor-btree cursor)) (cursor-node cursor))))
+    (if node
+        (let ((old-kv-pair (containers:element old-node))
+	      (kv-pair (containers:element node)))
+	  (setf (cursor-node cursor) node)
+          (if (lisp-compare-equal (car kv-pair) (car old-kv-pair))
+	      (cursor-prev-nodup cursor)
+	      (progn
+		(setf (cursor-initialized-p cursor) t)
+		(values t (car kv-pair) 
+			(primary-cursor-value cursor (cdr kv-pair)) 
+			(cdr kv-pair)))))
+        (setf (cursor-initialized-p cursor) nil))))
+
+(defmethod cursor-pprev-nodup ((cursor clp-index-cursor))
+  (cursor-prev-nodup cursor))
 
 

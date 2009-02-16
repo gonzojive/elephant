@@ -28,7 +28,8 @@
 		      :components
 		      ((:file "package")
 		       (:file "primitives")
-		       (:file "clp-controller"))))))
+		       (:file "clp-controller"))
+		      :serial t))))
 ;   (:file "clprev-slots")
 ;   (:file "clprev-collections")
 ;   (:file "clprev-transactions")
