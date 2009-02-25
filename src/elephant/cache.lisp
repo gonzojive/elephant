@@ -43,12 +43,12 @@ collected, so are the keys."
   (apply #'make-hash-table args)
   )
 
-#+openmcl
+#+(and openmcl (not ccl))
 (defclass cleanup-wrapper ()
   ((cleanup :accessor cleanup :initarg :cleanup)
    (value :accessor value :initarg :value)))
 
-#+openmcl
+#+(and openmcl (not ccl))
 (defmethod ccl:terminate ((c cleanup-wrapper))
   (funcall (cleanup c)))
 
@@ -58,20 +58,21 @@ collected, so are the keys."
   (let ((val (gethash key cache)))
     (if val (values (weak-pointer-value val) t)
 	(values nil nil)))
-  #+openmcl 
+  #+(and openmcl (not ccl))
   (let ((wrap (gethash key cache)))
     (if wrap (values (value wrap) t)
 	(values nil nil)))
-  #-(or openmcl cmu sbcl scl)
+  #-(or (and openmcl (not ccl)) cmu sbcl scl)
   (gethash key cache)
   )
 
 (defun make-finalizer (key cache)
+  (declare (ignorable key cache))
   #+(or cmu sbcl)
   (lambda () (remhash key cache))
-  #+(or allegro openmcl)
+  #+(or allegro (and openmcl (not ccl)))
   (lambda (obj) (declare (ignore obj)) (remhash key cache))
-  #-(or cmu sbcl allegro openmcl)
+  #-(or cmu sbcl allegro (and openmcl (not ccl)))
   (lambda () nil)
   )
 
@@ -85,7 +86,7 @@ collected, so are the keys."
     (finalize value (make-finalizer key cache))
     (setf (gethash key cache) w)
     value)
-  #+openmcl
+  #+(and openmcl (not ccl-1.3))
   (let ((w (make-instance 'cleanup-wrapper :value value
 			  :cleanup (make-finalizer key cache))))
     (ccl:terminate-when-unreachable w)
@@ -95,9 +96,7 @@ collected, so are the keys."
   (progn
     (excl:schedule-finalization value (make-finalizer key cache))
     (setf (gethash key cache) value))
-  #+lispworks
-  (setf (gethash key cache) value)
-  #-(or lispworks allegro openmcl cmu sbcl)
+  #-(or allegro (and openmcl (not ccl)) cmu sbcl)
   (setf (gethash key cache) value)
   )
 
@@ -111,8 +110,8 @@ collected, so are the keys."
 	   (return-from map-cache))
 	 (funcall fn key 
 		  #+(or cmu sbcl) (weak-pointer-value value)
-		  #+openmcl (value value)
-		  #-(or cmu sbcl openmcl) value)))))
+		  #+(and openmcl (not ccl)) (value value)
+		  #-(or cmu sbcl (and openmcl (not ccl))) value)))))
 
 (defun dump-cache (cache)
   (format t "Dumping cache: ~A~%" cache)
