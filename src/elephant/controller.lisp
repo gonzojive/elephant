@@ -319,7 +319,7 @@
        (let ((schema (get-controller-schema sc cid)))
 	 (values (find-class (schema-classname schema)) schema))))
 
-(define-condition missing-persistent-instance ()
+(define-condition missing-persistent-instance (simple-condition)
    ((oid :initarg :oid :accessor missing-persistent-instance-oid)
     (spec :initarg :spec :accessor missing-persistent-instance-spec)))
 
@@ -407,7 +407,7 @@
   "Get the latest db class schema from caches, etc."
   ;; Lookup class cached version
   (awhen (get-class-controller-schema sc class) 
-    (when (eq (schema-successor it) nil) 
+    (when (eq (schema-successor it) nil)
       (return-from lookup-schema it)))
 
   ;; Lookup persistent version

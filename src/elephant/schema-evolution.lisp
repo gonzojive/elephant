@@ -120,8 +120,8 @@
    upgrade-instance.  This should be called after a redefinition."
   (loop for inst being the hash-value of (controller-instance-cache sc) do
        #+(or cmu sbcl)(oid (weak-pointer-value inst))
-       #+openmcl (oid (value inst))
-       #-(or cmu sbcl openmcl) (oid inst)))
+       #+(and openmcl (not ccl)) (oid (value inst))
+       #-(or cmu sbcl (and openmcl (not ccl))) (oid inst)))
 
 (defmethod upgrade-all-db-instances ((sc store-controller) class-schema)
   "This does a scan and upgrades each instance of the class referred to

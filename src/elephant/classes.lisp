@@ -486,7 +486,7 @@ slots."
 ;; CLOZURE CL / OpenMCL
 ;;
 
-#+(or openmcl allegro)
+#+(or (and openmcl (not ccl)) allegro)
 (defmethod reinitialize-instance :after ((class persistent-metaclass) &rest initargs)
   (declare (ignore initargs))
   (finalize-inheritance class))
