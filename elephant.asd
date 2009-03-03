@@ -324,6 +324,7 @@
 		       (:file "schemas")
 		       (:file "metaclasses")
 		       (:file "classes")
+		       (:file "slots")
 		       (:file "cache")
 		       (:file "serializer")
 		       (:file "controller")
