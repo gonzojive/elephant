@@ -32,7 +32,7 @@
   #+mcl (ccl:make-lock)
   #+openmcl (ccl:make-lock)
   #+lispworks (mp:make-lock)
-  #-(or allegro sbcl cmu lispworks mcl) nil )
+  #-(or openmcl allegro sbcl cmu lispworks mcl) nil )
 
 (defmacro ele-with-lock ((lock &rest ignored) &body body)
   (declare (ignore ignored)
@@ -43,7 +43,7 @@
   #+lispworks `(mp:with-lock (,lock) ,@body)
   #+mcl `(ccl:with-lock-grabbed (,lock) ,@body)
   #+openmcl `(ccl:with-lock-grabbed (,lock) ,@body)
-  #-(or allegro sbcl cmu lispworks mcl) `(progn ,@body) )
+  #-(or openmcl allegro sbcl cmu lispworks mcl) `(progn ,@body) )
 
 ;;
 ;; For tight loops we need a fast lock, for lisps that support this
@@ -71,5 +71,5 @@
   #+mcl ccl:*current-process*
   #+openmcl ccl:*current-process*
   #+lispworks mp:*current-process*
-  #-(or allegro sbcl cmu lispworks mcl) nil
+  #-(or allegro sbcl openmcl cmu lispworks mcl) nil
   )
