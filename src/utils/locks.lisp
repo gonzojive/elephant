@@ -30,6 +30,7 @@
   #+cmu (mp:make-lock)
   #+sbcl (sb-thread:make-mutex)
   #+mcl (ccl:make-lock)
+  #+openmcl (ccl:make-lock)
   #+lispworks (mp:make-lock)
   #-(or allegro sbcl cmu lispworks mcl) nil )
 
@@ -41,6 +42,7 @@
   #+sbcl `(sb-thread:with-recursive-lock (,lock) ,@body)
   #+lispworks `(mp:with-lock (,lock) ,@body)
   #+mcl `(ccl:with-lock-grabbed (,lock) ,@body)
+  #+openmcl `(ccl:with-lock-grabbed (,lock) ,@body)
   #-(or allegro sbcl cmu lispworks mcl) `(progn ,@body) )
 
 ;;
@@ -67,6 +69,7 @@
   #+allegro mp:*current-process*
   #+cmu mp:*current-process*
   #+mcl ccl:*current-process*
+  #+openmcl ccl:*current-process*
   #+lispworks mp:*current-process*
   #-(or allegro sbcl cmu lispworks mcl) nil
   )
