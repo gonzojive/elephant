@@ -106,7 +106,7 @@
 	  (deserialization-error-condition condition)))
 
 (define-condition elephant-type-deserialization-error (elephant-deserialization-error)
-  ((tag :initarg type-tag :initform nil :accessor type-deserialization-error-tag))
+  ((tag :initarg :type-tag :initform nil :accessor type-deserialization-error-tag))
   (:documentation "This error is signaled when a tag is not
                    recognized in the deserializer.  This error is
                    more specific than the generalized error

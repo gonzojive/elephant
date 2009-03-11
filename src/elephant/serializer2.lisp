@@ -602,7 +602,7 @@
 					 (value (%deserialize bs)))
 				     (setf (slot-value o name) value)))
 			      o)))))))
-	     (t (error 'elephant-type-deserialization-error :tag tag)))))
+	     (t (error 'elephant-type-deserialization-error :type-tag tag)))))
 ;;	     (print-post-deserialize-value value)
 	     value))))
       (etypecase buf-str 
