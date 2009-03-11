@@ -98,7 +98,12 @@
   ((condition :initarg :condition :initform nil :accessor deserialization-error-condition))
   (:documentation "A generalized deserialization error; something went wrong in deserialization
                    that an application can test for explicitely.  The enclosed condition is
-                   the actual error"))
+                   the actual error")
+  (:report elephant-deserialization-error-report))
+
+(defun elephant-deserialization-error-report (condition stream)
+  (format stream "Elephant deserialization error:~%~A"
+	  (deserialization-error-condition condition)))
 
 (define-condition elephant-type-deserialization-error (elephant-deserialization-error)
   ((tag :initarg type-tag :initform nil :accessor type-deserialization-error-tag))
