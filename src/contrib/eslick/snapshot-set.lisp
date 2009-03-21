@@ -199,13 +199,13 @@
 
 (defun save-snapshot-object (id obj set)
   (unless (touched id set)
+    (touch id set)
     (setf (get-value id (snapshot-set-index set))
 	  (cond ((standard-object-subclass-p obj)
 		 (save-proxy-object obj set))
 		((hash-table-p obj)
 		 (save-proxy-hash obj set))
-		(t (error "Cannot only snapshot standard-objects and hash-tables"))))
-    (touch id set))
+		(t (error "Cannot only snapshot standard-objects and hash-tables")))))
   id)
 
 (defun save-proxy-object (obj set)
