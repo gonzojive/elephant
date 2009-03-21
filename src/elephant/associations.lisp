@@ -99,7 +99,7 @@
   (let ((index (get-association-index slot-def (get-con instance))))
     (if (and (eq (association-type slot-def) :ref)
 	     (slot-boundp-using-class class instance slot-def))
-	(remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index)
+	(remove-kv-pair (oid (slot-value-using-class class instance slot-def)) (oid instance) index)
 	(remove-kv-pair (oid associated) (oid instance) index))))
 
 (defun update-other-association-end (class instance slot-def other-instance)
