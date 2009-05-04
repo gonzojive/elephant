@@ -72,7 +72,7 @@
 (defmethod synchronize-store-class ((sc store-controller) class class-schema old-schema)
   "Synchronizing a store means adding/removing indices, upgrading
    the default schema if necessary, etc."
-  (format t "Synchronizing ~A in ~A~%" (schema-classname class-schema) (controller-spec sc))
+  (format t "~&Synchronizing ~A in ~A~%" (schema-classname class-schema) (controller-spec sc))
   (let* ((class (or class (find-class (schema-classname class-schema))))
 	 (new-schema (create-controller-schema sc class))
 	 (diff (schema-diff new-schema old-schema)))
