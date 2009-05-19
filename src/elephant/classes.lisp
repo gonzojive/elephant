@@ -364,6 +364,20 @@ slots."
 ;;    (unless (match-schemas (%class-schema class) current-schema))
       (prog1 
 	  (call-next-method)
+        ;; OpenMCL seems to make additional instances of differing types obsolete.
+        ;; Let's use a high-level approach until we have figured out how to handle this
+        ;; properly.
+        #+openmcl
+        (progn
+          (unless (schema-predecessor current-schema)
+            ;; make sure the class schema is up to date
+            (synchronize-stores-for-class (class-of instance)))
+          (let ((schema-predecessor (schema-predecessor current-schema)))
+            (when schema-predecessor
+              (let ((prior-schema (get-controller-schema sc schema-predecessor)))
+                (assert (and current-schema prior-schema))
+                (upgrade-db-instance instance current-schema prior-schema property-list)))))
+        #-openmcl
 	(let ((prior-schema (aif (schema-predecessor current-schema)
 				 (get-controller-schema sc it)
 				 (error "If the schemas mismatch, a derived controller schema should have been computed"))))
