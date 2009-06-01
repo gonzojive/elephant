@@ -46,7 +46,7 @@
   (map-btree (lambda (cid db-schema)
 	       (declare (ignore cid))
 	       (let ((classname (schema-classname db-schema)))
-		 (awhen (find-class classname)
+		 (awhen (find-class classname nil)
 		   (let ((class-schema (get-class-schema it)))
 		     (unless (match-schemas class-schema db-schema)
 		       	(synchronize-store-class sc it class-schema db-schema)
