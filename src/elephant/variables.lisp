@@ -171,14 +171,19 @@
   "Print more than a simple status line")
 
 (defparameter *warn-when-dropping-persistent-slots* nil
-  "Assert a signal when the user is about to delete a bunch of
-   persistent slot values on class redefinition.  This is nil by
-   default to stop annoying message and confusing new users, but
-   it will help keep users from shooting themselves in the foot
-   and losing significant amounts of data during debugging and
-   development.  It can be disabled if change-class is used a
-   bunch in the application rather than just defclass changes
-   interactively.")
+  "Signal a continuable error when the user is about to delete
+  a bunch of persistent slot values on class redefinition. This
+  is nil by default to stop annoying message and confusing new
+  users, but it will help keep users from shooting themselves
+  in the foot and losing significant amounts of data during
+  debugging and development. It can be disabled if change-class
+  is used a bunch in the application rather than just defclass
+  changes interactively.
+
+  Note that the new class definition will take place even if
+  you abort the continuable error; only the removal of the
+  slots in the database is prevented. You can access them again
+  if you redefine your class once more.")
 
 (defparameter *return-null-on-missing-instance* t
   "During instance recreation, references to missing instances

@@ -156,9 +156,10 @@
   "Constructs the metaclass schema when the class hierarchy is valid"
   (let* ((old-schema (get-class-schema instance))
 	 (new-schema (class-instance-schema instance)))
+    (assert new-schema)
     ;; Stop synchronization if necessary to allow for reversing the
     ;; interactive re-definition
-    (when *warn-on-manual-class-finalization*
+    (when (and old-schema *warn-when-dropping-persistent-slots*)
       (warn-on-reinitialization-data-loss instance))
     ;; Update schema chain
     (setf (schema-predecessor new-schema) old-schema)
@@ -314,7 +315,7 @@ slots."
    (slots :initarg :slotnames :reader persistent-slot-drop-names))
   (:report (lambda (cond stream)
 	     (with-slots (class slots operation) cond
-	       (format stream "Dropping slot(s) ~A for class ~A in ~A."
+	       (format stream "Dropping slot(s) ~A for class ~A in ~A. Continue the synchronization process?"
 		       slots class operation)))))
 
 ;; ================================================
