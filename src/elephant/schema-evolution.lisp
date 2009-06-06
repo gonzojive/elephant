@@ -37,24 +37,34 @@
    update-instance-for-redefined-class for any instances that
    have been invalidated by the MOP")
 
-(defmethod synchronize-store-classes ((sc store-controller))
+(defmethod synchronize-store-classes ((sc store-controller) &key class-list)
   "Synchronize all schemas in the stores to in-memory classes.
    This also populates the schema cache.  It is meant to be
    called when a controller is opened.  If a class and db schema
    mismatch, synchronize the class then update all versions of
-   the class to the new schema"
-  (map-btree (lambda (cid db-schema)
-	       (declare (ignore cid))
-	       (let ((classname (schema-classname db-schema)))
-		 (awhen (find-class classname nil)
-		   (let ((class-schema (get-class-schema it)))
-		     (unless (match-schemas class-schema db-schema)
-		       	(synchronize-store-class sc it class-schema db-schema)
-			(unless *lazy-db-instance-upgrading*
-			  (upgrade-all-db-instances sc class-schema)))))))
-	     (controller-schema-table sc))
-  (unless *lazy-memory-instance-upgrading*
-    (upgrade-all-memory-instances sc)))
+   the class to the new schema. If CLASS-LIST is given only upgrade
+   the classes named/given therein. Every symbol in CLASS-LIST must
+   name a currently defined class."
+  (let ((class-list (mapcar (lambda (class-designator)
+                              (etypecase class-designator
+                                (class class-designator)
+                                (symbol (find-class class-designator))))
+                            (mklist class-list))))
+    (map-btree (lambda (cid db-schema)
+                 (declare (ignore cid))
+                 (let* ((classname (schema-classname db-schema))
+                        (class (find-class classname nil)))
+                   (when (and class (or (null class-list)
+                                        (member class class-list)))
+                     (ensure-finalized class)
+                     (let ((class-schema (get-class-schema class)))
+                       (unless (match-schemas class-schema db-schema)
+                          (synchronize-store-class sc class class-schema db-schema)
+                          (unless *lazy-db-instance-upgrading*
+                            (upgrade-all-db-instances sc class-schema)))))))
+               (controller-schema-table sc))
+    (unless *lazy-memory-instance-upgrading*
+      (upgrade-all-memory-instances sc))))
 
 (defmethod synchronize-stores-for-class (class)
   "Synchronize all stores connected to a given class.  Meant to be
