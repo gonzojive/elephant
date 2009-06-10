@@ -21,9 +21,9 @@
 ;;; should be lost due to concurrent updates.
 
 (defvar *zork-count* 10)
-(defvar *thread-count* 10)
-(defvar *thread-batches* 1)
-(defvar *thread-runs* 2)
+(defvar *thread-count* 50)
+(defvar *thread-batches* 3)
+(defvar *thread-runs* 3)
 
 (defun setup-zork (&key initially-zero (zork-count *zork-count*) (with-indices t))
   (wipe-class 'zork)
