@@ -28,6 +28,7 @@
 				&key 
 				transaction parent environment
 				(retries *default-retries*)
+                                (retry-wait 0.1)
 				degree-2 read-uncommitted txn-nosync 
 				txn-nowait txn-sync (snapshot elephant::*default-mvcc*)
 				inhibit-rollback-fn)
@@ -73,7 +74,11 @@
 			(setq success :yes)))
 		 ;; If unhandled non-local exit or commit failure: abort
 		 (unless (eq success :yes)
-		   (db-transaction-abort txn)))))
+		   (db-transaction-abort txn)
+                   #+thread-support(bt:thread-yield)
+                   (sleep (etypecase retry-wait
+                            (number retry-wait)
+                            (function (funcall retry-wait txn count retries))))))))
 	   ;; A positive success results in a normal return
 	   (when (eq success :yes)
 	     (return (values-list result)))))
