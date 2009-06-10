@@ -21,6 +21,9 @@
 ;;; should be lost due to concurrent updates.
 
 (defvar *zork-count* 10)
+(defvar *thread-count* 10)
+(defvar *thread-batches* 1)
+(defvar *thread-runs* 2)
 
 (defun setup-zork (&key initially-zero (zork-count *zork-count*) (with-indices t))
   (wipe-class 'zork)
@@ -94,12 +97,12 @@
   (block check-block
     (setup-zork)
 
-    (dotimes (batch 3) ; run 3 batches
+    (dotimes (batch *thread-batches*)
       (maybe-report-failure check-block
-	(do-threaded-tests (:thread-count 5)
-	  (dotimes (i 3) ; 3 runs
+	(do-threaded-tests (:thread-count *thread-count*)
+	  (dotimes (i *thread-runs*)
 	    (format t "thread ~A: batch ~A, run ~A~%" (bt:current-thread) batch i)
-	    (dolist (obj (elephant::get-instances-by-class 'zork))
+	    (dolist (obj (get-instances-by-class 'zork))
 	      (format t "now handling obj ~A~%" obj)
 	      (ele:with-transaction (:retry-cleanup-fn #'report-retry)
 		;; check if obj can be found via index read
@@ -110,12 +113,12 @@
 		
 		(unless (= (slot-value obj 'slot1) (slot-value obj 'slot2))
 		  (error "slot1 and slot2 are not equal in zork: ~a and ~a" (slot-value obj 'slot1) (slot-value obj 'slot2)))
-		
+
 		(setf (slot-value obj 'slot1) (random 50000)
 		      (slot-value obj 'slot2) (slot-value obj 'slot1))))))))
 
     (let ((zorks (elephant::get-instances-by-class 'zork)))
-      (is (= 10 (length zorks)))
+      (is (= *zork-count* (length zorks)))
       (dolist (z zorks)
 	(ele:with-transaction ()
 	  (is (= (slot-value z 'slot1) (slot-value z 'slot2))) ; verify that both slots were transactionally updated
