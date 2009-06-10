@@ -94,7 +94,7 @@
 ;; Serializer error conditions
 ;;
 
-(define-condition elephant-deserialization-error ()
+(define-condition elephant-deserialization-error (error)
   ((condition :initarg :condition :initform nil :accessor deserialization-error-condition))
   (:documentation "A generalized deserialization error; something went wrong in deserialization
                    that an application can test for explicitely.  The enclosed condition is
