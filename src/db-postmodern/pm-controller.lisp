@@ -291,7 +291,7 @@
   ;; performance hack for SBCL uses SB-IMPL. unfortunately no better way to convert OID to string faster,
   ;; unless we'll cache it in instance..
   #+sbcl (concatenate 'simple-string
-		      (sb-impl::quick-integer-to-string oid)
+		      (sb-ext:without-package-locks (sb-impl::quick-integer-to-string oid))
 		      " "
 		      (symbol-name name)))
 
