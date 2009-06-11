@@ -301,7 +301,18 @@
 	   (slot2 foo))))
   nil 2)
 
-
+;; does UPDATE-INSTANCE-SLOT handle unbound values properly?
+(deftest upgrade-instance-slot-unbound-value
+  ;; TODO: changes in base index
+  (progn
+    (defpclass uisuv () ((s)))
+    (make-instance 'uisuv)
+    (format t "persistent -> indexed~%")
+    (defpclass uisuv () ((s :index t)))
+    (format t "indexed -> persistent~%")
+    (defpclass uisuv () ((s)))
+    t)
+  t)
       
 ;; does CHANGE-INSTANCE-SLOT handle unbound values properly?
 (deftest change-instance-slot-unbound-value
