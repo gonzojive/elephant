@@ -303,3 +303,21 @@
 
 
       
+;; does CHANGE-INSTANCE-SLOT handle unbound values properly?
+(deftest change-instance-slot-unbound-value
+  (progn
+    (defpclass cisuv () ((s)))
+    (let ((obj (make-instance 'cisuv)))
+      (format t "persistent -> indexed~%")
+      (defpclass cisuv2 () ((s :index t)))
+      (change-class obj 'cisuv2)
+
+      (format t "indexed -> indexed~%")
+      (defpclass cisuv3 () ((s :index t)))
+      (change-class obj 'cisuv3)
+
+      (format t "indexed -> persistent~%")
+      (change-class obj 'cisuv))
+    t)
+  t)
+

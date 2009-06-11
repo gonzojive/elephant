@@ -185,7 +185,8 @@
 	    ;; The new index will get updated as a natural part of the rest of the protocol
 	    ((and (member old-type '(:indexed :derived))
 		  (not (eq (getf old-args :base)
-			   (getf (slot-rec-args new-rec) :base))))
+			   (getf (slot-rec-args new-rec) :base)))
+                  (slot-boundp instance old-name))
 	     (let ((slot-value (slot-value instance old-name)))
 	       (unindex-slot-value sc slot-value (oid instance) old-name (getf old-args :base))))
 	    ;; If it was a persistent slot and now isn't, drop it and add the new type back
@@ -275,15 +276,16 @@
       (with-slots ((new-type type) (new-name name) (new-args args)) new-rec
 	(cond ;; If it was not indexed, and now is, we have to notify the index of the new value (?)
 	  ((and (member old-type '(:persistent :cached))
-		(eq new-type :indexed))
+		(eq new-type :indexed) (slot-boundp previous old-name))
 	   (setf (slot-value previous old-name) (slot-value previous old-name)))
 	  ;; If the old slot was indexed, we definitely need to unindex it to avoid
           ;; having the objects hang around in the index
-	  ((and (eq old-type :indexed) (eq new-type :indexed))
+	  ((and (eq old-type :indexed) (eq new-type :indexed)
+                (slot-boundp previous old-name))
 	   (unindex-slot-value sc (slot-value previous old-name)
 			       (oid previous) old-name (getf old-args :base))
 	   (setf (slot-value current new-name) (slot-value previous old-name)))
-	  ((eq old-type :indexed)
+	  ((and (eq old-type :indexed) (slot-boundp previous old-name))
 	   (unindex-slot-value sc (slot-value previous old-name)
 			       (oid previous) old-name (getf old-args :base)))
 	  ;; If it was a persistent slot and now isn't, drop it and add the new type back
