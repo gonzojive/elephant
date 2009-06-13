@@ -135,6 +135,100 @@
                                         (slot-value instance index-name))))
 	       class)))
 
+(defun rebuild-slot-indices (sc class)
+  "Rebuild all slot indices for CLASS, or all known classes
+  if CLASS is NIL. CLASS may be a class or class name."
+  (let* ((classes (mklist (etypecase class
+                            (null (known-classes sc))
+                            (class class)
+                            (symbol (find-class class)))))
+         (class-names (mapcar #'class-name classes)))
+    (loop for class in classes
+          for class-name in class-names
+          do (progn
+               (format t "=== class ~S~%" class)
+               (dolist (slotname (indexed-slot-names class))
+                 (when (member slotname (class-slots class) :key #'slot-definition-name)
+                   (format t "slot index ~S~%" slotname)
+                   (rebuild-slot-index sc class-name slotname)))))))
+
+(defun known-classes (sc)
+  "Return all classes that are known both to SC and the current
+  Lisp image."
+  (remove-duplicates
+    (remove nil
+            (map-btree (lambda (cid schema)
+                         (declare (ignore cid))
+                         (let ((class (find-class (schema-classname schema) nil)))
+                           (unless class
+                             (warn "Class ~S not defined, ignoring." (schema-classname schema)))
+                           class))
+                       (controller-schema-table sc)
+                       :collect t))))
+
+(defun slot-index-sane-p (sc class slotname &key errorp)
+  (declare (optimize (safety 3))
+           (store-controller sc)
+           ((or class symbol) class)
+           (symbol slotname))
+  (flet ((exit (fmt &rest args)
+           (if errorp
+             (apply #'error fmt args)
+             (return-from slot-index-sane-p
+                          (values nil (apply #'format nil fmt args))))))
+    (let* ((*store-controller* sc)
+           (objects<-class-index (remove-if-not (lambda (obj)
+                                                  (slot-boundp obj slotname))
+                                                (get-instances-by-class class)))
+           (objects<-inverted-index (map-inverted-index
+                                      (lambda (key inst)
+                                        (cond
+                                          ((not (slot-exists-p inst slotname))
+                                           (warn "Slot ~S is missing from obj ~S, ignoring." slotname inst)
+                                           inst)
+                                          ((not (slot-boundp inst slotname))
+                                           (exit "Slot ~S is unbound in obj ~S but present in the index with key ~S"
+                                                 slotname inst key))
+                                          ((not (lisp-compare-equal key (slot-value inst slotname)))
+                                           (exit "The value ~S of slot ~S in obj ~S disagrees with the index key ~S"
+                                                 (slot-value inst slotname) slotname inst key))
+                                          (t inst)))
+                                      class slotname :collect t))
+           (diff (set-difference objects<-class-index objects<-inverted-index)))
+      (unless (null diff)
+        (exit "Objects are missing from the inverted index ~S for class ~S: ~S" slotname class diff))
+      t)))
+
+#-ele-check-index-sanity
+(defun assert-slot-index-sanity (sc class slotname)
+  t)
+#+ele-check-index-sanity
+(defun assert-slot-index-sanity (sc class slotname)
+  (slot-index-sane-p sc class slotname :errorp t))
+
+(defun slot-indices-sane-p (sc class &rest args)
+  "Check slot index sanity for CLASS or all classes known to SC if
+  CLASS is NIL."
+  (let ((classes (mklist (etypecase class
+                           (null (known-classes sc))
+                           (class class)
+                           (symbol (find-class class))))))
+    (loop for class in classes
+          ;do (format t "=== class ~S~%" class)
+          collect (cons (class-name class)
+                        (loop for slotname in (indexed-slot-names class)
+                              for sane-p = (multiple-value-list
+                                             (apply #'slot-index-sane-p sc class slotname args))
+                              ;do (format t "slot ~S~%" slotname)
+                              collect (cons slotname sane-p))))))
+
+#-ele-check-index-sanity
+(defun assert-slot-index-sanity-for-class (sc class)
+  t)
+#+ele-check-index-sanity
+(defun assert-slot-index-sanity-for-class (sc class)
+  (slot-indices-sane-p sc class :errorp t))
+
 
 
 ;; =================================
