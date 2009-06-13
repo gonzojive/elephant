@@ -129,9 +129,10 @@
   (let ((class (find-class class-name)))
     (ensure-slot-def-index (find-slot-def-by-name class index-name) sc)
     (map-class #'(lambda (instance)
-		   (update-slot-index sc class instance
-				      (find-slot-def-by-name class index-name)
-				      (slot-value instance index-name)))
+                   (when (slot-boundp instance index-name)
+                     (update-slot-index sc class instance
+                                        (find-slot-def-by-name class index-name)
+                                        (slot-value instance index-name))))
 	       class)))
 
 
