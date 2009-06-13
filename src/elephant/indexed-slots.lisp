@@ -39,12 +39,13 @@
   (let ((sc (get-con instance))
 	(oid (oid instance)))
     (ensure-transaction (:store-controller sc)
-      (let ((idx (get-slot-def-index slot-def sc))
-	    (old-value (when (slot-boundp-using-class class instance slot-def)
-			 (slot-value-using-class class instance slot-def))))
+      (let* ((idx (get-slot-def-index slot-def sc))
+             (old-value-bound-p (slot-boundp-using-class class instance slot-def))
+             (old-value (when old-value-bound-p
+                          (slot-value-using-class class instance slot-def))))
 	(unless idx
 	  (setf idx (ensure-slot-def-index slot-def sc)))
-	(when old-value 
+	(when old-value-bound-p
 	  (remove-kv-pair old-value oid idx)))
       (call-next-method))))
 
@@ -90,12 +91,13 @@
   "Update an index value when written"
   (let ((oid (oid instance)))
     (ensure-transaction (:store-controller sc)
-      (let ((idx (get-slot-def-index slot-def sc))
-	    (old-value (when (slot-boundp-using-class class instance slot-def)
-			 (slot-value-using-class class instance slot-def))))
+      (let* ((idx (get-slot-def-index slot-def sc))
+             (old-value-bound-p (slot-boundp-using-class class instance slot-def))
+             (old-value (when old-value-bound-p
+                          (slot-value-using-class class instance slot-def))))
 	(unless idx
 	  (setf idx (ensure-slot-def-index slot-def sc)))
-	(when old-value 
+	(when old-value-bound-p 
   	  (remove-kv-pair old-value oid idx))
 	(setf (get-value new-value idx) oid)))))
 

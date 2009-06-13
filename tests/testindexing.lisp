@@ -717,5 +717,29 @@
   (is (null (map-inverted-index (lambda (x y)
 				  (declare (ignore y))
 				  x) 'idx-nine 'str :start "f" :end "fz" :collect t))))
+
+(defpclass nil-slot-class ()
+  ((s :initform nil :index t)))
       
+(test slot-makunbound-nil-value
+  (wipe-class 'nil-slot-class)
+  (let ((obj (make-instance 'nil-slot-class)))
+    (is (= 1 (length (get-instances-by-value 'nil-slot-class 's nil))))
+    (slot-makunbound obj 's)
+    (is (= 0 (length (get-instances-by-value 'nil-slot-class 's nil))))))
+
+(test update-slot-index-nil-value
+  (wipe-class 'nil-slot-class)
+  (let ((obj (make-instance 'nil-slot-class)))
+    (is (= 1 (length (get-instances-by-value 'nil-slot-class 's nil))))
+    ;; update-slot-index normally gets called on (setf slot-value-using-class)
+    (setf (slot-value obj 's) t)
+    #+(or)
+    (ele::update-slot-index *store-controller*
+                            (find-class 'nil-slot-class)
+                            obj
+                            (find 's (class-slots (find-class 'nil-slot-class)) :key #'slot-definition-name)
+                            t)
+    (is (= 0 (length (get-instances-by-value 'nil-slot-class 's nil))))
+    (is (= 1 (length (get-instances-by-value 'nil-slot-class 's t))))))
 
