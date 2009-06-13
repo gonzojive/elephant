@@ -150,6 +150,7 @@
           do (progn
                (format t "=== class ~S~%" class)
                (dolist (slotname (indexed-slot-names class))
+                 (ensure-finalized class) ; for CLASS-SLOTS
                  (when (member slotname (class-slots class) :key #'slot-definition-name)
                    (format t "slot index ~S~%" slotname)
                    (rebuild-slot-index sc class-name slotname)))))))
@@ -173,6 +174,7 @@
            (store-controller sc)
            ((or class symbol) class)
            (symbol slotname))
+  (ensure-finalized (etypecase class (class class) (symbol (find-class class))))
   (flet ((exit (fmt &rest args)
            (if errorp
              (apply #'error fmt args)
