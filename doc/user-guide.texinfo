@@ -1240,6 +1240,19 @@ You can trace @code{elephant::execute-transaction} to see the sequence
 of calls that occur dynamically and detect where and how many
 transactions are and are not happening. 
 
+@subsection Deadlock considerations
+
+Deadlocks are bound to happen under heavy contention. Most SQL
+servers and BDB handle them properly and abort transactions
+until everything is resolved.
+
+You should however strive to keep the number of deadlocks
+under normal load conditions low by writing transaction bodies
+that read all their values before writing them.
+
+Especially avoid a large body of writes followed by reads
+of the same locations.
+
 @c IT WOULD BE GOOD TO EXPAND ON THIS REGARDING HOW TO SOLVE COMMON PROBLEMS
 
 @node Multi-repository Operation
