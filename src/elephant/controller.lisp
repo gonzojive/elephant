@@ -418,14 +418,15 @@
        ;; Or create it
        (create-controller-schema sc class)))
 
-(defmethod get-controller-schema ((sc store-controller) schema-id)
-  "Find the db class schema by schema id"
+(defmethod get-controller-schema ((sc store-controller) schema-id &optional class)
+  "Find the db class schema by schema id. CLASS needs to be supplied
+  if the class object isn't registered via (SETF FIND-CLASS) yet."
   (assert (typep schema-id 'fixnum))
   ;; Lookup in controller cache
   (ifret (get-cache schema-id (controller-schema-cache sc))
 	 ;; Lookup in store table
 	 (let* ((schema (get-value schema-id (controller-schema-table sc)))
-		(class (find-class (schema-classname schema))))
+		(class (or class (find-class (schema-classname schema)))))
 	   (assert schema)
 	   ;; Update controller cache
 	   (ele-with-fast-lock ((controller-schema-cache-lock sc))
@@ -442,7 +443,7 @@
     (setf (get-value (schema-id db-schema) (controller-schema-table sc))
 	  db-schema)
     ;; Let get-controller-schema cache it for us
-    (get-controller-schema sc (schema-id db-schema))))
+    (get-controller-schema sc (schema-id db-schema) class)))
 
 (defmethod update-controller-schema ((sc store-controller) db-schema &optional update-cache)
   "Use this to update the schema version that is on store and in 

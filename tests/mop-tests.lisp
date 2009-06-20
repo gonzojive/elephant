@@ -332,3 +332,11 @@
     t)
   t)
 
+(deftest initial-class-definition-reader-writer
+  (progn
+    (setf (find-class 'icdrm) nil)
+    (fmakunbound 'icdrm)
+    (defpclass icdrw () ((s :reader icdrm)))
+    t)
+  t)
+
