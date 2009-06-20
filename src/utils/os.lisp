@@ -229,3 +229,9 @@
 	  (loop (write-byte (read-byte src :eof-error-p t) targ))
 	(end-of-file () t)))))
 
+(defmacro without-interrupts (&body body)
+  "Run BODY with interrupts disabled."
+  #+allegro `(excl:without-interrupts ,@body)
+  #+sbcl `(sb-sys:without-interrupts ,@body)
+  #-(or allegro sbcl) `(progn ,@body))
+

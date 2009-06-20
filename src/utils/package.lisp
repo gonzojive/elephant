@@ -30,6 +30,7 @@
    #:ele-make-fast-lock
    #:ele-with-fast-lock
    #:ele-thread-hash-key
+   #:without-interrupts
    #:launch-background-program
    #:kill-background-program
    #:copy-directory
@@ -48,3 +49,4 @@
    #:it
    #:remove-indexed-element-and-adjust
    #:curry))
+

@@ -48,7 +48,8 @@
 					:snapshot snapshot)))
 	 (declare (type pointer-void txn))
 	 (let (result)
-	   (let ((*current-transaction* (make-transaction-record sc txn *current-transaction*))
+	   (let ((*current-transaction* (without-interrupts
+                                          (make-transaction-record sc txn *current-transaction*)))
 		 (*store-controller* sc))
 	     (declare (special *current-transaction* *store-controller*))
 	     (catch 'transaction
@@ -74,7 +75,8 @@
 			(setq success :yes)))
 		 ;; If unhandled non-local exit or commit failure: abort
 		 (unless (eq success :yes)
-		   (db-transaction-abort txn)
+		   (without-interrupts
+                     (db-transaction-abort txn))
                    #+thread-support(bt:thread-yield)
                    (sleep (etypecase retry-wait
                             (number retry-wait)

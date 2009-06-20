@@ -411,11 +411,13 @@ primary key."))
   "Macro which opens a named cursor on a BTree (primary or
 not), evaluates the forms, then closes the cursor."
   (declare (inline make-cursor))
-  `(let ((,var (make-cursor ,bt)))
+  `(let ((,var (without-interrupts
+                 (make-cursor ,bt))))
      (declare (dynamic-extent ,var))
      (unwind-protect
 	  (progn ,@body)
-       (cursor-close ,var))))
+       (without-interrupts
+         (cursor-close ,var)))))
 
 (defmethod remove-kv-pair (key value (dbt dup-btree))
   "Too bad there isn't a direct way to do this, but with
