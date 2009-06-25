@@ -63,7 +63,8 @@
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Removes the slot value from the database."
-  (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def)))
+  (ensure-transaction (:store-controller (get-con instance))
+    (persistent-slot-makunbound (get-con instance) instance (slot-definition-name slot-def))))
 
 ;; ===================================
 ;;  Multi-store error checking
