@@ -30,39 +30,42 @@
 
 (defmethod persistent-slot-reader ((sc bdb-store-controller) instance name &optional oids-only)
   (declare (ignore oids-only))
-  (with-buffer-streams (key-buf value-buf)
-    (buffer-write-fixnum32 (the fixnum (oid instance)) key-buf)
-    (serialize name key-buf sc)
-    (let ((buf (db-get-key-buffered (controller-db sc)
-				    key-buf value-buf
-				    :transaction (my-current-transaction sc))))
-      (if buf (deserialize buf sc)
-	  (slot-unbound (class-of instance) instance name)))))
+  (ensure-transaction (:store-controller sc)
+    (with-buffer-streams (key-buf value-buf)
+      (buffer-write-fixnum32 (the fixnum (oid instance)) key-buf)
+      (serialize name key-buf sc)
+      (let ((buf (db-get-key-buffered (controller-db sc)
+                                      key-buf value-buf
+                                      :transaction (my-current-transaction sc))))
+        (if buf (deserialize buf sc)
+            (slot-unbound (class-of instance) instance name))))))
 
 (defmethod persistent-slot-writer ((sc bdb-store-controller) new-value instance name)
-  (with-buffer-streams (key-buf value-buf)
-    (buffer-write-fixnum32 (oid instance) key-buf)
-    (serialize name key-buf sc)
-    (serialize new-value value-buf sc)
-    (db-put-buffered (controller-db sc)
-		     key-buf value-buf
-		     :transaction (my-current-transaction sc))
-    new-value))
+  (ensure-transaction (:store-controller sc)
+    (with-buffer-streams (key-buf value-buf)
+      (buffer-write-fixnum32 (oid instance) key-buf)
+      (serialize name key-buf sc)
+      (serialize new-value value-buf sc)
+      (db-put-buffered (controller-db sc)
+                       key-buf value-buf
+                       :transaction (my-current-transaction sc))
+      new-value)))
 
 (defmethod persistent-slot-boundp ((sc bdb-store-controller) instance name)
-  (with-buffer-streams (key-buf value-buf)
-    (buffer-write-fixnum32 (oid instance) key-buf)
-    (serialize name key-buf sc)
-    (let ((buf (db-get-key-buffered (controller-db sc)
-				    key-buf value-buf
-				    :transaction (my-current-transaction sc))))
-      (if buf t nil))))
+  (ensure-transaction (:store-controller sc)
+    (with-buffer-streams (key-buf value-buf)
+      (buffer-write-fixnum32 (oid instance) key-buf)
+      (serialize name key-buf sc)
+      (let ((buf (db-get-key-buffered (controller-db sc)
+                                      key-buf value-buf
+                                      :transaction (my-current-transaction sc))))
+        (if buf t nil)))))
 
 (defmethod persistent-slot-makunbound ((sc bdb-store-controller) instance name)
-  (with-buffer-streams (key-buf)
-    (buffer-write-fixnum32 (oid instance) key-buf)
-    (serialize name key-buf sc)
-    (db-delete-buffered (controller-db sc) key-buf
-			:transaction (my-current-transaction sc))))
-
+  (ensure-transaction (:store-controller sc)
+    (with-buffer-streams (key-buf)
+      (buffer-write-fixnum32 (oid instance) key-buf)
+      (serialize name key-buf sc)
+      (db-delete-buffered (controller-db sc) key-buf
+                          :transaction (my-current-transaction sc)))))
 
