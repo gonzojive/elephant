@@ -21,7 +21,7 @@
 
 (in-package :elephant)
 
-(defparameter *string-comparison-functions*
+(defparameter *string-relation-functions*
   `((< . ,#'string<)
     (<= . ,#'string<=)
     (> . ,#'string>)
@@ -29,7 +29,7 @@
     (= . ,#'equal)
     (!= . ,(lambda (x y) (not (equal x y))))))
 
-(defparameter *number-comparison-functions*
+(defparameter *number-relation-functions*
   `((< . ,#'<)
     (<= . , #'<=)
     (> . ,#'>)
@@ -85,7 +85,7 @@
     (flet ((filter-by-relation (inst)
 	     (when (test-relation relation (slot-value inst slot) values)
 	       (funcall fn inst))))
-      (declare (dynamic-extent filter-by-relation))
+      (declare (dynamic-extent #'filter-by-relation))
       (if (null (cdr constraints))
 	  (if (find-inverted-index class slot)
 	      (if (= (length values) 1)
@@ -117,7 +117,7 @@
       (flet ((filter-instance (inst)
 	       (reset-bindings inst bindings)
 	       (interpret-constraints fn constraints bindings)))
-	(declare (dynamic-extent filter-instance))
+	(declare (dynamic-extent #'filter-instance))
 	(map-class #'filter-instance classname)))))
 
 (defun make-bindings (vars)
