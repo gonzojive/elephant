@@ -29,23 +29,26 @@
 (defmethod slot-value-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Get the slot value from the database."
   (let ((name (slot-definition-name slot-def)))
-    (persistent-slot-reader (get-con instance) instance name)))
+    (ensure-transaction (:store-controller (get-con instance))
+      (persistent-slot-reader (get-con instance) instance name))))
 
 (defmethod (setf slot-value-using-class) (new-value (class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Set the slot value in the database."
   (let ((name (slot-definition-name slot-def)))
-    (if (derived-slot-triggers slot-def)
-	(ensure-transaction (:store-controller (get-con instance))
-	  (persistent-slot-writer (get-con instance) new-value instance name)
-	  (derived-index-updater class instance slot-def))
-	(persistent-slot-writer (get-con instance) new-value instance name)))
+    (ensure-transaction (:store-controller (get-con instance))
+      (if (derived-slot-triggers slot-def)
+          (progn
+            (persistent-slot-writer (get-con instance) new-value instance name)
+            (derived-index-updater class instance slot-def))
+          (persistent-slot-writer (get-con instance) new-value instance name))))
   new-value)
 
 (defmethod slot-boundp-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Checks if the slot exists in the database."
   (when instance
     (let ((name (slot-definition-name slot-def)))
-      (persistent-slot-boundp (get-con instance) instance name))))
+      (ensure-transaction (:store-controller (get-con instance))
+        (persistent-slot-boundp (get-con instance) instance name)))))
 
 (defmethod slot-boundp-using-class ((class persistent-metaclass) (instance persistent-object) (slot-name symbol))
   "Checks if the slot exists in the database."
@@ -54,8 +57,9 @@
      until matches-p
      finally (return (if (and matches-p
 			      (subtypep (type-of slot) 'persistent-slot-definition))
-			 (persistent-slot-boundp (get-con instance) instance slot-name)
-			 (call-next-method)))))
+                       (ensure-transaction (:store-controller (get-con instance))
+			 (persistent-slot-boundp (get-con instance) instance slot-name))
+		       (call-next-method)))))
 
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def persistent-slot-definition))
   "Removes the slot value from the database."
