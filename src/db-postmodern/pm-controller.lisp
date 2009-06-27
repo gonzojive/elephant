@@ -287,13 +287,8 @@
 
 (defun form-slot-key (oid name)
   (declare (optimize speed))
-  #-sbcl (let ((*print-pretty* nil)) (format nil "~a ~a" oid name))
-  ;; performance hack for SBCL uses SB-IMPL. unfortunately no better way to convert OID to string faster,
-  ;; unless we'll cache it in instance..
-  #+sbcl (concatenate 'simple-string
-		      (sb-ext:without-package-locks (sb-impl::quick-integer-to-string oid))
-		      " "
-		      (symbol-name name)))
+  (let ((*print-pretty* nil))
+    (concatenate 'string (princ-to-string oid) " " (symbol-name name))))
 
 (defmethod oid->schema-id (oid (sc postmodern-store-controller))
   "For default data structures, provide a fixed mapping to class IDs based
