@@ -22,6 +22,19 @@
 
 (in-package "ELEPHANT")
 
+(defclass cacheable-persistent-object (persistent-object)
+  ((pchecked-out :accessor pchecked-out-p :initform nil)
+   (checked-out :accessor checked-out-p :initform nil :transient t))
+  (:metaclass persistent-metaclass)
+  (:documentation 
+   "Adds a special value slot to store checkout state"))
+
+(defmethod shared-initialize :around ((instance cacheable-persistent-object) slot-names &key make-cached-instance &allow-other-keys)
+  ;; User asked us to start in cached mode?  Otherwise default to not.
+  (setf (slot-value instance 'pchecked-out) make-cached-instance)
+  (setf (slot-value instance 'checked-out) make-cached-instance)
+  (call-next-method))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;; Portable value-weak hash-tables for the cache: when the

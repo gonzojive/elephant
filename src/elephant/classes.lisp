@@ -67,14 +67,6 @@
     objects that would not be appropriate for Elephant objects
     such as persistent collections"))
 
-(defclass cacheable-persistent-object (persistent-object)
-  ((pchecked-out :accessor pchecked-out-p :initform nil)
-   (checked-out :accessor checked-out-p :initform nil :transient t))
-  (:metaclass persistent-metaclass)
-  (:documentation 
-   "Adds a special value slot to store checkout state"))
-
-
 ;; ================================================
 ;; METACLASS INITIALIZATION 
 ;; ================================================
@@ -259,12 +251,6 @@ slots."
 	(initialize-set-slots class instance set-slots))
       (loop for dslotname in derived-slots do
 	   (derived-index-updater class instance (find-slot-def-by-name class dslotname))))))
-
-(defmethod shared-initialize :around ((instance cacheable-persistent-object) slot-names &key make-cached-instance &allow-other-keys)
-  ;; User asked us to start in cached mode?  Otherwise default to not.
-  (setf (slot-value instance 'pchecked-out) make-cached-instance)
-  (setf (slot-value instance 'checked-out) make-cached-instance)
-  (call-next-method))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (dolist (slotname persistent-slot-inits)
