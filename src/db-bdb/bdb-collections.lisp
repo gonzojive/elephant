@@ -38,46 +38,50 @@
 
 (defmethod get-value (key (bt bdb-btree))
   (let ((sc (get-con bt)))
-    (with-buffer-streams (key-buf value-buf)
-      (buffer-write-oid (oid bt) key-buf)
-      (serialize key key-buf sc)
-      (let ((buf (db-get-key-buffered (controller-btrees sc)
-				      key-buf value-buf
-				      :transaction (my-current-transaction sc))))
-	(if buf (values (deserialize buf sc) T)
-	    (values nil nil))))))
+    (ensure-transaction (:store-controller sc)
+      (with-buffer-streams (key-buf value-buf)
+        (buffer-write-oid (oid bt) key-buf)
+        (serialize key key-buf sc)
+        (let ((buf (db-get-key-buffered (controller-btrees sc)
+                                        key-buf value-buf
+                                        :transaction (my-current-transaction sc))))
+          (if buf (values (deserialize buf sc) T)
+              (values nil nil)))))))
 
 (defmethod existsp (key (bt bdb-btree))
   (let ((sc (get-con bt)))
-    (with-buffer-streams (key-buf value-buf)
-      (buffer-write-oid (oid bt) key-buf)
-      (serialize key key-buf sc)
-      (let ((buf (db-get-key-buffered 
-		  (controller-btrees sc)
-		  key-buf value-buf
-		  :transaction (my-current-transaction sc))))
-	(if buf t
-	    nil)))))
+    (ensure-transaction (:store-controller sc)
+      (with-buffer-streams (key-buf value-buf)
+        (buffer-write-oid (oid bt) key-buf)
+        (serialize key key-buf sc)
+        (let ((buf (db-get-key-buffered 
+                    (controller-btrees sc)
+                    key-buf value-buf
+                    :transaction (my-current-transaction sc))))
+          (if buf t
+              nil))))))
 
 
 (defmethod (setf get-value) (value key (bt bdb-btree))
     (let ((sc (get-con bt)))
-      (with-buffer-streams (key-buf value-buf)
-	(buffer-write-oid (oid bt) key-buf)
-	(serialize key key-buf sc)
-	(serialize value value-buf sc)
-	(db-put-buffered (controller-btrees sc)
-			 key-buf value-buf
-			 :transaction (my-current-transaction sc))))
+      (ensure-transaction (:store-controller sc)
+        (with-buffer-streams (key-buf value-buf)
+          (buffer-write-oid (oid bt) key-buf)
+          (serialize key key-buf sc)
+          (serialize value value-buf sc)
+          (db-put-buffered (controller-btrees sc)
+                           key-buf value-buf
+                           :transaction (my-current-transaction sc)))))
     value)
 
 (defmethod remove-kv (key (bt bdb-btree))
   (let ((sc (get-con bt)) )
-    (with-buffer-streams (key-buf)
-      (buffer-write-oid (oid bt) key-buf)
-      (serialize key key-buf sc)
-      (db-delete-buffered (controller-btrees sc) key-buf 
-			  :transaction (my-current-transaction sc)))))
+    (ensure-transaction (:store-controller sc)
+      (with-buffer-streams (key-buf)
+        (buffer-write-oid (oid bt) key-buf)
+        (serialize key key-buf sc)
+        (db-delete-buffered (controller-btrees sc) key-buf 
+                            :transaction (my-current-transaction sc))))))
 
 (defmethod optimize-layout ((bt bdb-btree) &key (freelist-only t) (free-space nil) &allow-other-keys)
   (optimize-layout (get-con bt)
