@@ -24,11 +24,17 @@
 (declaim #-elephant-without-optimize (optimize (speed 3))
 	 #+elephant-without-optimize (optimize (speed 1) (safety 3) (debug 3)))
 
+(defvar *retry-wait* 0.1
+  "Set this to the number of seconds to wait between transaction
+retries. May also be a function of three arguments (transaction
+object, current retry number, maximum number of retries) returning
+this value.")
+
 (defmethod execute-transaction ((sc bdb-store-controller) txn-fn
 				&key 
 				transaction parent environment
 				(retries *default-retries*)
-                                (retry-wait 0.1)
+                                (retry-wait *retry-wait*)
 				degree-2 read-uncommitted txn-nosync 
 				txn-nowait txn-sync (snapshot elephant::*default-mvcc*)
 				inhibit-rollback-fn)

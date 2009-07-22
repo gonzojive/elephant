@@ -48,5 +48,6 @@
   (:import-from :ccl
 		#:byte-length)
   (:export
+   #:*retry-wait*
    #:optimize-layout
    #:checkpoint))
