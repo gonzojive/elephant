@@ -285,9 +285,9 @@
   (multiple-value-bind (env errno)
       (%db-env-create 0)
     (declare (type fixnum errno))
-    (if (= errno 0)
-	env
-	(error 'bdb-db-error :errno errno))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    env))
 	     
 (def-function ("db_env_close" %db-env-close)
     ((dbenvp :pointer-void)
@@ -411,9 +411,9 @@
   (multiple-value-bind (db errno)
       (%db-create dbenv 0)
     (declare (type fixnum errno))
-    (if (= errno 0) 
-	db
-	(error 'bdb-db-error :errno errno))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    db))
 
 (def-function ("db_close" %db-close)
     ((db :pointer-void)
@@ -511,8 +511,9 @@ and DUP-SORT.")
   "Get flags on a DB handle."
   (multiple-value-bind (errno flags)
       (%db-get-flags db)
-    (if (= errno 0) flags
-	(error 'bdb-db-error :errno errno))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    flags))
 
 ;; Accessors
 
@@ -881,8 +882,9 @@ wasn't found."
 	   (errno (deref-array errno-buffer '(:array :int) 0)))
       (declare (type pointer-void curs)
 	       (type fixnum errno))
-      (if (= errno 0) curs
-	  (error 'bdb-db-error :errno errno)))))
+      (unless (zerop errno)
+        (error 'bdb-db-error :errno errno))
+      curs)))
 
 (def-function ("db_cursor_close" %db-cursor-close)
     ((cursor :pointer-void))
@@ -925,8 +927,9 @@ wasn't found."
 	   (errno (deref-array errno-buffer '(:array :int) 0)))
       (declare (type pointer-void newc)
 	       (type fixnum errno))
-      (if (= errno 0) newc
-	  (error 'bdb-db-error :errno errno)))))
+      (unless (zerop errno)
+        (error 'bdb-db-error :errno errno))
+      newc)))
 
 (def-function ("db_cursor_get_raw" %db-cursor-get-key-buffered)
     ((cursor :pointer-void)
@@ -1313,9 +1316,9 @@ get, get-range."
 	   (errno (deref-array errno-buffer '(:array :int) 0)))
       (declare (type pointer-void txn)
 	       (type fixnum errno))
-      (if (= errno 0) 
-	  txn
-	  (error 'bdb-db-error :errno errno)))))
+      (unless (zerop errno)
+        (error 'bdb-db-error :errno errno))
+      txn)))
 
 (def-function ("db_txn_abort" %db-txn-abort)
     ((txn :pointer-void))
@@ -1614,9 +1617,9 @@ function for Elephant to compare lisp values that are also btree keys.")
 	   (errno (deref-array errno-buffer '(:array :int) 0)))
       (declare (type pointer-void seq)
 	       (type fixnum errno))
-      (if (= errno 0) 
-	  seq
-	  (error 'bdb-db-error :errno errno)))))
+      (unless (zerop errno)
+        (error 'bdb-db-error :errno errno))
+      seq)))
 
 (def-function ("db_sequence_open" %db-sequence-open)
     ((seq :pointer-void)
@@ -1706,8 +1709,9 @@ function for Elephant to compare lisp values that are also btree keys.")
   (let ((errno
 	 (%db-sequence-initial-value sequence (low32 value) (high32 value))))
     (declare (type fixnum errno))
-    (cond ((= errno 0) nil)
-	  (t (error 'bdb-db-error :errno errno)))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    nil))
 
 (def-function ("db_sequence_remove" %db-sequence-remove)
     ((seq :pointer-void)
@@ -1761,8 +1765,9 @@ function for Elephant to compare lisp values that are also btree keys.")
 	 (%db-sequence-set-range sequence (low32 min) (high32 min)
 				 (low32 max) (high32 max))))
     (declare (type fixnum errno))
-    (cond ((= errno 0) nil)
-	  (t (error 'bdb-db-error :errno errno)))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    nil))
 
 (def-function ("db_sequence_get_range" %db-sequence-get-range)
     ((seq :pointer-void)
@@ -1778,9 +1783,10 @@ function for Elephant to compare lisp values that are also btree keys.")
       (%db-sequence-get-range sequence)
     (declare (type fixnum errno)
 	     (type integer minlow minhigh maxlow maxhigh))
-    (cond ((= errno 0) (values (make-64-bit-integer minhigh minlow)
-			       (make-64-bit-integer maxhigh maxlow)))
-	  (t (error 'bdb-db-error :errno errno)))))
+    (unless (zerop errno)
+      (error 'bdb-db-error :errno errno))
+    (values (make-64-bit-integer minhigh minlow)
+            (make-64-bit-integer maxhigh maxlow))))
 
 (def-function ("next_counter" %next-counter)
     ((env :pointer-void)
