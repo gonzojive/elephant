@@ -561,6 +561,8 @@ of a string."
     (when (> length len)
       (let ((newlen (max length (* len 2))))
 	(declare (type fixnum newlen))
+        ;; FIXME: async unwinds between alloc of newbuf and free of buf
+        ;; will leave us with a memory leak of size NEWLEN.
 	(let ((newbuf (allocate-foreign-object :unsigned-char newlen)))
 	  ;; technically we just need to copy from position to size.....
 	  (when (null-pointer-p newbuf)
@@ -584,6 +586,8 @@ of a string."
     (when (> length len)
       (let ((newlen (max length (* len 2))))
 	(declare (type fixnum newlen))
+        ;; FIXME: async unwinds between alloc of newbuf and free of buf
+        ;; will leave us with a memory leak of size NEWLEN.
 	(let ((newbuf (allocate-foreign-object :unsigned-char newlen)))
 	  (when (null-pointer-p newbuf)
 	    (error "Failed to allocate buffer stream of length ~A.  allocate-foreign-object returned a null pointer" newlen))
