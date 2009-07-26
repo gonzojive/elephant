@@ -872,7 +872,7 @@ wasn't found."
   "Create a cursor."
   (declare (type pointer-void db)
 	   (type boolean degree-2 read-committed dirty-read read-uncommitted))
-  (let ((errno-buffer (allocate-foreign-object :int 1)))
+  (with-foreign-object (errno-buffer :int)
     (declare (type pointer-int errno-buffer))
     (let* ((curs (%db-cursor db transaction 
 			     (flags :degree-2 (or degree-2 read-committed)
@@ -918,7 +918,7 @@ wasn't found."
 (defun db-cursor-duplicate (cursor &key (position t)) 
   "Duplicate a cursor."
   (declare (type pointer-void cursor))
-  (let ((errno-buffer (allocate-foreign-object :int 1)))
+  (with-foreign-object (errno-buffer :int)
     (declare (type pointer-int errno-buffer))
     (let* ((newc (%db-cursor-dup cursor (flags :position position) 
 				 errno-buffer))
@@ -1299,7 +1299,7 @@ get, get-range."
   (declare (type pointer-void env parent)
 	   (type boolean degree-2 read-committed dirty-read read-uncommitted 
 		 txn-nosync txn-nowait txn-sync snapshot))
-  (let ((errno-buffer (allocate-foreign-object :int 1)))
+  (with-foreign-object (errno-buffer :int)
     (declare (type pointer-int errno-buffer))
     (let* ((txn
 	    (%db-txn-begin env parent
@@ -1607,7 +1607,7 @@ function for Elephant to compare lisp values that are also btree keys.")
 (defun db-sequence-create (db)
   "Create a new sequence."
   (declare (type pointer-void db))
-  (let ((errno-buffer (allocate-foreign-object :int 1)))
+  (with-foreign-object (errno-buffer :int)
     (declare (type pointer-int errno-buffer))
     (let* ((seq
 	    (%db-sequence-create db 0 errno-buffer))
