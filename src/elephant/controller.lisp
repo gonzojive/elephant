@@ -644,7 +644,7 @@
 (defun translate-and-intern-symbol (sc symbol-name package-name)
   "Service for the serializer to translate any renamed packages or symbols
    and then intern the decoded symbol."
-  (if package-name 
+  (if package-name
       (multiple-value-bind (sname pname)
 	  (if (or *always-convert* (not (= (controller-database-version sc)
 					   *elephant-code-version-int*)))
@@ -654,8 +654,8 @@
 	  (if package
 	      (intern sname package)
 	      (progn
-		(warn "Couldn't deserialize the package: ~A based on ~A~%
-                       An uninterred symbol will be created" pname package-name)
+		(warn "Couldn't deserialize package ~A based on symbol ~A's home package ~A.
+                       Creating an uninterned symbol" pname sname package-name)
 		(make-symbol sname)))))
       (make-symbol symbol-name)))
 
