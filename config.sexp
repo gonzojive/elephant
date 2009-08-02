@@ -10,6 +10,7 @@
  (:berkeley-db-cachesize . 20971520)
  (:berkeley-db-max-locks . 2000)
  (:berkeley-db-max-objects . 2000)
+ (:berkeley-db-max-transactions . 1000)
  (:berkeley-db-map-degree2 . t)
  (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)

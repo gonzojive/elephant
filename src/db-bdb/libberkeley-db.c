@@ -673,6 +673,14 @@ int db_env_get_cachesize(DB_ENV *env, u_int32_t *gbytes, u_int32_t *bytes, int *
   return env->get_cachesize(env, gbytes, bytes, ncache);
 }
 
+int db_env_set_tx_max(DB_ENV *env, u_int32_t tx_max) {
+  return env->set_tx_max(env, tx_max);
+}
+
+int db_env_get_tx_max(DB_ENV *env, u_int32_t *tx_maxp) {
+  return env->get_tx_max(env, tx_maxp);
+}
+
 int db_env_set_lk_max_locks(DB_ENV *env, u_int32_t max) {
   return env->set_lk_max_locks(env, max);
 }

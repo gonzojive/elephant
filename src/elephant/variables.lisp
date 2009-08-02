@@ -49,6 +49,7 @@
     (:berkeley-db-cachesize *berkeley-db-cachesize*)
     (:berkeley-db-max-locks *berkeley-db-max-locks*)
     (:berkeley-db-max-objects *berkeley-db-max-objects*)
+    (:berkeley-db-max-transactions *berkeley-db-max-transactions*)
     (:berkeley-db-version *bdb-version*)
     (:berkeley-db-mvcc *default-mvcc*)
     (:enable-multi-store-indexing *enable-multi-store-indexing*)))
@@ -118,6 +119,10 @@
    it to enable transactions to be larger.  Typically for bulk loads or large
    transactions.  See berkeley db docs 'Configuring Locking: sizing the system' 
    for more detail")
+
+(defvar *berkeley-db-max-transactions* 1000
+  "Controls the number of transactions allocated for berkeley db. Especially
+  MVCC operation (see below) requires a large number of transactions.")
 
 (defvar *default-mvcc* nil
   "Determines whether a BDB database is enabled for multiple version concurrency

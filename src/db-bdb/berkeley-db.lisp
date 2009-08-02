@@ -1458,6 +1458,26 @@ be prepared to handle deadlock / lock no granted errors.")
 	    :documentation "Return the current cache size of
             the BDB environment buffer pool")
 
+
+(def-function ("db_env_set_tx_max" %db-env-set-max-transactions)
+    ((env :pointer-void)
+     (max :int))
+  :returning :int)
+
+(wrap-errno db-env-set-max-transactions (env max)
+	    :documentation "Set the current maximum number of
+	    active transactions")
+
+(def-function ("db_env_get_tx_max" %db-env-get-max-transactions)
+    ((env :pointer-void)
+     (max :int :out))
+  :returning :int)
+
+(wrap-errno db-env-get-max-transactions (env) :outs 1
+	    :documentation "Return the current maximum number of
+	    active transactions")
+
+
 ;; locks
 
 (def-function ("db_env_set_lk_max_locks" %db-env-set-max-locks)
