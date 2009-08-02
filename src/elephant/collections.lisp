@@ -411,9 +411,10 @@ primary key."))
   "Macro which opens a named cursor on a BTree (primary or
 not), evaluates the forms, then closes the cursor."
   (declare (inline make-cursor))
-  `(let ((,var (without-interrupts
-                 (make-cursor ,bt))))
+  `(let (,var)
      (declare (dynamic-extent ,var))
+     (without-interrupts
+       (setf ,var (make-cursor ,bt)))
      (unwind-protect
 	  (progn ,@body)
        (without-interrupts
