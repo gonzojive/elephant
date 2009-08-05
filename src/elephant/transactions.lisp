@@ -105,7 +105,7 @@
   (declare (ignore sc rec))
   (error "Function is deprecated"))
 
-(define-condition transaction-retry-count-exceeded ()
+(define-condition transaction-retry-count-exceeded (error)
   ((count :initarg :count :accessor retry-count :initform 0)))
 
 
