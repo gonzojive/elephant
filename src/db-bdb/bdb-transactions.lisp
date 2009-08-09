@@ -83,7 +83,7 @@ this value.")
 		 (unless (eq success :yes)
 		   (without-interrupts
                      (db-transaction-abort txn))
-                   #+thread-support(bt:thread-yield)
+                   #+bordeaux-threads(bt:thread-yield)
                    (sleep (etypecase retry-wait
                             (number retry-wait)
                             (function (funcall retry-wait txn count retries))))))))
