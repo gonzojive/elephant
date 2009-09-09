@@ -808,6 +808,10 @@ true."))
 	  (progn ,@body)
        (close-store *store-controller*))))
 
+(defmacro with-store ((store) &body body)
+  `(let ((*store-controller* ,store))
+     (declare (special *store-controller*))
+     ,@body))
 
 ;;
 ; Operations on the root index
