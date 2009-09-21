@@ -654,8 +654,14 @@
 	  (if package
 	      (intern sname package)
 	      (progn
-		(warn "Couldn't deserialize package ~A based on symbol ~A's home package ~A.
-                       Creating an uninterned symbol" pname sname package-name)
+		(case *no-deserialization-package-found-action*
+		  (:warn 
+		   (warn "Couldn't deserialize package ~A based on symbol ~A's home package ~A.
+                         Creating an uninterned symbol" pname sname package-name))
+		  (:error
+		   (error "Couldn't deserialize package ~A based on symbol ~A's home package ~A."
+			  pname sname package-name))
+		  (t nil))
 		(make-symbol sname)))))
       (make-symbol symbol-name)))
 

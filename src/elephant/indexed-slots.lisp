@@ -63,8 +63,8 @@
 (defmethod slot-makunbound-using-class ((class persistent-metaclass) (instance persistent-object) (slot-def derived-index-slot-definition))
   "Unbinding cannot be performed explicitly.  It is effectively 
    inhibited when the derived fn says 'no'"
-  (error "Cannot unbind derived slot values for ~A in class ~A" 
-	 (slot-definition-name slot-def) (class-name class)))
+  (warn "Cannot unbind derived slot values for ~A in class ~A" 
+	(slot-definition-name slot-def) (class-name class)))
 
 (defun derived-index-updater (class instance written-slot-def)
   "Compute the derived indices to update from the slot-def that is

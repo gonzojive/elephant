@@ -165,6 +165,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Enables warnings of various kinds
 
+(defparameter *no-deserialization-package-found-action* :warn
+  "Issue a warning when deserializing a symbol from a package that is
+   not created.")
+
 (defparameter *warn-on-manual-class-finalization* nil
   "Issue a printed warnings when the class mechanism has
    to finalize a class to access indexing information")
