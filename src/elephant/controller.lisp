@@ -68,12 +68,11 @@
     (spec :initarg :spec :accessor store-controller-closed-error-spec)))
 
 (defun signal-controller-lost-error (object)
-  (cerror "Open a new instance and continue?"
-	  'controller-lost-error
-	  :format-control "Store controller for specification ~A for object ~A cannot be found."
-	  :format-arguments (list object (db-spec object))
-	  :object object
-	  :spec (db-spec object)))
+  (error 'controller-lost-error
+	 :format-control "Store controller ~A for object ~A cannot be found."
+	 :format-arguments (list (db-spec object) object)
+	 :object object
+	 :spec (db-spec object)))
 
 (defun lookup-con-spec (spec)
   (ifret (fast-lookup-con-spec spec)
@@ -108,9 +107,12 @@
 	       (setf (db-spec instance) 
 		     (car (find it *dbconnection-spec* :key #'cdr)))
 	       (get-con instance))
-	     (progn (signal-controller-lost-error instance)
-		    (open-controller 
-		     (get-controller (db-spec instance))))))
+	     (restart-case 
+		 (signal-controller-lost-error instance)
+	       (reopen-controller ()
+		 :report "Re-open the store controller"
+		 (open-controller 
+		  (get-controller (db-spec instance)))))))
 	  ;; If it's valid and open
 	  ((and con (connection-is-indeed-open con))
 	   con)
