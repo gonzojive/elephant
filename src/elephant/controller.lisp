@@ -63,7 +63,7 @@
    we re-open the controller from the spec if it's not
    cached?  That might be dangerous so for now we error"))
 
-(define-condition controller-lost-error ()
+(define-condition controller-lost-error (simple-condition)
    ((object :initarg :object :accessor store-controller-closed-error-object)
     (spec :initarg :spec :accessor store-controller-closed-error-spec)))
 
@@ -115,8 +115,7 @@
 	  ((and con (connection-is-indeed-open con))
 	   con)
 	  ;; If the controller object exists but is closed, reopen
-	  (t (open-controller con)))
-    con))
+	  (t (open-controller con)))))
 
 (defun get-controller (spec)
   "This is used by open-store to fetch or open a controller.
