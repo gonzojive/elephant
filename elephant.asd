@@ -225,6 +225,7 @@
    #-(or darwin macosx darwin-host) "-shared"
    #+(or darwin macosx darwin-host) "-bundle"
    #+(and X86-64 (or macosx darwin darwin-host)) "-arch x86_64"
+   #+(and X86 (or macosx darwin darwin-host)) "-m32" ; Snow Leopard
    #+(and X86-64 linux) "-march=x86-64"
    "-fPIC"
    "-Wall"
