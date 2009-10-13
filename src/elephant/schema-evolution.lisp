@@ -128,10 +128,11 @@
   "Touch each instance in memory to force update-instance-for-redefined class
    to be called on classes that were just redefined.  This in turn calls 
    upgrade-instance.  This should be called after a redefinition."
-  (loop for inst being the hash-value of (controller-instance-cache sc) do
-       #+(or cmu sbcl)(oid (weak-pointer-value inst))
-       #+(and openmcl (not ccl)) (oid (value inst))
-       #-(or cmu sbcl (and openmcl (not ccl))) (oid inst)))
+  (loop for inst-pointer being the hash-value of (controller-instance-cache sc)
+        for inst = #+(or cmu sbcl) (weak-pointer-value inst-pointer)
+                   #+(and openmcl (not ccl)) (value inst-pointer)
+                   #-(or cmu sbcl (and openmcl (not ccl))) inst-pointer
+        do (oid inst)))
 
 (defmethod upgrade-all-db-instances ((sc store-controller) class-schema)
   "This does a scan and upgrades each instance of the class referred to
