@@ -111,13 +111,15 @@
 		 (signal-controller-lost-error instance)
 	       (reopen-controller ()
 		 :report "Re-open the store controller"
-		 (open-controller 
-		  (get-controller (db-spec instance)))))))
+		 (let ((controller (get-controller (db-spec instance))))
+		   (apply #'open-controller controller (controller-opening-args controller)))))))
 	  ;; If it's valid and open
 	  ((and con (connection-is-indeed-open con))
 	   con)
 	  ;; If the controller object exists but is closed, reopen
-	  (t (open-controller con)))))
+	  (t
+	   (let ((controller (get-controller (db-spec instance))))
+	     (apply #'open-controller controller (controller-opening-args controller)))))))
 
 (defun get-controller (spec)
   "This is used by open-store to fetch or open a controller.
@@ -184,6 +186,11 @@
 	 :documentation "Data store initialization functions are
 	 expected to initialize :spec on the call to
 	 make-instance")
+   (opening-args :type list
+	 :accessor controller-opening-args
+	 :initarg :controller-opening-args
+	 :documentation "List of keyword arguments passed to the
+         OPEN-STORE function when opening (or re-opening) a controller.")
    (db-version :type fixnum
 	       :accessor controller-database-version
 	       :initform 100)
@@ -785,7 +792,8 @@ true."))
   ;; Ensure that parameters are set
   (initialize-user-parameters)
   (let ((controller (get-controller spec)))
-    (apply #'open-controller controller args)
+    (setf (controller-opening-args controller) args)
+    (apply #'open-controller controller (controller-opening-args controller))
     (if *store-controller*
 	(progn
 ;;	  (warn "Store controller already set so was not updated") ;; this was annoying me

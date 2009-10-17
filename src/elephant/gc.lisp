@@ -362,7 +362,7 @@
   "Ignore *store-controller*"
   (initialize-user-parameters)
   (let ((controller (get-controller spec)))
-    (open-controller controller)
+    (apply #'open-controller controller (controller-opening-args controller))
     controller))
 
 (defgeneric temp-spec (type spec)
