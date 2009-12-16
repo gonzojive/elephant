@@ -1,35 +1,35 @@
+CREDITS
 
-Authors: Andrew Blumberg and Ben Lee 
-<ablumberg@common-lisp.net> and <blee@common-lisp.net>
+The Elephant Persistent Object Database
+(http://www.common-lisp.net/project/elephant)
 
-Current maintainers: Robert L. Read <read@robertlread.net>
+
+Current maintainers: Leslie Polzer <lpolzer@common-lisp.net>
 	             Ian S. Eslick <eslick@media.mit.edu>
 
-http://www.common-lisp.net/project/elephant
+Prior Maintainers: Robert L. Read <read@robertlread.net>
+
+Original Authors: Andrew Blumberg <ablumberg@common-lisp.net> 
+	 	  Ben Lee <blee@common-lisp.net>
+
 
 The CL-SQL based backend was written by Robert L. Read.
+The Postmodern backend was written by Henrik Hjelte 
 
 Thanks to:
 
-Sleepycat for Berkeley DB, especially Ron Cohen and Michael
-Cahill for answering my questions
+Henrik Hjelte for a number of bug fixes and for testing as well as
+his wonderful postmodern data store!
 
-Kevin Rosenberg for UFFI, answering lots of questions and
-letting me patch
+Leslie Polzer for numerous patches
 
 Gary Byers for OpenMCL and answering my questions
-
-Richard Waters (and Paul Dietz, Kevin Rosenberg) for RT
 
 Rafal Strzalinski for the Makefile and package patch
 
 Bill Clementson for Win32 help and for publicity
 
 The common-lisp.net people for hosting
-
-The CMUCL and SBCL people for great compilers
-
-SLIME for a better environment
 
 Erik Enge (CL-IRC) for being an unwitting guinea pig
 
@@ -45,11 +45,6 @@ unbound slots, and proved the system works with SQLite3.
 
 Tayssir John Gabbour has found two bugs on Feb. 14, 2006.
 
-Ian Eslick wrote src/indexing.lisp, which added major convenience
-features for automatically indexing on slot values in a class.  He is
-also responsible for the refactoring and most of the bug fixes in the
-0.6.0 release.
-
 Vladimir Sedach for the upgrade to Berkeley DB 4.4.
 
 pinterface@gmail.com provided the basic support in the .asd
@@ -60,13 +55,24 @@ Marco Baringer provided a partial patch for 64-bit support.
 Pierre Thierry for a *features* hack to turn off optimization as well as
 many suggestions and dicussions.
 
-Henrik Hjelte for a number of bug fixes and for testing as well as
-his wonderful postmodern data store!
-
 Edi Weitz for Lispworks and Win32 patches
 
 Mac Chan for his Hunchentoot blog tutorial 
 
 And many others for their comments, testing and suggestions -- we're sorry
 if we missed crediting you here.
+
+Also thanks to:
+
+- Sleepycat (now Oracle) for Berkeley DB, especially Ron Cohen and
+Michael Cahill for answering my questions
+
+- Richard Waters (and Paul Dietz, Kevin Rosenberg) for RT
+
+- The CMUCL and SBCL people for great compilers
+
+- SLIME for a better environment
+
+- Kevin Rosenberg for UFFI, answering lots of questions and
+letting me patch
 
