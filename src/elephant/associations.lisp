@@ -99,7 +99,7 @@
   (let ((index (get-association-index slot-def (get-con instance))))
     (if (and (eq (association-type slot-def) :ref)
 	     (slot-boundp-using-class class instance slot-def))
-	(remove-kv-pair (oid (slot-value-using-class class instance slot-def)) (oid instance) index)
+	(remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index)
 	(remove-kv-pair (oid associated) (oid instance) index))))
 
 (defun update-other-association-end (class instance slot-def other-instance)
@@ -168,8 +168,10 @@
     (when (type-check-association instance slot-def associated)
       (ensure-transaction (:store-controller sc)
 	(case (association-type slot-def)
-	  (:ref (setf (slot-value instance (if (symbolp slotname) slotname (slot-definition-name slotname))) nil))
-	  (:m21 (remove-association-end fclass associated fslot instance))
+	  (:ref (when (slot-boundp-using-class class instance slot-def)
+                  (slot-makunbound-using-class class instance slot-def)))
+          (:m21 (when (slot-boundp-using-class fclass associated fslot)
+                  (slot-makunbound-using-class fclass associated fslot)))
           (:m2m (remove-association-end fclass associated fslot instance)
 		(remove-association-end class instance slot-def associated)))))))
 
