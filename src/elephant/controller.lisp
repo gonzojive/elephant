@@ -669,6 +669,9 @@
 		  (:error
 		   (error "Couldn't deserialize package ~A based on symbol ~A's home package ~A."
 			  pname sname package-name))
+		  (:create
+		   (intern sname 
+			   (make-package pname :use '(cl))))
 		  (t nil))
 		(make-symbol sname)))))
       (make-symbol symbol-name)))
@@ -824,9 +827,14 @@ true."))
        (close-store *store-controller*))))
 
 (defmacro with-store ((store) &body body)
-  `(let ((*store-controller* ,store))
-     (declare (special *store-controller*))
-     ,@body))
+  (with-gensyms (ref)
+    `(let* ((,ref ,store)
+	    (*store-controller* 
+	     (if (listp ,ref)
+		 (get-controller ,ref)
+		 ,ref)))
+       (declare (special *store-controller*))
+       ,@body)))
 
 ;;
 ; Operations on the root index

@@ -44,7 +44,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; General support for user configurable parameters
 
-(defvar *user-configurable-parameters*
+(defparameter *user-configurable-parameters*
   '((:berkeley-db-map-degree2 *map-using-degree2*)
     (:berkeley-db-cachesize *berkeley-db-cachesize*)
     (:berkeley-db-max-locks *berkeley-db-max-locks*)
@@ -52,7 +52,13 @@
     (:berkeley-db-max-transactions *berkeley-db-max-transactions*)
     (:berkeley-db-version *bdb-version*)
     (:berkeley-db-mvcc *default-mvcc*)
-    (:enable-multi-store-indexing *enable-multi-store-indexing*)))
+    (:enable-multi-store-indexing *enable-multi-store-indexing*)
+    (:warn-when-dropping-persistent-slots 
+     *warn-when-dropping-persistent-slots*)
+    (:return-null-on-missing-instance 
+     *return-null-on-missing-instance*)
+    (:no-deserialization-package-found-action
+     *no-deserialization-package-found-action*)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; System-wide configuration options
@@ -179,7 +185,7 @@
 (defparameter *migrate-verbose* t
   "Print more than a simple status line")
 
-(defparameter *warn-when-dropping-persistent-slots* nil
+(defparameter *warn-when-dropping-persistent-slots* t
   "Signal a continuable error when the user is about to delete
   a bunch of persistent slot values on class redefinition. This
   is nil by default to stop annoying message and confusing new

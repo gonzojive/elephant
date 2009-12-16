@@ -99,8 +99,12 @@
   (let ((index (get-association-index slot-def (get-con instance))))
     (if (and (eq (association-type slot-def) :ref)
 	     (slot-boundp-using-class class instance slot-def))
-	(remove-kv-pair (slot-value-using-class class instance slot-def) (oid instance) index)
-	(remove-kv-pair (oid associated) (oid instance) index))))
+	(remove-kv-pair (oid (slot-value-using-class class instance slot-def)) (oid instance) index)
+	(when associated ;it is possible that the original association
+                         ;slot was not bound at the time of
+                         ;deletion. thus, remove the entry only when
+                         ;it is bound
+	  (remove-kv-pair (oid associated) (oid instance) index)))))
 
 (defun update-other-association-end (class instance slot-def other-instance)
   "Update the association index for the other object so that it maps from

@@ -14,7 +14,10 @@
  (:berkeley-db-map-degree2 . t)
  (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
- (:prebuilt-libraries . nil))
+ (:prebuilt-libraries . nil)
+ (:warn-when-dropping-persistent-slots . t)
+ (:return-null-on-missing-instance . t)
+ (:no-deserialization-package-found-action . :warn))
 
 ;; OSX Defaults 
 #+(and (or sbcl allegro openmcl lispworks) (not (or mswindows windows win32)) (or macosx darwin))
@@ -30,7 +33,10 @@
  (:berkeley-db-map-degree2 . t)
  (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
- (:prebuilt-libraries . nil))
+ (:prebuilt-libraries . nil)
+ (:warn-when-dropping-persistent-slots . t)
+ (:return-null-on-missing-instance . t)
+ (:no-deserialization-package-found-action . :warn))
 
 ;; Windows defaults (assumes prebuild libraries)
 #+(or mswindows windows win32)
@@ -46,11 +52,14 @@
  (:berkeley-db-map-degree2 . t)
  (:berkeley-db-mvcc . nil)
  (:clsql-lib-paths . nil)
- (:prebuilt-libraries . t))
+ (:prebuilt-libraries . t)
+ (:warn-when-dropping-persistent-slots . t)
+ (:return-null-on-missing-instance . t)
+ (:no-deserialization-package-found-action . :warn))
 
-;; Berkeley 4.5 or 4.6 are valid as set by berkeley-db-version, each 
-;; system will have different settings for these directories, use this 
-;; as an indication of what each key means
+;; Berkeley 4.7 is required and each system will have different 
+;; settings for these directories, use this as an indication of 
+;; what each key means
 ;;
 ;; :prebuilt-libraries is true by default for windows machines.  It causes
 ;; the library loader to look in the elephant root directory for the shared 
@@ -61,15 +70,25 @@
 ;;
 ;;  (:clsql-lib-paths . ("/Users/me/Work/SQlite3/" "/Users/me/Work/Postgresql/"))
 ;;
-;; :pthread-lib is deprecated, for old versions of sbcl prior to 0.9.17 that 
-;; did not have pthreads compiled in.  If you are using an old version, we 
-;; recommend that you upgrade!  
-;; Typical pthread settings were: /lib/tls/libpthread.so.0
-;;
 ;; :compiler options are 
 ;;           :gcc (default: for unix platforms with /usr/bin/gcc)
 ;;           :cygwin (for windows platforms with cygwin/gcc)
 ;;           :msvc (unsupported)
+;;
+;; :warn-when-dropping-persistent-slots
+;;            When you redefine a class, you may have changed the name of a function
+;;            unless you add a redefinition function to the current db schema, 
+;;            which copies the data, that data will be lost.  This determines whether
+;;            the system interactively warns you about this.  Defaults to true.
+;;
+;; :return-null-on-missing-instance 
+;;            When the deserializer does not find an instance for a given oid in
+;;            the instance table, for now it assumes it is gone (a poor mans 
+;;            referential integrity.  Defaults to true
+;;
+;; :no-deserialization-package-found-action
+;;            When a symbol is interned in a package that has not been created,
+;;            this determines the action.  :warn, :create, :error
 ;;
 ;; Additional supported parameters include:
 ;;
