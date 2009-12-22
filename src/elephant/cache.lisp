@@ -29,11 +29,22 @@
   (:documentation 
    "Adds a special value slot to store checkout state"))
 
-(defmethod shared-initialize :around ((instance cacheable-persistent-object) slot-names &key make-cached-instance &allow-other-keys)
+(defmethod shared-initialize :around ((instance cacheable-persistent-object) slot-names &key from-oid (make-cached-instance nil make-cached-instance-p) &allow-other-keys)
   ;; User asked us to start in cached mode?  Otherwise default to not.
-  (setf (slot-value instance 'pchecked-out) make-cached-instance)
-  (setf (slot-value instance 'checked-out) make-cached-instance)
+  (when make-cached-instance-p
+    (setf (slot-value instance 'pchecked-out) make-cached-instance
+	  (slot-value instance 'checked-out) make-cached-instance))
+  (when (and from-oid (eq (get-cache-style (class-of instance)) :checkout))
+    (unless make-cached-instance-p
+      (setf (slot-value instance 'checked-out) 
+	    (slot-value instance 'pchecked-out)))
+    (when (checked-out-p instance)
+      (bind-slot-defs (class-of instance) slot-names
+	  ((cached-slots cached-slot-names))
+	(refresh-cached-slots instance cached-slots))))
   (call-next-method))
+
+    
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;

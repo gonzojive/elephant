@@ -225,32 +225,31 @@ and initargs in such a way that slot-value-using-class et al
 aren't used.  We also handle writing any indices after the 
 class is fully initialized.  Calls the next method for the transient 
 slots."
-  (bind-slot-defs (class-of instance) slot-names
-    ((transient-slots transient-slot-names)
-     (cached-slots cached-slot-names)
-     (indexed-slots indexed-slot-names)
-     (derived-slots derived-index-slot-names)
-     (association-end-slots association-end-slot-names)
-     (persistent-slots persistent-slot-names))
-    ;; Slot initialization
-    (let* ((class (class-of instance))
-	   (persistent-initializable-slots 
-	    (union (union persistent-slots indexed-slots) association-end-slots))
-	   (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
-;;      NOTE: backing store for cached slots is only initialized on checkout or txn
-      (cond (from-oid ;; If re-starting, make sure we read the cached values
-;;	     (refresh-cached-slots instance cached-slots)) ;; old model dependency
-	     nil)
-	    (t  ;; If new instance, initialize all slots
-	     (setq transient-slots (union transient-slots cached-slots))
-	     (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)))
-      ;; Always initialize transients
-      (apply #'call-next-method instance transient-slots initargs)
-      ;; Initialize set slots after transient initialization
-      (unless from-oid
-	(initialize-set-slots class instance set-slots))
-      (loop for dslotname in derived-slots do
-	   (derived-index-updater class instance (find-slot-def-by-name class dslotname))))))
+  (let ((class (class-of instance)))
+    (bind-slot-defs class slot-names
+	((transient-slots transient-slot-names)
+	 (cached-slots cached-slot-names)
+	 (indexed-slots indexed-slot-names)
+	 (derived-slots derived-index-slot-names)
+	 (association-end-slots association-end-slot-names)
+	 (persistent-slots persistent-slot-names))
+      ;; Slot initialization
+      (let* ((persistent-initializable-slots 
+	      (union (union persistent-slots indexed-slots) association-end-slots))
+	     (set-slots (get-init-slotnames class #'set-valued-slot-names slot-names)))
+	;;      NOTE: backing store for cached slots is only initialized on checkout or txn
+	(cond (from-oid ;; If re-starting, make sure we read the cached values
+	       nil)
+	      (t ;; If new instance, initialize all slots
+	       (setq transient-slots (union transient-slots cached-slots))
+	       (initialize-persistent-slots class instance persistent-initializable-slots initargs from-oid)))
+	;; Always initialize transients
+	(apply #'call-next-method instance transient-slots initargs)
+	;; Initialize set slots after transient initialization
+	(unless from-oid
+	  (initialize-set-slots class instance set-slots))
+	(loop for dslotname in derived-slots do
+	     (derived-index-updater class instance (find-slot-def-by-name class dslotname)))))))
 
 (defun initialize-persistent-slots (class instance persistent-slot-inits initargs object-exists)
   (dolist (slotname persistent-slot-inits)

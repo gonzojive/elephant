@@ -20,7 +20,7 @@
 (in-package :elephant)
 
 #-elephant-without-optimize 
-(declaim (optimize (speed 3) (safety 0) (space 0) (debug 0)))
+(declaim (optimize (speed 3) (safety 1) (space 0) (debug 1)))
 
 ;;
 ;; Cached slot access protocol
@@ -112,7 +112,7 @@
     (setf (pchecked-out-p object) t) ;; grab write lock, rollback parallel txns
     ;; THIS IS BAD / READER ON OBJECT BEFORE CHECKOUT GETS STALE DATA
     ;; CAN WE BYPASS PROTOCOL TO WRITE MEMORY STORAGE DIRECTLY IN REFRESH?
-    (setf (checked-out-p object) t) 
+    (setf (checked-out-p object) t)
     (refresh-cached-slots object (cached-slot-names (class-of object)))
     object))
 
@@ -122,6 +122,13 @@
     (assert (pchecked-out-p object))
     (flush-cached-slots object (cached-slot-names (class-of object)))
     object))
+
+(defmethod maybe-persistent-sync ((instance cacheable-persistent-object))
+  "Synchronize the slots to the database without a checkin"
+  (ensure-transaction ()
+    (when (and (eq (ele::get-cache-style (class-of instance)) :checkout)
+	       (checked-out-p instance))
+      (persistent-sync instance))))
 
 (defmethod persistent-checkin ((object cacheable-persistent-object))
   "Flush the slot states to the database and release the checkout state.
@@ -170,6 +177,7 @@
   "Assumes checkout mode is t so side effects are only
    in memory"
   (assert (pchecked-out-p instance))
+  (assert (eq (%cache-style (class-of instance)) :checkout))
   (let ((sc (get-con instance)))
     (dolist (slot slots)
       (if (persistent-slot-boundp sc instance slot)
@@ -186,56 +194,4 @@
 	  (persistent-slot-writer sc (slot-value instance slot) instance slot)
 	  (persistent-slot-makunbound sc instance slot)))))
 
-
-;;
-;; OLD STUFF
-;;
-
-#+nil ;; support for old method
- (defmethod cache-mode ((object persistent-object))
-  (let ((imode (slot-value object 'cache-mode)))
-    (cond ((= imode +none+)
-	   :none-cached)
-	  ((= imode +all-cached+)
-	   :all-cached)
-	  ((= imode +all-write-through+)
-	   :write-through)
-	  ((= imode +index-write-through+)
-	   :index-write-through)
-	  (t "Invalid cache mode - please write a valid mode"))))
-
-#+nil ;; support for old method
-(defmethod (setf cache-mode) (mode (object persistent-object))
-  "Valid modes are: :all-cached, :none-cached, :write-through :index-write-through"
-  (if (typep mode 'fixnum)
-      (setf (slot-value object 'cache-mode) mode)
-      (setf (slot-value object 'cache-mode)
-	    (ecase mode
-	      (:none-cached 
-	       +none-cached+)
-	      (:all-cached 
-	       +all-cached+)
-	      (:write-through 
-	       +all-write-through+)
-	      (:index-write-through 
-	       +index-write-through+))))
-  (if (eq (cache-mode object) +all-cached+)
-      (refresh-slots object)
-      (save-slots object))
-  mode)
-
-#+nil
-(defmacro with-cached-instances ((mode &rest instances) &body body)
-  (with-gensyms (insts)
-    `(let ((,insts ,instances)
-	   (old-modes (mapcar #'(lambda (inst)
-				  (prog1 
-				      (slot-value inst 'cache-mode)
-				    (setf (cache-mode inst) ,mode)))
-			      ,insts)))
-     (unwind-protect 
-	  ,@body
-       (mapcar #'(lambda (old-mode inst)
-		   (setf (slot-value inst 'cache-mode) old-mode))
-	       old-modes ,insts)))))
 
