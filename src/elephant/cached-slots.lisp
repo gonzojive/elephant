@@ -123,6 +123,9 @@
     (flush-cached-slots object (cached-slot-names (class-of object)))
     object))
 
+(defmethod maybe-persistent-sync ((instance persistent-object))
+  nil)
+
 (defmethod maybe-persistent-sync ((instance cacheable-persistent-object))
   "Synchronize the slots to the database without a checkin"
   (ensure-transaction ()
