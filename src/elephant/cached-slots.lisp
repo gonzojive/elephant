@@ -43,7 +43,7 @@
   "Always write local slot value; maybe write persistent value if no caching or write-through"
   (case (%cache-style class)
     (:checkout
-     (if (checked-out-p instance)
+     (if (ignore-errors (checked-out-p instance))
 	 (call-next-method)
 	 (persistent-slot-writer (get-con instance) new-value instance 
 				 (slot-definition-name slot-def))))

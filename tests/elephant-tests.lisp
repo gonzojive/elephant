@@ -136,11 +136,13 @@
    if you run a :bdb backend test it will load berkeley db
    specific tests which should silently succeed if you
    test another backend"
-  (when (and (consp spec) (symbolp (car spec)))
-    (with-open-store (spec)
-      (when (eq (car spec) :bdb)
-	(asdf:operate 'asdf:load-op :elephant-tests-bdb))
-      (do-tests))))
+  (let ((ele::*warn-when-dropping-persistent-slots* nil))
+    (declare (special ele::*warn-when-dropping-persistent-slots*))
+    (when (and (consp spec) (symbolp (car spec)))
+      (with-open-store (spec)
+	(when (eq (car spec) :bdb)
+	  (asdf:operate 'asdf:load-op :elephant-tests-bdb))
+	(do-tests)))))
   
 (defun do-test-spec (testname &optional (spec *default-spec*))
   "For easy interactive running of single tests while debugging"
