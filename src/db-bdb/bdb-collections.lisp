@@ -99,10 +99,20 @@
   (:metaclass persistent-metaclass)
   (:documentation "A BDB-based BTree supports secondary indices."))
 
+(defmethod indices-cache ((instance bdb-indexed-btree))
+  ;; Lazily load the indices-cache to avoid bootstrapping issues: If
+  ;; we do not lazy-load the indices cache, it we attempt to
+  ;; initialize it before the instance-table is available (thus we
+  ;; cannot map oids to classes -- deserialize does not really work
+  ;; for complex objects).  -- Red Daly 07/10/2010
+  (aif (slot-value instance 'indices-cache)
+       it
+       (setf (indices-cache instance) (indices instance))))
+
 (defmethod shared-initialize :after ((instance bdb-indexed-btree) slot-names
 				     &rest rest)
   (declare (ignore slot-names rest))
-  (setf (indices-cache instance) (indices instance)))
+  (setf (indices-cache instance) nil))
 
 (defmethod build-indexed-btree ((sc bdb-store-controller))
   (make-instance 'bdb-indexed-btree :sc sc))
