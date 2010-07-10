@@ -708,12 +708,14 @@ true."))
     ;; Initialize classname -> cidx
     (setf (slot-value sc 'schema-name-index)
 	  (ensure-index (slot-value sc 'schema-table) 'by-name
-			:key-form 'schema-classname-keyform))
+			:key-form 'schema-classname-keyform
+                        :populate t))
 
     ;; Initialize class idx -> oid index
     (setf (slot-value sc 'instance-class-index)
 	  (ensure-index (slot-value sc 'instance-table) 'by-name
-			:key-form 'instance-cidx-keyform))))
+			:key-form 'instance-cidx-keyform
+                        :populate t))))
 
 (defmethod close-controller :after ((sc store-controller))
   (map-cache (lambda (schema-id schema) 
