@@ -172,46 +172,24 @@
 ;; CMU / SBCL
 ;;
 
-#+(or cmu sbcl)
+#+cmu
 (defun make-persistent-reader (name)
   (lambda (instance)
     (declare (type persistent-object instance))
     (persistent-slot-reader (get-con instance) instance name)))
 
-#+(or cmu sbcl)
+#+cmu
 (defun make-persistent-writer (name)
   (lambda (new-value instance)
     (declare (optimize (speed 3))
 	     (type persistent-object instance))
     (persistent-slot-writer (get-con instance) new-value instance name)))
 
-#+(or cmu sbcl)
+#+cmu
 (defun make-persistent-slot-boundp (name)
   (lambda (instance)
     (declare (type persistent-object instance))
     (persistent-slot-boundp (get-con instance) instance name)))
-
-#+sbcl ;; CMU also?  Old code follows...
-(defmethod initialize-internal-slot-functions ((slot-def persistent-effective-slot-definition))
-  (let ((name (slot-definition-name slot-def)))
-    (setf (slot-definition-reader-function slot-def)
-	  (make-persistent-reader name))
-    (setf (slot-definition-writer-function slot-def)
-	  (make-persistent-writer name))
-    (setf (slot-definition-boundp-function slot-def)
-	  (make-persistent-slot-boundp name)))
-  (call-next-method)) ;;  slot-def)
-
-#+sbcl ;; CMU also?  Old code follows...
-(defmethod initialize-internal-slot-functions ((slot-def cached-effective-slot-definition))
-  (let ((name (slot-definition-name slot-def)))
-    (setf (slot-definition-reader-function slot-def)
-	  (make-persistent-reader name))
-    (setf (slot-definition-writer-function slot-def)
-	  (make-persistent-writer name))
-    (setf (slot-definition-boundp-function slot-def)
-	  (make-persistent-slot-boundp name)))
-  (call-next-method)) ;;  slot-def)
 
 #+cmu
 (defmethod initialize-internal-slot-functions ((slot-def persistent-slot-definition))

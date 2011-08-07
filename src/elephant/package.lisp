@@ -98,9 +98,6 @@
   (:import-from :sb-pcl
 		initialize-internal-slot-functions
 		compute-effective-slot-definition-initargs
-		slot-definition-reader-function
-		slot-definition-writer-function
-		slot-definition-boundp-function
 		slot-definition-allocation-class
 		class-slot-cells
 		plist-value
