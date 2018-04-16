@@ -264,7 +264,7 @@
 	(or (uffi-funcall :load-foreign-library file :module module)
 	    (error "Could not load ~A into ~A" file module)))))
   ;; Load the compiled libraries
-  (dolist (file (output-files (make-instance 'compile-op) c))
+  (dolist (file (output-files (make-operation 'compile-op) c))
     (format t "Attempting to load ~A...~%" (file-namestring file))
     (if (and (probe-file file)
 	     (not (get-config-option :prebuilt-libraries c)))
